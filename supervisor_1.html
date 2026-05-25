@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Supervisor — Painéis Elétricos</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:14px;}
+.topbar{background:#1a1a1a;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;position:sticky;top:0;z-index:10;}
+.topbar h1{font-size:15px;font-weight:600;color:#fff;}
+.badge-sup{background:#BA7517;color:#fff;font-size:11px;padding:2px 9px;border-radius:99px;font-weight:500;}
+.sync-info{font-size:11px;color:#aaa;display:flex;align-items:center;gap:5px;}
+.dot{width:7px;height:7px;border-radius:50%;background:#1D9E75;display:inline-block;flex-shrink:0;}
+.nav{display:flex;gap:6px;padding:12px 18px 0;flex-wrap:wrap;background:#fff;border-bottom:1px solid #e5e5e5;}
+.nav button{font-size:12px;padding:8px 14px;border-radius:0;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;cursor:pointer;font-weight:500;margin-bottom:-1px;}
+.nav button.active{color:#1a1a1a;border-bottom-color:#1a1a1a;}
+.content{padding:16px 18px 48px;}
+.page{display:none;} .page.active{display:block;}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;}
+.metric{background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:12px 14px;}
+.metric .lbl{font-size:11px;color:#888;margin-bottom:4px;}
+.metric .val{font-size:24px;font-weight:700;}
+.metric .sub{font-size:11px;color:#bbb;margin-top:2px;}
+.ok{color:#1D9E75!important;} .warn{color:#BA7517!important;} .bad{color:#A32D2D!important;}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+.card h3{font-size:13px;font-weight:600;color:#666;margin-bottom:12px;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
+label{font-size:12px;color:#666;display:block;margin-bottom:4px;}
+input,select{width:100%;font-size:13px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;outline:none;}
+input:focus,select:focus{border-color:#1D9E75;}
+.btn{background:#1a1a1a;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;}
+.btn-sm{font-size:12px;padding:3px 10px;border:1px solid #f5c5c5;border-radius:7px;background:#fff;color:#A32D2D;cursor:pointer;}
+.btn-green{font-size:12px;padding:3px 10px;border:1px solid #1D9E75;border-radius:7px;background:#fff;color:#1D9E75;cursor:pointer;}
+.btn-cancel{font-size:12px;padding:4px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#666;cursor:pointer;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-size:12px;font-weight:500;color:#888;padding:6px 8px;border-bottom:1px solid #f0f0f0;}
+td{padding:8px;border-bottom:1px solid #f5f5f5;color:#1a1a1a;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:500;}
+.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bbad{background:#FCEBEB;color:#A32D2D;} .bgray{background:#f0f0f0;color:#888;}
+.pbar{height:5px;background:#f0f0f0;border-radius:99px;overflow:hidden;margin-top:4px;}
+.pfill{height:100%;border-radius:99px;background:#1D9E75;}
+.pfill.warn{background:#BA7517;} .pfill.bad{background:#A32D2D;}
+.empty{font-size:13px;color:#bbb;padding:8px 0;}
+.sep{font-size:12px;font-weight:700;color:#888;margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #f0f0f0;}
+.op-card{border:1px solid #e5e5e5;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;}
+.op-hd{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+.prow{display:flex;align-items:center;gap:8px;}
+.plbl{min-width:80px;font-size:12px;color:#888;}
+.pwrap{flex:1;height:6px;background:#f0f0f0;border-radius:99px;overflow:hidden;}
+.pfill2{height:100%;border-radius:99px;background:#1D9E75;}
+.toast{position:fixed;bottom:20px;right:20px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;display:none;z-index:999;}
+.confirm-row{background:#fff8f8;border:1px solid #f5c5c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:6px;}
+
+/* SETUP */
+.setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh;padding:24px;}
+.setup h2{font-size:22px;font-weight:700;margin-bottom:6px;}
+.setup p{font-size:14px;color:#666;margin-bottom:22px;max-width:480px;text-align:center;}
+.setup-card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:22px 26px;width:100%;max-width:480px;}
+.setup-card h3{font-size:15px;font-weight:700;margin-bottom:16px;}
+.step{display:flex;gap:10px;margin-bottom:14px;font-size:13px;color:#555;align-items:flex-start;line-height:1.5;}
+.sn{width:24px;height:24px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
+.err{font-size:12px;color:#A32D2D;margin-top:6px;}
+.url-box{background:#f5f5f3;border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:13px;font-family:monospace;word-break:break-all;margin:8px 0;cursor:pointer;color:#1D9E75;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="dot" id="dot"></span>
+    <h1>Gerenciamento de Produção</h1>
+    <span class="badge-sup">SUPERVISOR</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <input type="date" id="hoje" style="width:130px;font-size:12px;padding:5px 8px;border:1px solid #444;border-radius:7px;background:#333;color:#fff;"/>
+    <span id="mesLabel" style="font-size:12px;color:#888;"></span>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div id="setupScreen" class="setup">
+  <h2>⚡ Configuração inicial</h2>
+  <p>Vamos conectar o sistema ao banco de dados em nuvem. É rápido e gratuito.</p>
+  <div class="setup-card">
+    <h3>🔧 Criar banco de dados Firebase (grátis)</h3>
+    <div class="step"><span class="sn">1</span><span>Acesse <strong><a href="https://console.firebase.google.com" target="_blank" style="color:#1D9E75;">console.firebase.google.com</a></strong> e clique em <strong>"Criar projeto"</strong></span></div>
+    <div class="step"><span class="sn">2</span><span>Dê um nome ao projeto (ex: <code>paineis-fabrica</code>) e desative o Google Analytics — clique em <strong>"Criar projeto"</strong></span></div>
+    <div class="step"><span class="sn">3</span><span>No menu lateral, clique em <strong>Criação → Realtime Database → Criar banco de dados</strong>. Escolha a região <strong>United States</strong> e selecione <strong>"Iniciar no modo de teste"</strong></span></div>
+    <div class="step"><span class="sn">4</span><span>Copie a URL que aparece no topo (começa com <code>https://</code> e termina com <code>firebaseio.com</code>) e cole abaixo:</span></div>
+    <label>URL do Firebase Realtime Database</label>
+    <input id="fbUrl" placeholder="https://paineis-fabrica-default-rtdb.firebaseio.com" type="url"/>
+    <div id="setupErr" class="err"></div>
+    <button class="btn" style="margin-top:12px;width:100%;" onclick="conectar()">🔗 Conectar e começar</button>
+  </div>
+</div>
+
+<!-- APP PRINCIPAL -->
+<div id="appScreen" style="display:none;">
+  <div class="nav">
+    <button class="active" onclick="nav('dash',this)">Dashboard</button>
+    <button onclick="nav('ops',this)">Ordens de Produção</button>
+    <button onclick="nav('col',this)">Colaboradores</button>
+    <button onclick="nav('mes',this)">Visão Mensal</button>
+    <button onclick="nav('cfg',this)">⚙ Config</button>
+  </div>
+
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div id="page-dash" class="page active">
+      <div class="metrics" id="m-dash"></div>
+      <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
+      <div class="card"><h3>📈 Quadros finalizados — últimos 10 dias</h3>
+        <div style="position:relative;height:180px;"><canvas id="cTrend"></canvas></div>
+      </div>
+    </div>
+
+    <!-- OPS -->
+    <div id="page-ops" class="page">
+      <div class="card"><h3>➕ Nova Ordem de Produção</h3>
+        <div class="frow3">
+          <div><label>Número da OP</label><input id="opNum" placeholder="OP-001"/></div>
+          <div><label>Modelo do painel</label><input id="opModelo" placeholder="QD-200A"/></div>
+          <div><label>Qtd. de quadros</label><input type="number" id="opQtd" min="1" placeholder="1"/></div>
+        </div>
+        <div class="frow">
+          <div><label>Prazo de entrega</label><input type="date" id="opPrazo"/></div>
+          <div><label>Observações</label><input id="opObs" placeholder="Opcional..."/></div>
+        </div>
+        <button class="btn" onclick="addOP()">Cadastrar OP</button>
+        <div id="opMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+      <div class="card"><h3>📋 Ordens cadastradas</h3><div id="ops-lista"></div></div>
+    </div>
+
+    <!-- COLABORADORES -->
+    <div id="page-col" class="page">
+      <div class="card"><h3>➕ Adicionar colaborador</h3>
+        <div class="frow">
+          <div><label>Nome</label><input id="cNome" placeholder="Nome completo"/></div>
+          <div><label>Função</label>
+            <select id="cFuncao">
+              <option>Montador</option><option>Cabeador</option><option>Conferente</option>
+              <option>Programador</option><option>Auxiliar</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn" onclick="addColab()">Adicionar</button>
+      </div>
+      <div class="card"><h3>👥 Equipe (<span id="cCount">0</span> colaboradores)</h3><div id="col-lista"></div></div>
+    </div>
+
+    <!-- MENSAL -->
+    <div id="page-mes" class="page">
+      <div class="frow" style="max-width:320px;margin-bottom:12px;">
+        <div><label>Mês/Ano</label><input type="month" id="mFiltro"/></div>
+        <div><label>Meta mensal (quadros)</label><input type="number" id="mMeta" value="50" min="1"/></div>
+      </div>
+      <div class="metrics" id="m-mes"></div>
+      <div class="card"><h3>📊 Quadros por colaborador</h3>
+        <div style="position:relative;height:280px;"><canvas id="cMes"></canvas></div>
+      </div>
+      <div class="card"><h3>📋 Resumo por colaborador</h3><div id="mes-tabela"></div></div>
+      <div class="card"><h3>🗒️ Todos os apontamentos no mês</h3><div id="mes-apon"></div></div>
+    </div>
+
+    <!-- CONFIG -->
+    <div id="page-cfg" class="page">
+      <div class="card">
+        <h3>🔗 Banco de dados conectado</h3>
+        <label>URL do Firebase</label>
+        <div class="url-box" id="urlDisplay" onclick="copyUrl()" title="Clique para copiar"></div>
+        <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores configurarem o app deles.</div>
+        <button class="btn" style="margin-top:12px;" onclick="copyUrl()">📋 Copiar URL</button>
+      </div>
+      <div class="card">
+        <h3>⚠️ Trocar banco de dados</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual. Os dados no Firebase continuarão existindo.</p>
+        <button class="btn" style="background:#A32D2D;" onclick="desconectar()">Desconectar e reconfigurar</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+let DB_URL = localStorage.getItem('paineis_db_url') || '';
+let S = {colaboradores:[],ops:[],apontamentos:[],nid:1};
+let currentPage = 'dash';
+
+function setSync(ok,txt){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
+function msg(id,txt,tipo){const el=document.getElementById(id);if(!el)return;el.style.color=tipo==='ok'?'#1D9E75':'#A32D2D';el.textContent=txt;setTimeout(()=>el.textContent='',3000);}
+function fmtH(iso){if(!iso)return'—';return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+function fmt(iso){if(!iso)return'—';const d=iso.includes('T')?iso.split('T')[0]:iso;const[y,m,dd]=d.split('-');return`${dd}/${m}/${y}`;}
+function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(a))/60000);}
+function td(){return new Date().toISOString().split('T')[0];}
+
+async function load(){
+  try{
+    const r=await fetch(DB_URL+'/paineis.json');
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    if(d){S=d;if(!S.colaboradores)S.colaboradores=[];if(!S.ops)S.ops=[];if(!S.apontamentos)S.apontamentos=[];if(!S.nid)S.nid=1;}
+    setSync(true);return true;
+  }catch(e){setSync(false);return false;}
+}
+
+async function save(){
+  try{
+    await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
+    setSync(true);
+  }catch(e){setSync(false);}
+}
+
+async function conectar(){
+  const url=document.getElementById('fbUrl').value.trim().replace(/\/$/,'');
+  if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
+  document.getElementById('setupErr').textContent='Testando conexão...';
+  DB_URL=url;
+  const ok=await load();
+  if(ok){localStorage.setItem('paineis_db_url',DB_URL);showApp();}
+  else{document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL e tente novamente.';}
+}
+
+function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
+function copyUrl(){navigator.clipboard.writeText(DB_URL).then(()=>toast('URL copiada!')).catch(()=>toast(DB_URL));}
+
+function showApp(){
+  document.getElementById('setupScreen').style.display='none';
+  document.getElementById('appScreen').style.display='block';
+  document.getElementById('hoje').value=td();
+  document.getElementById('mesLabel').textContent=new Date().toLocaleString('pt-BR',{month:'long',year:'numeric'});
+  document.getElementById('mFiltro').value=td().substring(0,7);
+  document.getElementById('mFiltro').addEventListener('input',renderMes);
+  document.getElementById('mMeta').addEventListener('input',renderMes);
+  const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
+  renderDash();renderColabs();
+  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},10000);
+}
+
+function nav(id,btn){
+  currentPage=id;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='dash')renderDash();
+  if(id==='ops'){load().then(renderOPs);}
+  if(id==='col'){load().then(renderColabs);}
+  if(id==='mes')renderMes();
+}
+
+async function addOP(){
+  const num=document.getElementById('opNum').value.trim();
+  const modelo=document.getElementById('opModelo').value.trim();
+  const qtd=parseInt(document.getElementById('opQtd').value)||1;
+  const prazo=document.getElementById('opPrazo').value;
+  const obs=document.getElementById('opObs').value.trim();
+  if(!num||!modelo){msg('opMsg','Preencha número e modelo.','bad');return;}
+  if(S.ops.find(o=>o.num===num)){msg('opMsg','OP já cadastrada.','bad');return;}
+  S.ops.push({id:S.nid++,num,modelo,qtd,prazo,obs,status:'aberta'});
+  ['opNum','opModelo','opObs','opPrazo'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('opQtd').value='';
+  await save();msg('opMsg','OP cadastrada!','ok');renderOPs();
+}
+
+function renderOPs(){
+  const div=document.getElementById('ops-lista');if(!div)return;
+  if(!S.ops.length){div.innerHTML='<p class="empty">Nenhuma OP cadastrada.</p>';return;}
+  const ab=S.ops.filter(o=>o.status==='aberta'),conc=S.ops.filter(o=>o.status==='concluida');
+  let html='';
+  if(ab.length){
+    html+='<div class="sep">Em aberto ('+ab.length+')</div>';
+    ab.forEach(op=>{
+      const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
+      const pct=Math.round((fin/op.qtd)*100);
+      const venc=op.prazo&&op.prazo<td();
+      html+=`<div class="op-card"><div class="op-hd">
+        <div><div style="font-size:14px;font-weight:700;">${op.num}</div>
+          <div style="font-size:12px;color:#888;">${op.modelo} · ${op.qtd} quadro${op.qtd>1?'s':''}</div>
+          ${op.prazo?`<div style="font-size:11px;color:${venc?'#A32D2D':'#bbb'};">Entrega: ${fmt(op.prazo)}</div>`:''}
+          ${op.obs?`<div style="font-size:11px;color:#bbb;">${op.obs}</div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          ${venc?'<span class="badge bbad">Atrasada</span>':''}
+          <span class="badge ${pct===100?'bok':pct>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span>
+          ${pct===100?`<button class="btn-green" onclick="concluirOP(${op.id})">✓ Concluir</button>`:''}
+          <button class="btn-sm" onclick="remOP(${op.id})">✕</button>
+        </div></div>
+        <div class="prow"><span class="plbl">Progresso</span><div class="pwrap"><div class="pfill2" style="width:${pct}%"></div></div><span style="font-size:11px;color:#888;min-width:32px;text-align:right;">${pct}%</span></div>
+        ${renderAponTabela(op)}</div>`;
+    });
+  }
+  if(conc.length){
+    html+='<div class="sep" style="margin-top:16px;">Concluídas ('+conc.length+')</div>';
+    conc.forEach(op=>{html+=`<div class="op-card" style="opacity:.6;"><div class="op-hd"><div><div style="font-size:14px;font-weight:700;">✓ ${op.num}</div><div style="font-size:12px;color:#888;">${op.modelo}</div></div><button class="btn-sm" onclick="remOP(${op.id})">✕</button></div></div>`;});
+  }
+  div.innerHTML=html;
+}
+
+function renderAponTabela(op){
+  const apts=S.apontamentos.filter(a=>a.opId===op.id);
+  if(!apts.length)return'<div style="font-size:12px;color:#bbb;margin-top:6px;">Nenhum apontamento ainda.</div>';
+  return`<div style="margin-top:10px;overflow-x:auto;"><table><thead><tr><th>Quadro</th><th>Colaborador</th><th>Início</th><th>Fim</th><th>Duração</th><th>Status</th></tr></thead><tbody>`+
+    apts.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);const d=dur(a.inicio,a.fim);
+      return`<tr><td>Quadro ${a.quadroIdx}</td><td>${c?c.nome:'—'}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td><td>${d?d+'min':'—'}</td>
+        <td><span class="badge ${a.fim?'bok':a.inicio?'bwarn':'bgray'}">${a.fim?'Finalizado':a.inicio?'Em andamento':'Aguardando'}</span></td></tr>`;
+    }).join('')+`</tbody></table></div>`;
+}
+
+async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'concluida'}:o);await save();renderOPs();}
+async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
+
+function renderColabs(){
+  const cnt=document.getElementById('cCount');if(cnt)cnt.textContent=S.colaboradores.length;
+  const div=document.getElementById('col-lista');if(!div)return;
+  if(!S.colaboradores.length){div.innerHTML='<p class="empty">Nenhum colaborador.</p>';return;}
+  const tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Quadros finalizados</th><th></th></tr></thead>';
+  const tbody=document.createElement('tbody');
+  S.colaboradores.forEach(c=>{
+    const total=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim).length;
+    const tr=document.createElement('tr');
+    const t1=document.createElement('td');t1.textContent=c.nome;
+    const t2=document.createElement('td');t2.textContent=c.funcao;
+    const t3=document.createElement('td');t3.textContent=total+' quadros';
+    const t4=document.createElement('td');
+    const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
+    btn.addEventListener('click',()=>{
+      const row=document.createElement('div');row.className='confirm-row';
+      row.innerHTML=`⚠️ Remover <strong>${c.nome}</strong>?`;
+      const sim=document.createElement('button');sim.className='btn-sm';sim.textContent='Sim';
+      sim.addEventListener('click',async()=>{S.colaboradores=S.colaboradores.filter(x=>x.id!==c.id);await save();renderColabs();});
+      const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
+      nao.addEventListener('click',renderColabs);
+      row.append(sim,nao);t4.innerHTML='';t4.appendChild(row);
+    });
+    t4.appendChild(btn);tr.append(t1,t2,t3,t4);tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
+}
+
+async function addColab(){
+  const nome=document.getElementById('cNome').value.trim();
+  const funcao=document.getElementById('cFuncao').value;
+  if(!nome)return;
+  S.colaboradores.push({id:S.nid++,nome,funcao});
+  document.getElementById('cNome').value='';
+  await save();renderColabs();toast('Colaborador adicionado!');
+}
+
+let chartT=null;
+function renderDash(){
+  const hoje=td(),mes=hoje.substring(0,7);
+  const aptH=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(hoje));
+  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const meta=parseInt(document.getElementById('mMeta')?.value)||50;
+  const pct=Math.round((aptM.length/meta)*100);
+  const pc=pct>=100?'ok':pct>=60?'warn':'bad';
+  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim).length;
+
+  const md=document.getElementById('m-dash');if(!md)return;
+  md.innerHTML=`
+    <div class="metric"><div class="lbl">Quadros hoje</div><div class="val">${aptH.length}</div><div class="sub">finalizados</div></div>
+    <div class="metric"><div class="lbl">Quadros no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%</div>
+      <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>
+    <div class="metric"><div class="lbl">Em andamento</div><div class="val warn">${emAnd}</div><div class="sub">agora</div></div>
+    <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>`;
+
+  const dops=document.getElementById('dash-ops');
+  const ab=S.ops.filter(o=>o.status==='aberta');
+  if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
+  else dops.innerHTML=ab.map(op=>{
+    const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
+    const p=Math.round((fin/op.qtd)*100);
+    const venc=op.prazo&&op.prazo<hoje;
+    return`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+      <span style="font-weight:700;">${op.num} <span style="font-weight:400;color:#888;">— ${op.modelo}</span></span>
+      <span style="display:flex;gap:6px;">${venc?'<span class="badge bbad">Atrasada</span>':''}<span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span></span>
+      </div><div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div></div>`;
+  }).join('');
+
+  const datas=[...new Set(S.apontamentos.filter(a=>a.fim).map(a=>a.fim.split('T')[0]))].sort().slice(-10);
+  const vals=datas.map(d=>S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(d)).length);
+  const canvas=document.getElementById('cTrend');if(!canvas)return;
+  if(chartT)chartT.destroy();
+  if(!datas.length){canvas.parentElement.innerHTML='<p class="empty" style="padding:10px 0;">Nenhum apontamento ainda.</p>';return;}
+  chartT=new Chart(canvas,{type:'line',data:{labels:datas.map(d=>{const[,m,dd]=d.split('-');return`${dd}/${m}`;}),
+    datasets:[{label:'Quadros',data:vals,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',tension:0.3,fill:true,pointBackgroundColor:'#1D9E75',borderWidth:2,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
+}
+
+let chartM=null;
+function renderMes(){
+  const mes=document.getElementById('mFiltro').value;
+  const meta=parseInt(document.getElementById('mMeta').value)||50;
+  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const tot=aptM.length,pct=Math.round((tot/meta)*100),pc=pct>=100?'ok':pct>=60?'warn':'bad';
+  const mm=document.getElementById('m-mes');if(!mm)return;
+  mm.innerHTML=`
+    <div class="metric"><div class="lbl">Quadros finalizados</div><div class="val ${pc}">${tot}</div><div class="sub">meta ${meta} · ${pct}%</div></div>
+    <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o.status==='concluida').length}</div><div class="sub">total</div></div>
+    <div class="metric"><div class="lbl">Colaboradores ativos</div><div class="val">${[...new Set(aptM.map(a=>a.colabId))].length}</div><div class="sub">com apontamentos</div></div>`;
+
+  const cd=S.colaboradores.map(c=>{
+    const regs=aptM.filter(a=>a.colabId===c.id);
+    const durs=regs.map(a=>dur(a.inicio,a.fim)).filter(Boolean);
+    return{nome:c.nome.split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,
+      media:durs.length?Math.round(durs.reduce((s,v)=>s+v,0)/durs.length):0};
+  });
+
+  if(chartM)chartM.destroy();
+  const cv=document.getElementById('cMes');if(!cv)return;
+  chartM=new Chart(cv,{type:'bar',data:{labels:cd.map(c=>c.nome),
+    datasets:[{label:'Quadros',data:cd.map(c=>c.qtd),backgroundColor:'rgba(29,158,117,0.75)',borderColor:'#1D9E75',borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
+
+  document.getElementById('mes-tabela').innerHTML=`<table><thead><tr><th>Colaborador</th><th>Função</th><th>Quadros</th><th>Tempo médio</th></tr></thead><tbody>`+
+    cd.map(c=>`<tr><td>${c.nomeC}</td><td>${c.funcao}</td><td><strong>${c.qtd}</strong></td><td>${c.media?c.media+'min':'—'}</td></tr>`).join('')+`</tbody></table>`;
+
+  const apts=[...aptM].sort((a,b)=>b.fim.localeCompare(a.fim));
+  const opMap={};S.ops.forEach(o=>opMap[o.id]=o);
+  const ad=document.getElementById('mes-apon');
+  if(!apts.length){ad.innerHTML='<p class="empty">Nenhum apontamento no mês.</p>';return;}
+  ad.innerHTML=`<div style="overflow-x:auto;"><table><thead><tr><th>Data</th><th>Colaborador</th><th>OP</th><th>Modelo</th><th>Quadro</th><th>Início</th><th>Fim</th><th>Duração</th></tr></thead><tbody>`+
+    apts.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);const op=opMap[a.opId];
+      return`<tr><td>${fmt(a.fim)}</td><td>${c?c.nome:'—'}</td><td>${op?op.num:'—'}</td><td>${op?op.modelo:'—'}</td><td>${a.quadroIdx}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td><td>${dur(a.inicio,a.fim)||'—'}min</td></tr>`;
+    }).join('')+`</tbody></table></div>`;
+}
+
+async function init(){
+  if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
+  const ok=await load();
+  if(ok)showApp();
+  else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
+}
+
+init();
+</script>
+</body>
+</html>

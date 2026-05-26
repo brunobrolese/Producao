@@ -12,24 +12,19 @@ body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size
 .badge-col{background:#1D9E75;color:#fff;font-size:11px;padding:2px 9px;border-radius:99px;font-weight:500;}
 .sync-info{font-size:11px;color:#aaa;display:flex;align-items:center;gap:5px;}
 .dot{width:7px;height:7px;border-radius:50%;background:#1D9E75;display:inline-block;flex-shrink:0;}
-
-/* SETUP */
+label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px;}
+input,select,textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;outline:none;font-family:inherit;}
+input:focus,select:focus,textarea:focus{border-color:#1D9E75;}
+textarea{resize:vertical;}
+.btn{background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:9px;font-size:14px;font-weight:600;border:none;cursor:pointer;width:100%;margin-top:12px;}
+.err{font-size:12px;color:#A32D2D;margin-top:6px;}
 .setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:24px;text-align:center;}
 .setup h2{font-size:20px;font-weight:700;margin-bottom:6px;}
 .setup p{font-size:14px;color:#666;margin-bottom:20px;max-width:440px;}
 .setup-card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:20px 24px;width:100%;max-width:440px;text-align:left;}
-.setup-card h3{font-size:14px;font-weight:600;margin-bottom:14px;color:#1a1a1a;}
+.setup-card h3{font-size:14px;font-weight:600;margin-bottom:14px;}
 .step{display:flex;gap:10px;margin-bottom:12px;font-size:13px;color:#555;align-items:flex-start;}
-.step-num{width:22px;height:22px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px;}
-input,select{width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;outline:none;}
-input:focus{border-color:#1D9E75;}
-.btn{background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:9px;font-size:14px;font-weight:600;border:none;cursor:pointer;width:100%;margin-top:12px;}
-.btn:active{opacity:.85;}
-.btn-sec{background:#fff;color:#1a1a1a;border:1px solid #ddd;padding:9px 18px;border-radius:9px;font-size:13px;cursor:pointer;}
-.err{font-size:12px;color:#A32D2D;margin-top:6px;}
-
-/* SELEÇÃO */
+.sn{width:22px;height:22px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
 .select-screen{display:flex;flex-direction:column;align-items:center;padding:32px 20px;min-height:70vh;}
 .select-screen h2{font-size:20px;font-weight:700;margin-bottom:6px;}
 .select-screen p{font-size:14px;color:#888;margin-bottom:24px;}
@@ -39,9 +34,7 @@ input:focus{border-color:#1D9E75;}
 .c-avatar{width:48px;height:48px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;}
 .c-nome{font-size:13px;font-weight:600;}
 .c-func{font-size:11px;color:#888;margin-top:2px;}
-
-/* APONTAMENTO */
-.main{padding:14px 18px 48px;}
+.main{padding:14px 18px 60px;}
 .header-user{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
 .user-info{display:flex;align-items:center;gap:10px;}
 .u-avatar{width:40px;height:40px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;}
@@ -52,26 +45,58 @@ input:focus{border-color:#1D9E75;}
 .op-tag{font-size:15px;font-weight:700;}
 .op-mod{font-size:12px;color:#888;}
 .badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;}
-.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bgray{background:#f0f0f0;color:#888;}
+.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bgray{background:#f0f0f0;color:#888;} .bbad{background:#FCEBEB;color:#A32D2D;} .bpause{background:#E8EEFF;color:#3550B4;}
 .qcard{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:10px;}
 .qcard.andamento{border-color:#BA7517;background:#fffbf5;}
-.qcard.feito{border-color:#1D9E75;background:#f5fbf7;opacity:.75;}
+.qcard.pausado{border-color:#3550B4;background:#f5f7ff;}
+.qcard.feito{border-color:#1D9E75;background:#f5fbf7;opacity:.82;}
+.qcard.feito-erro{border-color:#A32D2D;background:#fff8f8;opacity:.82;}
 .qh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
 .qnum{font-size:14px;font-weight:700;}
-.hora-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;}
+.hora-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
 .hora-item{font-size:12px;color:#888;}
 .hora-item span{color:#1a1a1a;font-weight:600;}
-.outros{font-size:12px;color:#aaa;margin-bottom:10px;}
+.outros{font-size:12px;color:#aaa;margin-bottom:8px;}
 .btn-start{width:100%;padding:14px;border-radius:10px;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;}
-.btn-end{width:100%;padding:14px;border-radius:10px;background:#BA7517;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;}
-.feito-msg{font-size:14px;color:#3B6D11;font-weight:600;text-align:center;padding:6px 0;}
-.timer{font-size:13px;color:#BA7517;font-weight:600;margin-bottom:8px;}
+.btn-end{width:100%;padding:13px;border-radius:10px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.btn-pause{width:100%;padding:13px;border-radius:10px;background:#fff;color:#3550B4;font-size:14px;font-weight:700;border:2px solid #3550B4;cursor:pointer;}
+.btn-resume{width:100%;padding:14px;border-radius:10px;background:#3550B4;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;}
+.acoes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.timer-box{background:#FFF3E0;border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.timer-txt{font-size:14px;color:#BA7517;font-weight:700;}
+.timer-liq{font-size:11px;color:#888;}
+.pause-box{background:#EEF1FF;border-radius:9px;padding:10px 14px;margin-bottom:10px;}
+.pause-txt{font-size:14px;color:#3550B4;font-weight:700;}
+.pause-sub{font-size:11px;color:#888;margin-top:2px;}
+.obs-section{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+.obs-section h5{font-size:12px;font-weight:700;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
+.obs-item{background:#f8f8f6;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;}
+.obs-item .obs-hora{font-size:11px;color:#aaa;margin-bottom:2px;}
+.obs-input-row{display:flex;gap:8px;}
+.obs-input-row textarea{min-height:50px;font-size:13px;}
+.btn-obs{padding:8px 14px;border-radius:8px;background:#1a1a1a;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer;white-space:nowrap;align-self:flex-end;}
+.fin-panel{background:#fff;border:1.5px solid #1a1a1a;border-radius:12px;padding:16px;margin-top:10px;}
+.fin-panel h4{font-size:14px;font-weight:700;margin-bottom:14px;}
+.radio-group{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.radio-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e5e5e5;border-radius:9px;cursor:pointer;background:#fff;}
+.radio-opt.sel-ok{border-color:#1D9E75;background:#f5fbf7;}
+.radio-opt.sel-err{border-color:#A32D2D;background:#fff8f8;}
+.radio-opt-label{font-size:13px;font-weight:600;}
+.radio-opt-sub{font-size:11px;color:#888;margin-top:1px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.chip{padding:7px 12px;border:1.5px solid #ddd;border-radius:99px;font-size:12px;font-weight:500;cursor:pointer;background:#fff;color:#555;}
+.chip.ativo{border-color:#A32D2D;background:#FCEBEB;color:#A32D2D;}
+.btn-confirmar{width:100%;padding:13px;border-radius:10px;background:#1D9E75;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-top:14px;}
+.btn-cancel-fin{width:100%;padding:10px;border-radius:10px;background:#fff;color:#888;font-size:13px;border:1px solid #ddd;cursor:pointer;margin-top:8px;}
+.feito-msg{font-size:14px;font-weight:700;text-align:center;padding:6px 0;color:#3B6D11;}
+.feito-msg.erro{color:#A32D2D;}
+.erro-resumo{font-size:12px;color:#A32D2D;font-style:italic;margin-top:3px;}
+.obs-resumo{font-size:12px;color:#888;margin-top:6px;padding:8px 10px;background:#f8f8f6;border-radius:8px;}
 .empty{font-size:14px;color:#aaa;text-align:center;padding:40px 20px;}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;display:none;z-index:999;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;display:none;z-index:999;text-align:center;}
 </style>
 </head>
 <body>
-
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
@@ -79,27 +104,24 @@ input:focus{border-color:#1D9E75;}
   </div>
   <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
 </div>
-
 <div id="setupScreen" class="setup" style="display:none;">
   <h2>Configuração inicial</h2>
-  <p>Para sincronizar com o supervisor, informe a URL do banco de dados Firebase configurada pelo supervisor.</p>
+  <p>Para sincronizar com o supervisor, informe a URL do banco de dados Firebase.</p>
   <div class="setup-card">
     <h3>🔗 Inserir URL do banco de dados</h3>
-    <div class="step"><span class="step-num">1</span><span>Peça ao supervisor a <strong>URL do banco Firebase</strong> (começa com <code>https://</code> e termina com <code>.firebaseio.com</code>)</span></div>
-    <div class="step"><span class="step-num">2</span><span>Cole a URL abaixo e toque em <strong>Conectar</strong></span></div>
+    <div class="step"><span class="sn">1</span><span>Peça ao supervisor a <strong>URL do Firebase</strong></span></div>
+    <div class="step"><span class="sn">2</span><span>Cole abaixo e toque em <strong>Conectar</strong></span></div>
     <label>URL do Firebase</label>
-    <input id="setupUrl" placeholder="https://seu-projeto.firebaseio.com" type="url"/>
+    <input id="setupUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com" type="url"/>
     <div id="setupErr" class="err"></div>
     <button class="btn" onclick="conectar()">Conectar</button>
   </div>
 </div>
-
 <div id="selectScreen" class="select-screen" style="display:none;">
   <h2>Quem é você?</h2>
   <p>Toque no seu nome para começar.</p>
   <div class="colab-grid" id="colabGrid"></div>
 </div>
-
 <div id="mainScreen" style="display:none;">
   <div class="main">
     <div class="header-user">
@@ -108,67 +130,71 @@ input:focus{border-color:#1D9E75;}
         <div><div class="u-name" id="uName"></div><div class="u-func" id="uFunc"></div></div>
       </div>
       <div style="display:flex;gap:6px;">
-        <button class="btn-sm" onclick="refresh()">↻</button>
+        <button class="btn-sm" onclick="refresh()">↻ Atualizar</button>
         <button class="btn-sm" onclick="trocar()">Trocar</button>
       </div>
     </div>
     <div id="opsDiv"></div>
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
-
 <script>
-let DB_URL = localStorage.getItem('paineis_db_url') || '';
-let S = {colaboradores:[],ops:[],apontamentos:[],nid:1};
-let colab = null;
-let timerIv = null;
-
+let DB_URL=localStorage.getItem('paineis_db_url')||'';
+let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
+let colab=null,timerIv=null,finalizando=null;
+let _semErro=false,_errosSel=[],_obsErro='';
+const TIPOS_ERRO=['Erro de cabeamento','Componente incorreto','Falta de componente','Erro de montagem','Dano em componente','Erro de identificação','Outro'];
 function ini(n){return n.split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();}
 function fmtH(iso){if(!iso)return'—';return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
-function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(a))/60000);}
-function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2200);}
-function setSync(ok,txt){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=txt;}
-
+function fmtD(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function durMin(a,b){if(!a||!b)return 0;return Math.round((new Date(b)-new Date(a))/60000);}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2400);}
+function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
+function tempoLiquido(apt){
+  if(!apt.inicio)return 0;
+  const fim=apt.fim||new Date().toISOString();
+  let total=durMin(apt.inicio,fim);
+  (apt.pausas||[]).forEach(p=>{if(p.inicio&&p.fim)total-=durMin(p.inicio,p.fim);});
+  return Math.max(0,total);
+}
+function estaPausado(apt){
+  if(!apt||apt.fim)return false;
+  const pausas=apt.pausas||[];
+  if(!pausas.length)return false;
+  const ultima=pausas[pausas.length-1];
+  return ultima.inicio&&!ultima.fim;
+}
 async function load(){
-  if(!DB_URL)return false;
   try{
     const r=await fetch(DB_URL+'/paineis.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
-    if(d){S=d;if(!S.colaboradores)S.colaboradores=[];if(!S.ops)S.ops=[];if(!S.apontamentos)S.apontamentos=[];if(!S.nid)S.nid=1;}
-    setSync(true,'sincronizado');return true;
-  }catch(e){setSync(false,'sem conexão');return false;}
+    if(d){S=d;['colaboradores','ops','apontamentos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
+    setSync(true);return true;
+  }catch(e){setSync(false);return false;}
 }
-
 async function save(){
   try{
     await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
-    setSync(true,'sincronizado');
-  }catch(e){setSync(false,'erro ao salvar');}
+    setSync(true);
+  }catch(e){setSync(false);}
 }
-
 async function conectar(){
   const url=document.getElementById('setupUrl').value.trim().replace(/\/$/,'');
   if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
-  document.getElementById('setupErr').textContent='';
+  document.getElementById('setupErr').textContent='Testando...';
   DB_URL=url;
-  setSync(false,'testando...');
   const ok=await load();
   if(ok){localStorage.setItem('paineis_db_url',DB_URL);showSelect();}
-  else{document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL.';}
+  else document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL.';
 }
-
-function showSetup(){document.getElementById('setupScreen').style.display='flex';document.getElementById('selectScreen').style.display='none';document.getElementById('mainScreen').style.display='none';}
 function showSelect(){
-  document.getElementById('setupScreen').style.display='none';
+  ['setupScreen','mainScreen'].forEach(id=>document.getElementById(id).style.display='none');
   document.getElementById('selectScreen').style.display='flex';
-  document.getElementById('mainScreen').style.display='none';
   const g=document.getElementById('colabGrid');
-  if(!S.colaboradores.length){g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:#aaa;font-size:13px;">Nenhum colaborador cadastrado.<br>Peça ao supervisor cadastrar.</div>';return;}
+  if(!S.colaboradores.length){g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:#aaa;font-size:13px;padding:20px;">Nenhum colaborador cadastrado.</div>';return;}
   g.innerHTML=S.colaboradores.map(c=>`<div class="colab-btn" onclick="selColab(${c.id})"><div class="c-avatar">${ini(c.nome)}</div><div class="c-nome">${c.nome}</div><div class="c-func">${c.funcao}</div></div>`).join('');
 }
-
 function selColab(id){
   colab=S.colaboradores.find(c=>c.id===id);if(!colab)return;
   document.getElementById('selectScreen').style.display='none';
@@ -178,91 +204,187 @@ function selColab(id){
   document.getElementById('uFunc').textContent=colab.funcao;
   renderOps();
 }
-
-function trocar(){colab=null;showSelect();}
-
+function trocar(){colab=null;finalizando=null;showSelect();}
 async function refresh(){
-  setSync(false,'atualizando...');
+  document.getElementById('syncTxt').textContent='atualizando...';
   await load();
-  if(colab) colab=S.colaboradores.find(c=>c.id===colab.id)||colab;
+  if(colab)colab=S.colaboradores.find(c=>c.id===colab.id)||colab;
   renderOps();toast('Atualizado!');
 }
-
 function renderOps(){
   const div=document.getElementById('opsDiv');
   const ab=S.ops.filter(o=>o.status==='aberta');
-  if(!ab.length){div.innerHTML='<div class="empty">Nenhuma OP em aberto.<br><span style="font-size:12px;">Aguarde o supervisor cadastrar ordens.</span></div>';return;}
-  div.innerHTML=ab.map(op=>renderOp(op)).join('');
+  if(!ab.length){div.innerHTML='<div class="empty">Nenhuma OP em aberto.</div>';return;}
+  div.innerHTML=ab.map(op=>renderOpCard(op)).join('');
   ab.forEach(op=>{
     for(let q=1;q<=op.qtd;q++){
       const apt=S.apontamentos.find(a=>a.opId===op.id&&a.colabId===colab.id&&a.quadroIdx===q);
-      if(apt&&apt.inicio&&!apt.fim) startTimer(op.id,q,apt.inicio);
+      if(apt&&apt.inicio&&!apt.fim&&!estaPausado(apt))startTimer(op.id,q,apt);
     }
   });
+  if(finalizando){const p=document.getElementById(`fin-${finalizando.opId}-${finalizando.q}`);if(p)renderFinPanel(finalizando.opId,finalizando.q);}
 }
-
-function renderOp(op){
+function renderOpCard(op){
   const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
   let qs='';
   for(let q=1;q<=op.qtd;q++){
     const apt=S.apontamentos.find(a=>a.opId===op.id&&a.colabId===colab.id&&a.quadroIdx===q);
     const outros=S.apontamentos.filter(a=>a.opId===op.id&&a.quadroIdx===q&&a.colabId!==colab.id);
-    let cls='qcard',badge='<span class="badge bgray">Não iniciado</span>',horas='',out='',acoes='';
-    if(apt&&apt.fim){
-      cls='qcard feito';badge='<span class="badge bok">✓ Finalizado</span>';
-      const d=dur(apt.inicio,apt.fim);
-      horas=`<div class="hora-row"><div class="hora-item">Início: <span>${fmtH(apt.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(apt.fim)}</span></div>${d?`<div class="hora-item">Duração: <span>${d}min</span></div>`:''}</div>`;
-      acoes=`<div class="feito-msg">✓ Concluído</div>`;
-    } else if(apt&&apt.inicio){
-      cls='qcard andamento';badge='<span class="badge bwarn">▶ Em andamento</span>';
-      horas=`<div class="hora-row"><div class="hora-item">Início: <span>${fmtH(apt.inicio)}</span></div></div>`;
-      acoes=`<div class="timer" id="tmr-${op.id}-${q}">calculando...</div><button class="btn-end" onclick="registrarFim(${op.id},${q})">⏹ Registrar finalização</button>`;
-    } else {
-      acoes=`<button class="btn-start" onclick="registrarInicio(${op.id},${q})">▶ Iniciar este quadro</button>`;
-    }
-    if(outros.length){
-      out=`<div class="outros">Outros: ${outros.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);return(c?c.nome.split(' ')[0]:'?')+(a.fim?' ✓':' ▶');}).join(', ')}</div>`;
-    }
-    qs+=`<div class="${cls}"><div class="qh"><span class="qnum">Quadro ${q} de ${op.qtd}</span>${badge}</div>${horas}${out}${acoes}</div>`;
+    qs+=renderQuadro(op,q,apt,outros);
   }
-  return`<div style="margin-bottom:20px;">
-    <div class="op-sep"><div><div class="op-tag">${op.num}</div><div class="op-mod">${op.modelo}</div></div>
-    <span class="badge ${fin===op.qtd?'bok':fin>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span></div>${qs}</div>`;
+  return`<div style="margin-bottom:20px;"><div class="op-sep"><div><div class="op-tag">${op.num}</div><div class="op-mod">${op.modelo}</div></div><span class="badge ${fin===op.qtd?'bok':fin>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span></div>${qs}</div>`;
 }
-
-async function registrarInicio(opId,qIdx){
-  if(S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===qIdx))return;
-  S.apontamentos.push({id:S.nid++,opId,colabId:colab.id,quadroIdx:qIdx,inicio:new Date().toISOString(),fim:null});
+function renderQuadro(op,q,apt,outros){
+  const outrosHtml=outros.length?`<div class="outros">Outros: ${outros.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);return(c?c.nome.split(' ')[0]:'?')+(a.fim?' ✓':estaPausado(a)?' ⏸':' ▶');}).join(', ')}</div>`:'';
+  if(!apt||!apt.inicio){
+    return`<div class="qcard"><div class="qh"><span class="qnum">Quadro ${q} de ${op.qtd}</span><span class="badge bgray">Não iniciado</span></div>${outrosHtml}<button class="btn-start" onclick="iniciar(${op.id},${q})">▶ Iniciar este quadro</button></div>`;
+  }
+  if(apt.fim){
+    const temErro=apt.erros&&apt.erros.length>0;
+    const liq=tempoLiquido(apt);
+    const pausaCount=(apt.pausas||[]).filter(p=>p.fim).length;
+    const obsCount=(apt.observacoes||[]).length;
+    return`<div class="qcard ${temErro?'feito-erro':'feito'}">
+      <div class="qh"><span class="qnum">Quadro ${q} de ${op.qtd}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div>
+      <div class="hora-row">
+        <div class="hora-item">Início: <span>${fmtH(apt.inicio)}</span></div>
+        <div class="hora-item">Fim: <span>${fmtH(apt.fim)}</span></div>
+        <div class="hora-item">Tempo líquido: <span>${liq}min</span></div>
+        ${pausaCount?`<div class="hora-item">Pausas: <span>${pausaCount}</span></div>`:''}
+      </div>
+      ${temErro?`<div class="feito-msg erro">⚠ Erros relatados</div><div class="erro-resumo">${apt.erros.join(', ')}${apt.obsErro?' — '+apt.obsErro:''}</div>`:'<div class="feito-msg">✓ Concluído sem erros</div>'}
+      ${obsCount?`<div class="obs-resumo">💬 ${obsCount} observação(ões): ${(apt.observacoes||[]).map(o=>o.texto).join(' · ')}</div>`:''}
+    </div>`;
+  }
+  if(estaPausado(apt)){
+    const pausas=apt.pausas||[];
+    const ultima=pausas[pausas.length-1];
+    const liq=tempoLiquido(apt);
+    return`<div class="qcard pausado">
+      <div class="qh"><span class="qnum">Quadro ${q} de ${op.qtd}</span><span class="badge bpause">⏸ Pausado</span></div>
+      <div class="pause-box"><div class="pause-txt">⏸ Produção pausada</div><div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · Tempo trabalhado: ${liq}min</div></div>
+      <div class="hora-row"><div class="hora-item">Iniciado: <span>${fmtD(apt.inicio)} ${fmtH(apt.inicio)}</span></div></div>
+      ${outrosHtml}
+      ${renderObsLista(apt)}
+      ${renderObsInput(op.id,q)}
+      <button class="btn-resume" onclick="retomar(${op.id},${q})">▶ Retomar produção</button>
+    </div>`;
+  }
+  return`<div class="qcard andamento">
+    <div class="qh"><span class="qnum">Quadro ${q} de ${op.qtd}</span><span class="badge bwarn">▶ Em andamento</span></div>
+    <div class="timer-box">
+      <div><div class="timer-txt" id="tmr-${op.id}-${q}">calculando...</div><div class="timer-liq">Tempo líquido de trabalho</div></div>
+      <div style="font-size:11px;color:#888;">Início: ${fmtH(apt.inicio)}</div>
+    </div>
+    ${outrosHtml}
+    ${renderObsLista(apt)}
+    ${renderObsInput(op.id,q)}
+    <div class="acoes-grid">
+      <button class="btn-pause" onclick="pausar(${op.id},${q})">⏸ Pausar</button>
+      <button class="btn-end" onclick="abrirFinalizar(${op.id},${q})">⏹ Finalizar</button>
+    </div>
+    <div id="fin-${op.id}-${q}"></div>
+  </div>`;
+}
+function renderObsLista(apt){
+  const obs=apt.observacoes||[];
+  if(!obs.length)return'';
+  return`<div class="obs-section"><h5>💬 Observações (${obs.length})</h5><div class="obs-lista">${obs.map(o=>`<div class="obs-item"><div class="obs-hora">${fmtD(o.hora)} ${fmtH(o.hora)}</div>${o.texto}</div>`).join('')}</div></div>`;
+}
+function renderObsInput(opId,q){
+  return`<div class="obs-section"><h5>📝 Adicionar observação</h5><div class="obs-input-row"><textarea id="obs-${opId}-${q}" placeholder="Descreva o problema ou observação durante a montagem..." rows="2"></textarea><button class="btn-obs" onclick="adicionarObs(${opId},${q})">Registrar</button></div></div>`;
+}
+async function adicionarObs(opId,q){
+  const el=document.getElementById(`obs-${opId}-${q}`);
+  if(!el)return;
+  const texto=el.value.trim();
+  if(!texto){toast('Digite uma observação antes de registrar.');return;}
+  const apt=S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===q);
+  if(!apt)return;
+  if(!apt.observacoes)apt.observacoes=[];
+  apt.observacoes.push({hora:new Date().toISOString(),texto});
+  await save();toast('Observação registrada!');renderOps();
+}
+async function pausar(opId,q){
+  const apt=S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===q);
+  if(!apt||apt.fim)return;
+  if(!apt.pausas)apt.pausas=[];
+  apt.pausas.push({inicio:new Date().toISOString(),fim:null});
+  await save();renderOps();toast('Produção pausada ⏸');
+}
+async function retomar(opId,q){
+  const apt=S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===q);
+  if(!apt||apt.fim)return;
+  const pausas=apt.pausas||[];
+  if(pausas.length){const ult=pausas[pausas.length-1];if(ult&&!ult.fim)ult.fim=new Date().toISOString();}
+  await save();renderOps();toast('Produção retomada ▶');
+}
+async function iniciar(opId,q){
+  if(S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===q))return;
+  S.apontamentos.push({id:S.nid++,opId,colabId:colab.id,quadroIdx:q,inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],erros:[],obsErro:''});
   await save();renderOps();toast('Iniciado!');
 }
-
-async function registrarFim(opId,qIdx){
-  const apt=S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===qIdx);
-  if(!apt||apt.fim)return;
-  apt.fim=new Date().toISOString();
-  await save();renderOps();toast('Finalizado ✓');
+function abrirFinalizar(opId,q){
+  finalizando={opId,q};_semErro=false;_errosSel=[];_obsErro='';
+  const c=document.getElementById(`fin-${opId}-${q}`);if(c)renderFinPanel(opId,q);
 }
-
-function startTimer(opId,q,inicio){
-  const ini=new Date(inicio);
-  const tick=()=>{
+function renderFinPanel(opId,q){
+  const c=document.getElementById(`fin-${opId}-${q}`);if(!c)return;
+  c.innerHTML=`<div class="fin-panel"><h4>Como foi a montagem deste quadro?</h4>
+    <div class="radio-group">
+      <div class="radio-opt ${_semErro?'sel-ok':''}" onclick="selSemErro(${opId},${q})"><div><div class="radio-opt-label">✓ Nenhum erro</div><div class="radio-opt-sub">Montagem concluída corretamente</div></div></div>
+      <div class="radio-opt ${!_semErro&&_errosSel.length?'sel-err':''}" onclick="selComErro(${opId},${q})"><div><div class="radio-opt-label">⚠ Houve erros</div><div class="radio-opt-sub">Selecione os tipos abaixo</div></div></div>
+    </div>
+    ${!_semErro?`<div><div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">Tipo de erro:</div>
+      <div class="chips">${TIPOS_ERRO.map(e=>`<span class="chip ${_errosSel.includes(e)?'ativo':''}" onclick="toggleErro(${opId},${q},'${e}')">${e}</span>`).join('')}</div>
+      <label>Descreva o que aconteceu (opcional)</label>
+      <textarea id="obsErroFin-${opId}-${q}" rows="2" placeholder="Ex: disjuntor com defeito...">${_obsErro}</textarea>
+    </div>`:''}
+    <button class="btn-confirmar" onclick="confirmarFin(${opId},${q})">Confirmar finalização</button>
+    <button class="btn-cancel-fin" onclick="cancelarFin(${opId},${q})">Cancelar</button>
+  </div>`;
+}
+function selSemErro(opId,q){_semErro=true;_errosSel=[];_obsErro='';renderFinPanel(opId,q);}
+function selComErro(opId,q){_semErro=false;renderFinPanel(opId,q);}
+function toggleErro(opId,q,tipo){
+  _semErro=false;
+  const el=document.getElementById(`obsErroFin-${opId}-${q}`);if(el)_obsErro=el.value;
+  const i=_errosSel.indexOf(tipo);if(i>=0)_errosSel.splice(i,1);else _errosSel.push(tipo);
+  renderFinPanel(opId,q);
+}
+function cancelarFin(opId,q){finalizando=null;const c=document.getElementById(`fin-${opId}-${q}`);if(c)c.innerHTML='';}
+async function confirmarFin(opId,q){
+  if(!_semErro&&!_errosSel.length){toast('Selecione "Nenhum erro" ou indique o tipo.');return;}
+  const el=document.getElementById(`obsErroFin-${opId}-${q}`);
+  const obsErro=el?el.value.trim():'';
+  const apt=S.apontamentos.find(a=>a.opId===opId&&a.colabId===colab.id&&a.quadroIdx===q);
+  if(!apt||apt.fim)return;
+  if(estaPausado(apt)){const ult=(apt.pausas||[]).slice(-1)[0];if(ult&&!ult.fim)ult.fim=new Date().toISOString();}
+  apt.fim=new Date().toISOString();
+  apt.erros=_semErro?[]:_errosSel;
+  apt.obsErro=_semErro?'':obsErro;
+  finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
+  await save();renderOps();
+  toast(!apt.erros.length?'Quadro finalizado ✓':'Quadro finalizado com erros ⚠');
+}
+function startTimer(opId,q,apt){
+  if(timerIv)clearInterval(timerIv);
+  timerIv=setInterval(()=>{
     const el=document.getElementById(`tmr-${opId}-${q}`);
     if(!el){clearInterval(timerIv);return;}
-    const s=Math.floor((new Date()-ini)/1000),m=Math.floor(s/60),ss=s%60;
-    el.textContent=`Tempo: ${m}min ${ss<10?'0'+ss:ss}s`;
-  };
-  tick();if(timerIv)clearInterval(timerIv);timerIv=setInterval(tick,1000);
+    const liq=tempoLiquido(apt);
+    el.textContent=liq>=60?`${Math.floor(liq/60)}h ${liq%60}min trabalhados`:`${liq}min trabalhados`;
+  },15000);
+  const el=document.getElementById(`tmr-${opId}-${q}`);
+  if(el){const liq=tempoLiquido(apt);el.textContent=`${liq}min trabalhados`;}
 }
-
 async function init(){
-  if(!DB_URL){showSetup();return;}
-  setSync(false,'conectando...');
+  if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();
-  if(ok) showSelect();
-  else showSetup();
-  setInterval(async()=>{if(colab){await load();renderOps();}},10000);
+  if(ok)showSelect();
+  else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
+  setInterval(async()=>{if(colab&&!finalizando){await load();renderOps();}},12000);
 }
-
 init();
 </script>
 </body>

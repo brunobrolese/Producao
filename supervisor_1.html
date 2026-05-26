@@ -12,8 +12,8 @@ body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size
 .badge-sup{background:#BA7517;color:#fff;font-size:11px;padding:2px 9px;border-radius:99px;font-weight:500;}
 .sync-info{font-size:11px;color:#aaa;display:flex;align-items:center;gap:5px;}
 .dot{width:7px;height:7px;border-radius:50%;background:#1D9E75;display:inline-block;flex-shrink:0;}
-.nav{display:flex;gap:6px;padding:12px 18px 0;flex-wrap:wrap;background:#fff;border-bottom:1px solid #e5e5e5;}
-.nav button{font-size:12px;padding:8px 14px;border-radius:0;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;cursor:pointer;font-weight:500;margin-bottom:-1px;}
+.nav{display:flex;gap:0;padding:0 18px;flex-wrap:wrap;background:#fff;border-bottom:1px solid #e5e5e5;}
+.nav button{font-size:12px;padding:10px 14px;border:none;border-bottom:2px solid transparent;background:transparent;color:#888;cursor:pointer;font-weight:500;margin-bottom:-1px;}
 .nav button.active{color:#1a1a1a;border-bottom-color:#1a1a1a;}
 .content{padding:16px 18px 48px;}
 .page{display:none;} .page.active{display:block;}
@@ -35,11 +35,11 @@ input:focus,select:focus{border-color:#1D9E75;}
 .btn-green{font-size:12px;padding:3px 10px;border:1px solid #1D9E75;border-radius:7px;background:#fff;color:#1D9E75;cursor:pointer;}
 .btn-cancel{font-size:12px;padding:4px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#666;cursor:pointer;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
-th{text-align:left;font-size:12px;font-weight:500;color:#888;padding:6px 8px;border-bottom:1px solid #f0f0f0;}
-td{padding:8px;border-bottom:1px solid #f5f5f5;color:#1a1a1a;vertical-align:middle;}
+th{text-align:left;font-size:11px;font-weight:600;color:#888;padding:6px 8px;border-bottom:1px solid #f0f0f0;white-space:nowrap;}
+td{padding:8px;border-bottom:1px solid #f5f5f5;color:#1a1a1a;vertical-align:top;}
 tr:last-child td{border-bottom:none;}
 .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:500;}
-.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bbad{background:#FCEBEB;color:#A32D2D;} .bgray{background:#f0f0f0;color:#888;}
+.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bbad{background:#FCEBEB;color:#A32D2D;} .bgray{background:#f0f0f0;color:#888;} .bpause{background:#E8EEFF;color:#3550B4;}
 .pbar{height:5px;background:#f0f0f0;border-radius:99px;overflow:hidden;margin-top:4px;}
 .pfill{height:100%;border-radius:99px;background:#1D9E75;}
 .pfill.warn{background:#BA7517;} .pfill.bad{background:#A32D2D;}
@@ -53,8 +53,8 @@ tr:last-child td{border-bottom:none;}
 .pfill2{height:100%;border-radius:99px;background:#1D9E75;}
 .toast{position:fixed;bottom:20px;right:20px;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;display:none;z-index:999;}
 .confirm-row{background:#fff8f8;border:1px solid #f5c5c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:6px;}
-
-/* SETUP */
+.obs-pill{display:inline-block;background:#f5f5f3;border:1px solid #e5e5e5;border-radius:6px;padding:3px 8px;font-size:11px;color:#555;margin:2px 2px 0 0;}
+.obs-pill.erro{background:#fff0f0;border-color:#f5c5c5;color:#A32D2D;}
 .setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh;padding:24px;}
 .setup h2{font-size:22px;font-weight:700;margin-bottom:6px;}
 .setup p{font-size:14px;color:#666;margin-bottom:22px;max-width:480px;text-align:center;}
@@ -64,11 +64,10 @@ tr:last-child td{border-bottom:none;}
 .sn{width:24px;height:24px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
 code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 .err{font-size:12px;color:#A32D2D;margin-top:6px;}
-.url-box{background:#f5f5f3;border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:13px;font-family:monospace;word-break:break-all;margin:8px 0;cursor:pointer;color:#1D9E75;}
+.url-box{background:#f5f5f3;border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:12px;font-family:monospace;word-break:break-all;margin:8px 0;cursor:pointer;color:#1D9E75;}
 </style>
 </head>
 <body>
-
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:10px;">
     <span class="dot" id="dot"></span>
@@ -80,25 +79,21 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span id="mesLabel" style="font-size:12px;color:#888;"></span>
   </div>
 </div>
-
-<!-- SETUP -->
 <div id="setupScreen" class="setup">
   <h2>⚡ Configuração inicial</h2>
-  <p>Vamos conectar o sistema ao banco de dados em nuvem. É rápido e gratuito.</p>
+  <p>Conecte ao banco de dados Firebase para começar.</p>
   <div class="setup-card">
     <h3>🔧 Criar banco de dados Firebase (grátis)</h3>
-    <div class="step"><span class="sn">1</span><span>Acesse <strong><a href="https://console.firebase.google.com" target="_blank" style="color:#1D9E75;">console.firebase.google.com</a></strong> e clique em <strong>"Criar projeto"</strong></span></div>
-    <div class="step"><span class="sn">2</span><span>Dê um nome ao projeto (ex: <code>paineis-fabrica</code>) e desative o Google Analytics — clique em <strong>"Criar projeto"</strong></span></div>
-    <div class="step"><span class="sn">3</span><span>No menu lateral, clique em <strong>Criação → Realtime Database → Criar banco de dados</strong>. Escolha a região <strong>United States</strong> e selecione <strong>"Iniciar no modo de teste"</strong></span></div>
-    <div class="step"><span class="sn">4</span><span>Copie a URL que aparece no topo (começa com <code>https://</code> e termina com <code>firebaseio.com</code>) e cole abaixo:</span></div>
+    <div class="step"><span class="sn">1</span><span>Acesse <a href="https://console.firebase.google.com" target="_blank" style="color:#1D9E75;font-weight:600;">console.firebase.google.com</a> → <strong>Criar projeto</strong></span></div>
+    <div class="step"><span class="sn">2</span><span>Dê um nome (ex: <code>paineis-fabrica</code>), desative Google Analytics → <strong>Criar projeto</strong></span></div>
+    <div class="step"><span class="sn">3</span><span><strong>Criação → Realtime Database → Criar banco</strong> → região United States → <strong>modo de teste</strong></span></div>
+    <div class="step"><span class="sn">4</span><span>Copie a URL do banco e cole abaixo</span></div>
     <label>URL do Firebase Realtime Database</label>
     <input id="fbUrl" placeholder="https://paineis-fabrica-default-rtdb.firebaseio.com" type="url"/>
     <div id="setupErr" class="err"></div>
     <button class="btn" style="margin-top:12px;width:100%;" onclick="conectar()">🔗 Conectar e começar</button>
   </div>
 </div>
-
-<!-- APP PRINCIPAL -->
 <div id="appScreen" style="display:none;">
   <div class="nav">
     <button class="active" onclick="nav('dash',this)">Dashboard</button>
@@ -107,10 +102,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <button onclick="nav('mes',this)">Visão Mensal</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
-
   <div class="content">
-
-    <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
       <div class="metrics" id="m-dash"></div>
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
@@ -118,8 +110,6 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <div style="position:relative;height:180px;"><canvas id="cTrend"></canvas></div>
       </div>
     </div>
-
-    <!-- OPS -->
     <div id="page-ops" class="page">
       <div class="card"><h3>➕ Nova Ordem de Produção</h3>
         <div class="frow3">
@@ -136,8 +126,6 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       </div>
       <div class="card"><h3>📋 Ordens cadastradas</h3><div id="ops-lista"></div></div>
     </div>
-
-    <!-- COLABORADORES -->
     <div id="page-col" class="page">
       <div class="card"><h3>➕ Adicionar colaborador</h3>
         <div class="frow">
@@ -153,8 +141,6 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       </div>
       <div class="card"><h3>👥 Equipe (<span id="cCount">0</span> colaboradores)</h3><div id="col-lista"></div></div>
     </div>
-
-    <!-- MENSAL -->
     <div id="page-mes" class="page">
       <div class="frow" style="max-width:320px;margin-bottom:12px;">
         <div><label>Mês/Ano</label><input type="month" id="mFiltro"/></div>
@@ -167,58 +153,65 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       <div class="card"><h3>📋 Resumo por colaborador</h3><div id="mes-tabela"></div></div>
       <div class="card"><h3>🗒️ Todos os apontamentos no mês</h3><div id="mes-apon"></div></div>
     </div>
-
-    <!-- CONFIG -->
     <div id="page-cfg" class="page">
       <div class="card">
         <h3>🔗 Banco de dados conectado</h3>
         <label>URL do Firebase</label>
         <div class="url-box" id="urlDisplay" onclick="copyUrl()" title="Clique para copiar"></div>
-        <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores configurarem o app deles.</div>
+        <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores.</div>
         <button class="btn" style="margin-top:12px;" onclick="copyUrl()">📋 Copiar URL</button>
       </div>
       <div class="card">
         <h3>⚠️ Trocar banco de dados</h3>
-        <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual. Os dados no Firebase continuarão existindo.</p>
+        <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual.</p>
         <button class="btn" style="background:#A32D2D;" onclick="desconectar()">Desconectar e reconfigurar</button>
       </div>
     </div>
-
   </div>
 </div>
-
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-let DB_URL = localStorage.getItem('paineis_db_url') || '';
-let S = {colaboradores:[],ops:[],apontamentos:[],nid:1};
-let currentPage = 'dash';
-
-function setSync(ok,txt){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';}
+let DB_URL=localStorage.getItem('paineis_db_url')||'';
+let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
+let currentPage='dash';
+function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';}
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
 function msg(id,txt,tipo){const el=document.getElementById(id);if(!el)return;el.style.color=tipo==='ok'?'#1D9E75':'#A32D2D';el.textContent=txt;setTimeout(()=>el.textContent='',3000);}
 function fmtH(iso){if(!iso)return'—';return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
-function fmt(iso){if(!iso)return'—';const d=iso.includes('T')?iso.split('T')[0]:iso;const[y,m,dd]=d.split('-');return`${dd}/${m}/${y}`;}
+function fmtD(iso){if(!iso)return'—';const d=iso.includes('T')?iso.split('T')[0]:iso;const[y,m,dd]=d.split('-');return`${dd}/${m}/${y}`;}
+function fmtDH(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(a))/60000);}
 function td(){return new Date().toISOString().split('T')[0];}
-
+function tempoLiquido(apt){
+  if(!apt.inicio)return 0;
+  const fim=apt.fim||new Date().toISOString();
+  let total=dur(apt.inicio,fim)||0;
+  (apt.pausas||[]).forEach(p=>{if(p.inicio&&p.fim)total-=dur(p.inicio,p.fim)||0;});
+  return Math.max(0,total);
+}
+function estaPausado(apt){
+  if(!apt||apt.fim)return false;
+  const pausas=apt.pausas||[];
+  if(!pausas.length)return false;
+  const u=pausas[pausas.length-1];
+  return u.inicio&&!u.fim;
+}
 async function load(){
   try{
     const r=await fetch(DB_URL+'/paineis.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
-    if(d){S=d;if(!S.colaboradores)S.colaboradores=[];if(!S.ops)S.ops=[];if(!S.apontamentos)S.apontamentos=[];if(!S.nid)S.nid=1;}
+    if(d){S=d;['colaboradores','ops','apontamentos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
     setSync(true);return true;
   }catch(e){setSync(false);return false;}
 }
-
 async function save(){
   try{
     await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
 }
-
 async function conectar(){
   const url=document.getElementById('fbUrl').value.trim().replace(/\/$/,'');
   if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
@@ -226,12 +219,10 @@ async function conectar(){
   DB_URL=url;
   const ok=await load();
   if(ok){localStorage.setItem('paineis_db_url',DB_URL);showApp();}
-  else{document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL e tente novamente.';}
+  else document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL.';
 }
-
 function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
 function copyUrl(){navigator.clipboard.writeText(DB_URL).then(()=>toast('URL copiada!')).catch(()=>toast(DB_URL));}
-
 function showApp(){
   document.getElementById('setupScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
@@ -244,7 +235,6 @@ function showApp(){
   renderDash();renderColabs();
   setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},10000);
 }
-
 function nav(id,btn){
   currentPage=id;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -256,7 +246,6 @@ function nav(id,btn){
   if(id==='col'){load().then(renderColabs);}
   if(id==='mes')renderMes();
 }
-
 async function addOP(){
   const num=document.getElementById('opNum').value.trim();
   const modelo=document.getElementById('opModelo').value.trim();
@@ -270,7 +259,6 @@ async function addOP(){
   document.getElementById('opQtd').value='';
   await save();msg('opMsg','OP cadastrada!','ok');renderOPs();
 }
-
 function renderOPs(){
   const div=document.getElementById('ops-lista');if(!div)return;
   if(!S.ops.length){div.innerHTML='<p class="empty">Nenhuma OP cadastrada.</p>';return;}
@@ -285,7 +273,7 @@ function renderOPs(){
       html+=`<div class="op-card"><div class="op-hd">
         <div><div style="font-size:14px;font-weight:700;">${op.num}</div>
           <div style="font-size:12px;color:#888;">${op.modelo} · ${op.qtd} quadro${op.qtd>1?'s':''}</div>
-          ${op.prazo?`<div style="font-size:11px;color:${venc?'#A32D2D':'#bbb'};">Entrega: ${fmt(op.prazo)}</div>`:''}
+          ${op.prazo?`<div style="font-size:11px;color:${venc?'#A32D2D':'#bbb'};">Entrega: ${fmtD(op.prazo)}</div>`:''}
           ${op.obs?`<div style="font-size:11px;color:#bbb;">${op.obs}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
@@ -304,34 +292,65 @@ function renderOPs(){
   }
   div.innerHTML=html;
 }
-
 function renderAponTabela(op){
   const apts=S.apontamentos.filter(a=>a.opId===op.id);
   if(!apts.length)return'<div style="font-size:12px;color:#bbb;margin-top:6px;">Nenhum apontamento ainda.</div>';
-  return`<div style="margin-top:10px;overflow-x:auto;"><table><thead><tr><th>Quadro</th><th>Colaborador</th><th>Início</th><th>Fim</th><th>Duração</th><th>Status</th></tr></thead><tbody>`+
-    apts.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);const d=dur(a.inicio,a.fim);
-      return`<tr><td>Quadro ${a.quadroIdx}</td><td>${c?c.nome:'—'}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td><td>${d?d+'min':'—'}</td>
-        <td><span class="badge ${a.fim?'bok':a.inicio?'bwarn':'bgray'}">${a.fim?'Finalizado':a.inicio?'Em andamento':'Aguardando'}</span></td></tr>`;
-    }).join('')+`</tbody></table></div>`;
+  const rows=apts.map(a=>{
+    const c=S.colaboradores.find(x=>x.id===a.colabId);
+    const liq=tempoLiquido(a);
+    const pausas=(a.pausas||[]).filter(p=>p.fim).length;
+    const obs=a.observacoes||[];
+    const erros=a.erros||[];
+    const pausado=estaPausado(a);
+    let statusBadge='';
+    if(a.fim){statusBadge=erros.length?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>';}
+    else if(pausado){statusBadge='<span class="badge bpause">⏸ Pausado</span>';}
+    else if(a.inicio){statusBadge='<span class="badge bwarn">▶ Em andamento</span>';}
+    else{statusBadge='<span class="badge bgray">Aguardando</span>';}
+    let obsHtml='—';
+    if(obs.length){obsHtml=obs.map(o=>`<span class="obs-pill" title="${o.texto}">${o.texto.substring(0,40)}${o.texto.length>40?'...':''}</span>`).join('');}
+    let erroHtml='—';
+    if(erros.length){
+      erroHtml=erros.map(e=>`<span class="obs-pill erro">${e}</span>`).join('');
+      if(a.obsErro)erroHtml+=`<div style="font-size:11px;color:#A32D2D;margin-top:3px;font-style:italic;">${a.obsErro}</div>`;
+    }
+    return`<tr>
+      <td style="font-size:12px;">Quadro ${a.quadroIdx}</td>
+      <td style="font-size:12px;">${c?c.nome:'—'}</td>
+      <td style="font-size:12px;">${fmtDH(a.inicio)}</td>
+      <td style="font-size:12px;">${a.fim?fmtDH(a.fim):statusBadge}</td>
+      <td style="font-size:12px;font-weight:600;">${liq?liq+'min':'—'}</td>
+      <td style="font-size:12px;">${pausas||'—'}</td>
+      <td>${obsHtml}</td>
+      <td>${erroHtml}</td>
+    </tr>`;
+  }).join('');
+  return`<div style="margin-top:10px;overflow-x:auto;">
+    <table><thead><tr>
+      <th>Quadro</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
+      <th>Tempo líquido</th><th>Pausas</th><th>Observações</th><th>Erros</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </div>`;
 }
-
 async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'concluida'}:o);await save();renderOPs();}
 async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
-
 function renderColabs(){
   const cnt=document.getElementById('cCount');if(cnt)cnt.textContent=S.colaboradores.length;
   const div=document.getElementById('col-lista');if(!div)return;
   if(!S.colaboradores.length){div.innerHTML='<p class="empty">Nenhum colaborador.</p>';return;}
   const tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Quadros finalizados</th><th></th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Quadros finalizados</th><th>Erros relatados</th><th></th></tr></thead>';
   const tbody=document.createElement('tbody');
   S.colaboradores.forEach(c=>{
-    const total=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim).length;
+    const apts=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim);
+    const total=apts.length;
+    const erros=apts.filter(a=>a.erros&&a.erros.length>0).length;
     const tr=document.createElement('tr');
     const t1=document.createElement('td');t1.textContent=c.nome;
     const t2=document.createElement('td');t2.textContent=c.funcao;
     const t3=document.createElement('td');t3.textContent=total+' quadros';
-    const t4=document.createElement('td');
+    const t4=document.createElement('td');t4.innerHTML=erros?`<span class="badge bbad">${erros} com erros</span>`:'<span class="badge bok">Sem erros</span>';
+    const t5=document.createElement('td');
     const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
     btn.addEventListener('click',()=>{
       const row=document.createElement('div');row.className='confirm-row';
@@ -340,13 +359,12 @@ function renderColabs(){
       sim.addEventListener('click',async()=>{S.colaboradores=S.colaboradores.filter(x=>x.id!==c.id);await save();renderColabs();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderColabs);
-      row.append(sim,nao);t4.innerHTML='';t4.appendChild(row);
+      row.append(sim,nao);t5.innerHTML='';t5.appendChild(row);
     });
-    t4.appendChild(btn);tr.append(t1,t2,t3,t4);tbody.appendChild(tr);
+    t5.appendChild(btn);tr.append(t1,t2,t3,t4,t5);tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
 }
-
 async function addColab(){
   const nome=document.getElementById('cNome').value.trim();
   const funcao=document.getElementById('cFuncao').value;
@@ -355,7 +373,6 @@ async function addColab(){
   document.getElementById('cNome').value='';
   await save();renderColabs();toast('Colaborador adicionado!');
 }
-
 let chartT=null;
 function renderDash(){
   const hoje=td(),mes=hoje.substring(0,7);
@@ -364,16 +381,18 @@ function renderDash(){
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
-  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim).length;
-
+  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
+  const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
+  const comErro=S.apontamentos.filter(a=>a.fim&&a.erros&&a.erros.length>0).length;
   const md=document.getElementById('m-dash');if(!md)return;
   md.innerHTML=`
     <div class="metric"><div class="lbl">Quadros hoje</div><div class="val">${aptH.length}</div><div class="sub">finalizados</div></div>
     <div class="metric"><div class="lbl">Quadros no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%</div>
       <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>
     <div class="metric"><div class="lbl">Em andamento</div><div class="val warn">${emAnd}</div><div class="sub">agora</div></div>
+    <div class="metric"><div class="lbl">Pausados</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
+    <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">quadros relatados</div></div>
     <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>`;
-
   const dops=document.getElementById('dash-ops');
   const ab=S.ops.filter(o=>o.status==='aberta');
   if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
@@ -381,12 +400,21 @@ function renderDash(){
     const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
     const p=Math.round((fin/op.qtd)*100);
     const venc=op.prazo&&op.prazo<hoje;
-    return`<div style="margin-bottom:14px;"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
-      <span style="font-weight:700;">${op.num} <span style="font-weight:400;color:#888;">— ${op.modelo}</span></span>
-      <span style="display:flex;gap:6px;">${venc?'<span class="badge bbad">Atrasada</span>':''}<span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span></span>
-      </div><div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div></div>`;
+    const errosOp=S.apontamentos.filter(a=>a.opId===op.id&&a.erros&&a.erros.length>0).length;
+    const obsOp=S.apontamentos.filter(a=>a.opId===op.id&&a.observacoes&&a.observacoes.length>0).length;
+    return`<div style="margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+        <span style="font-weight:700;">${op.num} <span style="font-weight:400;color:#888;">— ${op.modelo}</span></span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${venc?'<span class="badge bbad">Atrasada</span>':''}
+          ${errosOp?`<span class="badge bbad">⚠ ${errosOp} erro${errosOp>1?'s':''}</span>`:''}
+          ${obsOp?`<span class="badge bgray">💬 ${obsOp} obs.</span>`:''}
+          <span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd} quadros</span>
+        </span>
+      </div>
+      <div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div>
+    </div>`;
   }).join('');
-
   const datas=[...new Set(S.apontamentos.filter(a=>a.fim).map(a=>a.fim.split('T')[0]))].sort().slice(-10);
   const vals=datas.map(d=>S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(d)).length);
   const canvas=document.getElementById('cTrend');if(!canvas)return;
@@ -396,52 +424,70 @@ function renderDash(){
     datasets:[{label:'Quadros',data:vals,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',tension:0.3,fill:true,pointBackgroundColor:'#1D9E75',borderWidth:2,pointRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
 }
-
 let chartM=null;
 function renderMes(){
   const mes=document.getElementById('mFiltro').value;
   const meta=parseInt(document.getElementById('mMeta').value)||50;
   const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
   const tot=aptM.length,pct=Math.round((tot/meta)*100),pc=pct>=100?'ok':pct>=60?'warn':'bad';
+  const errosMes=aptM.filter(a=>a.erros&&a.erros.length>0).length;
+  const obsMes=aptM.reduce((s,a)=>s+(a.observacoes||[]).length,0);
   const mm=document.getElementById('m-mes');if(!mm)return;
   mm.innerHTML=`
     <div class="metric"><div class="lbl">Quadros finalizados</div><div class="val ${pc}">${tot}</div><div class="sub">meta ${meta} · ${pct}%</div></div>
-    <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o.status==='concluida').length}</div><div class="sub">total</div></div>
-    <div class="metric"><div class="lbl">Colaboradores ativos</div><div class="val">${[...new Set(aptM.map(a=>a.colabId))].length}</div><div class="sub">com apontamentos</div></div>`;
-
+    <div class="metric"><div class="lbl">Com erros</div><div class="val ${errosMes?'bad':''}">${errosMes}</div><div class="sub">quadros no mês</div></div>
+    <div class="metric"><div class="lbl">Observações</div><div class="val">${obsMes}</div><div class="sub">registradas no mês</div></div>
+    <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o.status==='concluida').length}</div><div class="sub">total</div></div>`;
   const cd=S.colaboradores.map(c=>{
     const regs=aptM.filter(a=>a.colabId===c.id);
-    const durs=regs.map(a=>dur(a.inicio,a.fim)).filter(Boolean);
-    return{nome:c.nome.split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,
-      media:durs.length?Math.round(durs.reduce((s,v)=>s+v,0)/durs.length):0};
+    const liqs=regs.map(a=>tempoLiquido(a));
+    const mediaLiq=liqs.length?Math.round(liqs.reduce((s,v)=>s+v,0)/liqs.length):0;
+    const erros=regs.filter(a=>a.erros&&a.erros.length>0).length;
+    const obs=regs.reduce((s,a)=>s+(a.observacoes||[]).length,0);
+    return{nome:c.nome.split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,mediaLiq,erros,obs};
   });
-
   if(chartM)chartM.destroy();
   const cv=document.getElementById('cMes');if(!cv)return;
   chartM=new Chart(cv,{type:'bar',data:{labels:cd.map(c=>c.nome),
-    datasets:[{label:'Quadros',data:cd.map(c=>c.qtd),backgroundColor:'rgba(29,158,117,0.75)',borderColor:'#1D9E75',borderWidth:1}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
-
-  document.getElementById('mes-tabela').innerHTML=`<table><thead><tr><th>Colaborador</th><th>Função</th><th>Quadros</th><th>Tempo médio</th></tr></thead><tbody>`+
-    cd.map(c=>`<tr><td>${c.nomeC}</td><td>${c.funcao}</td><td><strong>${c.qtd}</strong></td><td>${c.media?c.media+'min':'—'}</td></tr>`).join('')+`</tbody></table>`;
-
+    datasets:[
+      {label:'Quadros',data:cd.map(c=>c.qtd),backgroundColor:'rgba(29,158,117,0.75)',borderColor:'#1D9E75',borderWidth:1},
+      {label:'Com erros',data:cd.map(c=>c.erros),backgroundColor:'rgba(163,45,45,0.5)',borderColor:'#A32D2D',borderWidth:1},
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11}}}},scales:{x:{ticks:{font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
+  document.getElementById('mes-tabela').innerHTML=`<table><thead><tr><th>Colaborador</th><th>Função</th><th>Quadros</th><th>Tempo médio líquido</th><th>Com erros</th><th>Observações</th></tr></thead><tbody>`+
+    cd.map(c=>`<tr><td>${c.nomeC}</td><td>${c.funcao}</td><td><strong>${c.qtd}</strong></td><td>${c.mediaLiq?c.mediaLiq+'min':'—'}</td>
+      <td>${c.erros?`<span class="badge bbad">${c.erros}</span>`:'<span class="badge bok">0</span>'}</td>
+      <td>${c.obs||'—'}</td></tr>`).join('')+`</tbody></table>`;
   const apts=[...aptM].sort((a,b)=>b.fim.localeCompare(a.fim));
   const opMap={};S.ops.forEach(o=>opMap[o.id]=o);
   const ad=document.getElementById('mes-apon');
   if(!apts.length){ad.innerHTML='<p class="empty">Nenhum apontamento no mês.</p>';return;}
-  ad.innerHTML=`<div style="overflow-x:auto;"><table><thead><tr><th>Data</th><th>Colaborador</th><th>OP</th><th>Modelo</th><th>Quadro</th><th>Início</th><th>Fim</th><th>Duração</th></tr></thead><tbody>`+
-    apts.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);const op=opMap[a.opId];
-      return`<tr><td>${fmt(a.fim)}</td><td>${c?c.nome:'—'}</td><td>${op?op.num:'—'}</td><td>${op?op.modelo:'—'}</td><td>${a.quadroIdx}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td><td>${dur(a.inicio,a.fim)||'—'}min</td></tr>`;
+  ad.innerHTML=`<div style="overflow-x:auto;"><table><thead><tr>
+    <th>Data</th><th>Colaborador</th><th>OP</th><th>Modelo</th><th>Quadro</th>
+    <th>Início</th><th>Fim</th><th>T. líquido</th><th>Pausas</th><th>Observações</th><th>Erros</th>
+  </tr></thead><tbody>`+
+    apts.map(a=>{
+      const c=S.colaboradores.find(x=>x.id===a.colabId);
+      const op=opMap[a.opId];
+      const liq=tempoLiquido(a);
+      const pausas=(a.pausas||[]).filter(p=>p.fim).length;
+      const obs=(a.observacoes||[]).map(o=>o.texto).join(' | ')||'—';
+      const erros=(a.erros||[]).length?((a.erros||[]).join(', ')+(a.obsErro?' — '+a.obsErro:'')):'—';
+      return`<tr>
+        <td>${fmtD(a.fim)}</td><td>${c?c.nome:'—'}</td><td>${op?op.num:'—'}</td><td>${op?op.modelo:'—'}</td>
+        <td>${a.quadroIdx}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td>
+        <td>${liq?liq+'min':'—'}</td><td>${pausas||'—'}</td>
+        <td style="font-size:12px;max-width:200px;">${obs}</td>
+        <td style="font-size:12px;max-width:200px;color:${(a.erros||[]).length?'#A32D2D':'inherit'}">${erros}</td>
+      </tr>`;
     }).join('')+`</tbody></table></div>`;
 }
-
 async function init(){
   if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();
   if(ok)showApp();
   else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
 }
-
 init();
 </script>
 </body>

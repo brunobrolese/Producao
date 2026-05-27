@@ -215,6 +215,33 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores configurarem o app deles.</div>
         <button class="btn" style="margin-top:12px;" onclick="copyUrl()">📋 Copiar URL</button>
       </div>
+
+      <div class="card">
+        <h3>🎨 Tema da interface</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:16px;">Escolha as cores da barra superior e dos botões.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;margin-bottom:16px;" id="themeGrid"></div>
+        <div style="border-top:1px solid #f0f0f0;padding-top:14px;margin-top:4px;">
+          <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:10px;">Cor personalizada</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <label>Cor principal (barra)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="customPrimary" style="width:44px;height:36px;padding:2px;cursor:pointer;flex-shrink:0;"/>
+                <input type="text" id="customPrimaryHex" placeholder="#1a1a1a" style="font-size:12px;"/>
+              </div>
+            </div>
+            <div>
+              <label>Cor de destaque (botões)</label>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <input type="color" id="customAccent" style="width:44px;height:36px;padding:2px;cursor:pointer;flex-shrink:0;"/>
+                <input type="text" id="customAccentHex" placeholder="#1D9E75" style="font-size:12px;"/>
+              </div>
+            </div>
+          </div>
+          <button class="btn" style="margin-top:12px;width:auto;padding:8px 20px;" onclick="aplicarCorCustom()">Aplicar</button>
+        </div>
+      </div>
+
       <div class="card">
         <h3>⚠️ Trocar banco de dados</h3>
         <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual.</p>
@@ -295,7 +322,7 @@ function showApp(){
   document.getElementById('mFiltro').addEventListener('input',renderMes);
   document.getElementById('mMeta').addEventListener('input',renderMes);
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
-  renderDash();renderColabs();if(!S.modelos)S.modelos=[];
+  renderDash();renderColabs();if(!S.modelos)S.modelos=[];carregarTema();
   setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},5000);
 }
 
@@ -308,6 +335,7 @@ function nav(id,btn){
   if(id==='dash')renderDash();
   if(id==='ops'){load().then(renderOPs);}
   if(id==='apt'){load().then(renderApt);}
+  if(id==='cfg')renderThemeGrid();
   if(id==='mod'){load().then(renderModelos);}
   if(id==='col'){load().then(renderColabs);}
 
@@ -755,6 +783,95 @@ function renderMes(){
         <td style="font-size:12px;max-width:200px;color:${(a.erros||[]).length?'#A32D2D':'inherit'}">${erros}</td>
       </tr>`;
     }).join('')+`</tbody></table></div>`;
+}
+
+/* ── TEMAS ── */
+const TEMAS=[
+  {nome:'Escuro',     primary:'#1a1a1a', accent:'#1D9E75'},
+  {nome:'Azul',       primary:'#1e3a5f', accent:'#2563eb'},
+  {nome:'Roxo',       primary:'#2d1b69', accent:'#7c3aed'},
+  {nome:'Vermelho',   primary:'#7f1d1d', accent:'#dc2626'},
+  {nome:'Laranja',    primary:'#7c2d12', accent:'#ea580c'},
+  {nome:'Teal',       primary:'#134e4a', accent:'#0d9488'},
+  {nome:'Cinza',      primary:'#374151', accent:'#6b7280'},
+  {nome:'Marinho',    primary:'#1e3a5f', accent:'#0ea5e9'},
+  {nome:'Rosa',       primary:'#4a1942', accent:'#db2777'},
+  {nome:'Verde Lima', primary:'#1a2e05', accent:'#65a30d'},
+];
+
+function aplicarTema(primary, accent){
+  document.querySelector('.topbar').style.background=primary;
+  document.querySelectorAll('.btn').forEach(el=>{
+    if(!el.style.background||el.style.background===el.dataset.originalBg||!el.dataset.originalBg){
+      el.dataset.originalBg=accent;
+      el.style.background=accent;
+    }
+  });
+  document.querySelectorAll('.nav button.active').forEach(el=>el.style.borderBottomColor=accent);
+  document.querySelectorAll('.pfill,.pfill2,.prog-fill').forEach(el=>el.style.background=accent);
+  document.documentElement.style.setProperty('--theme-primary', primary);
+  document.documentElement.style.setProperty('--theme-accent', accent);
+  localStorage.setItem('paineis_tema', JSON.stringify({primary,accent}));
+
+  // sync color pickers
+  const cp=document.getElementById('customPrimary');
+  const ca=document.getElementById('customAccent');
+  const cph=document.getElementById('customPrimaryHex');
+  const cah=document.getElementById('customAccentHex');
+  if(cp)cp.value=primary;if(ca)ca.value=accent;
+  if(cph)cph.value=primary;if(cah)cah.value=accent;
+}
+
+function aplicarCorCustom(){
+  const hexEl=document.getElementById('customPrimaryHex');
+  const accEl=document.getElementById('customAccentHex');
+  const cp=document.getElementById('customPrimary');
+  const ca=document.getElementById('customAccent');
+  const primary=(hexEl&&hexEl.value.trim())||cp.value||'#1a1a1a';
+  const accent=(accEl&&accEl.value.trim())||ca.value||'#1D9E75';
+  aplicarTema(primary,accent);
+  renderThemeGrid();
+  toast('Tema aplicado!');
+}
+
+function renderThemeGrid(){
+  const grid=document.getElementById('themeGrid');
+  if(!grid)return;
+  const saved=JSON.parse(localStorage.getItem('paineis_tema')||'{}');
+  grid.innerHTML=TEMAS.map(t=>{
+    const ativo=saved.primary===t.primary&&saved.accent===t.accent;
+    return`<div onclick="aplicarTema('${t.primary}','${t.accent}');renderThemeGrid();toast('Tema ${t.nome} aplicado!');"
+      style="cursor:pointer;border-radius:10px;overflow:hidden;border:2px solid ${ativo?t.accent:'#e5e5e5'};box-shadow:${ativo?'0 0 0 2px '+t.accent:'none'};">
+      <div style="height:32px;background:${t.primary};display:flex;align-items:center;padding:0 8px;gap:5px;">
+        <div style="width:8px;height:8px;border-radius:50%;background:${t.accent};"></div>
+        <div style="width:20px;height:4px;border-radius:2px;background:rgba(255,255,255,0.4);"></div>
+      </div>
+      <div style="padding:6px 8px;background:#fff;">
+        <div style="height:6px;border-radius:3px;background:${t.accent};margin-bottom:4px;width:70%;"></div>
+        <div style="height:4px;border-radius:2px;background:#f0f0f0;width:90%;"></div>
+      </div>
+      <div style="padding:4px 8px 6px;background:#fff;font-size:11px;font-weight:600;color:#1a1a1a;">${t.nome}</div>
+    </div>`;
+  }).join('');
+
+  // sync pickers with current
+  const cp=document.getElementById('customPrimary');
+  const ca=document.getElementById('customAccent');
+  const cph=document.getElementById('customPrimaryHex');
+  const cah=document.getElementById('customAccentHex');
+  if(cp&&saved.primary)cp.value=saved.primary;
+  if(ca&&saved.accent)ca.value=saved.accent;
+  if(cph&&saved.primary)cph.value=saved.primary;
+  if(cah&&saved.accent)cah.value=saved.accent;
+
+  // sync color picker inputs
+  if(cp)cp.addEventListener('input',()=>{const h=document.getElementById('customPrimaryHex');if(h)h.value=cp.value;});
+  if(ca)ca.addEventListener('input',()=>{const h=document.getElementById('customAccentHex');if(h)h.value=ca.value;});
+}
+
+function carregarTema(){
+  const saved=JSON.parse(localStorage.getItem('paineis_tema')||'null');
+  if(saved&&saved.primary&&saved.accent) aplicarTema(saved.primary,saved.accent);
 }
 
 async function init(){

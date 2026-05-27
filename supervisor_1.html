@@ -120,6 +120,13 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
       <div class="metrics" id="m-dash"></div>
+      <div class="card" style="border-color:#BA7517;">
+        <h3 style="display:flex;align-items:center;justify-content:space-between;">
+          <span>🔴 Produção em tempo real</span>
+          <span id="liveCount" style="font-size:11px;font-weight:400;color:#888;"></span>
+        </h3>
+        <div id="dash-live"></div>
+      </div>
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
       <div class="card"><h3>📈 Quadros finalizados — últimos 10 dias</h3>
         <div style="position:relative;height:180px;"><canvas id="cTrend"></canvas></div>
@@ -289,7 +296,7 @@ function showApp(){
   document.getElementById('mMeta').addEventListener('input',renderMes);
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
   renderDash();renderColabs();if(!S.modelos)S.modelos=[];
-  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},10000);
+  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},5000);
 }
 
 function nav(id,btn){
@@ -562,6 +569,65 @@ async function addColab(){
   await save();renderColabs();toast('Colaborador adicionado!');
 }
 
+/* ── TEMPO REAL ── */
+function renderLive(){
+  const div=document.getElementById('dash-live');
+  const cnt=document.getElementById('liveCount');
+  if(!div)return;
+
+  const ativos=S.apontamentos.filter(a=>!a.fim);
+  if(cnt)cnt.textContent=`atualiza a cada 5s — ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+
+  if(!ativos.length){
+    div.innerHTML='<p class="empty">Nenhum colaborador trabalhando no momento.</p>';
+    return;
+  }
+
+  div.innerHTML=ativos.map(a=>{
+    const c=S.colaboradores.find(x=>x.id===a.colabId);
+    const m=S.modelos?S.modelos.find(x=>x.id===a.modeloId):null;
+    const pausado=estaPausado(a);
+    const liq=tempoLiquido(a);
+    const ini=new Date(a.inicio);
+    const agora=new Date();
+    const totalMin=Math.round((agora-ini)/60000);
+    const pausasMin=(a.pausas||[]).filter(p=>p.fim).reduce((s,p)=>s+dur(p.inicio,p.fim),0);
+
+    const avatar=(c?c.nome:'?').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
+    const nome=c?c.nome:'Colaborador';
+    const func=c?c.funcao:'';
+    const opLabel=a.opNum||a.num||'—';
+    const modeloLabel=m?m.codigo:(a.modeloLabel||'—');
+
+    const statusColor=pausado?'#3550B4':'#BA7517';
+    const statusBg=pausado?'#E8EEFF':'#FFF3E0';
+    const statusTxt=pausado?'⏸ Pausado':'▶ Em andamento';
+    const tempoTxt=liq>=60?`${Math.floor(liq/60)}h ${liq%60}min`:`${liq}min`;
+    const itensFalt=a.itensFaltando?`<div style="font-size:11px;color:#BA7517;margin-top:4px;">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:'';
+
+    return`<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #f0f0f0;">
+      <div style="width:38px;height:38px;border-radius:50%;background:${pausado?'#E8EEFF':'#EAF3DE'};color:${statusColor};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${avatar}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+          <div>
+            <span style="font-size:13px;font-weight:700;">${nome}</span>
+            <span style="font-size:11px;color:#888;margin-left:6px;">${func}</span>
+          </div>
+          <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:99px;background:${statusBg};color:${statusColor};">${statusTxt}</span>
+        </div>
+        <div style="font-size:13px;font-weight:600;margin-top:3px;">OP ${opLabel} <span style="font-weight:400;color:#888;">— ${modeloLabel}</span></div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:4px;">
+          <span style="font-size:11px;color:#888;">⏱ Trabalhado: <strong style="color:#1a1a1a;">${tempoTxt}</strong></span>
+          <span style="font-size:11px;color:#888;">🕐 Início: <strong style="color:#1a1a1a;">${fmtH(a.inicio)}</strong></span>
+          ${pausasMin?`<span style="font-size:11px;color:#888;">⏸ Pausas: <strong style="color:#1a1a1a;">${pausasMin}min</strong></span>`:''}
+        </div>
+        ${itensFalt}
+        ${(a.observacoes||[]).length?`<div style="font-size:11px;color:#888;margin-top:4px;">💬 ${a.observacoes.length} observação(ões)</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 /* ── DASHBOARD ── */
 let chartT=null;
 function renderDash(){
@@ -584,6 +650,8 @@ function renderDash(){
     <div class="metric"><div class="lbl">Pausados</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
     <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">quadros relatados</div></div>
     <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>`;
+
+  renderLive();
 
   const dops=document.getElementById('dash-ops');
   const ab=S.ops.filter(o=>o.status==='aberta');

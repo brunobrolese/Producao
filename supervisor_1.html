@@ -812,6 +812,9 @@ function aplicarTema(primary, accent){
   document.documentElement.style.setProperty('--theme-primary', primary);
   document.documentElement.style.setProperty('--theme-accent', accent);
   localStorage.setItem('paineis_tema', JSON.stringify({primary,accent}));
+  // salva no Firebase para sincronizar com colaborador
+  S.tema={primary,accent};
+  save();
 
   // sync color pickers
   const cp=document.getElementById('customPrimary');
@@ -870,8 +873,9 @@ function renderThemeGrid(){
 }
 
 function carregarTema(){
-  const saved=JSON.parse(localStorage.getItem('paineis_tema')||'null');
-  if(saved&&saved.primary&&saved.accent) aplicarTema(saved.primary,saved.accent);
+  // prioriza tema salvo no Firebase, depois localStorage
+  const t=S.tema||(JSON.parse(localStorage.getItem('paineis_tema')||'null'));
+  if(t&&t.primary&&t.accent) aplicarTema(t.primary,t.accent);
 }
 
 async function init(){

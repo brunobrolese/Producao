@@ -531,7 +531,18 @@ async function init(){
   const ok=await load();
   if(ok)showSelect();
   else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
-  setInterval(async()=>{if(colab&&!finalizando){await load();renderAll();}},12000);
+  let ultimaDigitacao=0;
+  document.addEventListener('keydown',()=>ultimaDigitacao=Date.now());
+
+  setInterval(async()=>{
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const tempoDigitando=Date.now()-ultimaDigitacao;
+    // pausa se estiver digitando E tiver digitado algo nos últimos 2 minutos
+    if(colab&&!finalizando&&!(digitando&&tempoDigitando<120000)){
+      await load();renderAll();
+    }
+  },12000);
 }
 init();
 </script>

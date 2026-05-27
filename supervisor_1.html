@@ -2,9 +2,6 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-<meta http-equiv="Pragma" content="no-cache"/>
-<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Supervisor — Painéis Elétricos</title>
 <style>
@@ -58,6 +55,11 @@ tr:last-child td{border-bottom:none;}
 .confirm-row{background:#fff8f8;border:1px solid #f5c5c5;border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin-top:6px;}
 .obs-pill{display:inline-block;background:#f5f5f3;border:1px solid #e5e5e5;border-radius:6px;padding:3px 8px;font-size:11px;color:#555;margin:2px 2px 0 0;}
 .obs-pill.erro{background:#fff0f0;border-color:#f5c5c5;color:#A32D2D;}
+.detalhe-btn{font-size:11px;padding:2px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;color:#666;white-space:nowrap;}
+.detalhe-box{background:#f8f8f6;border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;line-height:1.6;}
+.detalhe-box .dh{font-weight:600;color:#888;font-size:11px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;}
+
+/* SETUP */
 .setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:75vh;padding:24px;}
 .setup h2{font-size:22px;font-weight:700;margin-bottom:6px;}
 .setup p{font-size:14px;color:#666;margin-bottom:22px;max-width:480px;text-align:center;}
@@ -71,6 +73,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 </style>
 </head>
 <body>
+
 <div class="topbar">
   <div style="display:flex;align-items:center;gap:10px;">
     <span class="dot" id="dot"></span>
@@ -82,6 +85,8 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span id="mesLabel" style="font-size:12px;color:#888;"></span>
   </div>
 </div>
+
+<!-- SETUP -->
 <div id="setupScreen" class="setup">
   <h2>⚡ Configuração inicial</h2>
   <p>Conecte ao banco de dados Firebase para começar.</p>
@@ -90,22 +95,29 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <div class="step"><span class="sn">1</span><span>Acesse <a href="https://console.firebase.google.com" target="_blank" style="color:#1D9E75;font-weight:600;">console.firebase.google.com</a> → <strong>Criar projeto</strong></span></div>
     <div class="step"><span class="sn">2</span><span>Dê um nome (ex: <code>paineis-fabrica</code>), desative Google Analytics → <strong>Criar projeto</strong></span></div>
     <div class="step"><span class="sn">3</span><span><strong>Criação → Realtime Database → Criar banco</strong> → região United States → <strong>modo de teste</strong></span></div>
-    <div class="step"><span class="sn">4</span><span>Copie a URL do banco e cole abaixo</span></div>
+    <div class="step"><span class="sn">4</span><span>Copie a URL do banco (começa com <code>https://</code>, termina com <code>firebaseio.com</code>) e cole abaixo</span></div>
     <label>URL do Firebase Realtime Database</label>
     <input id="fbUrl" placeholder="https://paineis-fabrica-default-rtdb.firebaseio.com" type="url"/>
     <div id="setupErr" class="err"></div>
     <button class="btn" style="margin-top:12px;width:100%;" onclick="conectar()">🔗 Conectar e começar</button>
   </div>
 </div>
+
+<!-- APP -->
 <div id="appScreen" style="display:none;">
   <div class="nav">
     <button class="active" onclick="nav('dash',this)">Dashboard</button>
     <button onclick="nav('ops',this)">Ordens de Produção</button>
+    <button onclick="nav('apt',this)">Apontamentos</button>
+    <button onclick="nav('mod',this)">Modelos</button>
     <button onclick="nav('col',this)">Colaboradores</button>
     <button onclick="nav('mes',this)">Visão Mensal</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
+
   <div class="content">
+
+    <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
       <div class="metrics" id="m-dash"></div>
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
@@ -113,6 +125,8 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <div style="position:relative;height:180px;"><canvas id="cTrend"></canvas></div>
       </div>
     </div>
+
+    <!-- OPS -->
     <div id="page-ops" class="page">
       <div class="card"><h3>➕ Nova Ordem de Produção</h3>
         <div class="frow3">
@@ -129,6 +143,32 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       </div>
       <div class="card"><h3>📋 Ordens cadastradas</h3><div id="ops-lista"></div></div>
     </div>
+
+    <!-- COLABORADORES -->
+    <!-- APONTAMENTOS -->
+    <div id="page-apt" class="page">
+      <div class="card"><h3>🔍 Filtrar</h3>
+        <div class="frow">
+          <div><label>OP</label><input id="filtOp" placeholder="Digite a OP..." oninput="renderApt()"/></div>
+          <div><label>Colaborador</label><select id="filtColab" onchange="renderApt()"><option value="">Todos</option></select></div>
+        </div>
+      </div>
+      <div id="apt-lista"></div>
+    </div>
+
+    <!-- MODELOS -->
+    <div id="page-mod" class="page">
+      <div class="card"><h3>➕ Cadastrar modelo de quadro</h3>
+        <div class="frow">
+          <div><label>Código do modelo</label><input id="modCod" placeholder="Ex: QD-200A, CCMB-100"/></div>
+          <div><label>Descrição (opcional)</label><input id="modDesc" placeholder="Ex: Quadro de distribuição 200A"/></div>
+        </div>
+        <button class="btn" onclick="addModelo()">Cadastrar modelo</button>
+        <div id="modMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+      <div class="card"><h3>📋 Modelos cadastrados (<span id="modCount">0</span>)</h3><div id="mod-lista"></div></div>
+    </div>
+
     <div id="page-col" class="page">
       <div class="card"><h3>➕ Adicionar colaborador</h3>
         <div class="frow">
@@ -144,6 +184,8 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       </div>
       <div class="card"><h3>👥 Equipe (<span id="cCount">0</span> colaboradores)</h3><div id="col-lista"></div></div>
     </div>
+
+    <!-- MENSAL -->
     <div id="page-mes" class="page">
       <div class="frow" style="max-width:320px;margin-bottom:12px;">
         <div><label>Mês/Ano</label><input type="month" id="mFiltro"/></div>
@@ -156,12 +198,14 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       <div class="card"><h3>📋 Resumo por colaborador</h3><div id="mes-tabela"></div></div>
       <div class="card"><h3>🗒️ Todos os apontamentos no mês</h3><div id="mes-apon"></div></div>
     </div>
+
+    <!-- CONFIG -->
     <div id="page-cfg" class="page">
       <div class="card">
         <h3>🔗 Banco de dados conectado</h3>
         <label>URL do Firebase</label>
         <div class="url-box" id="urlDisplay" onclick="copyUrl()" title="Clique para copiar"></div>
-        <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores.</div>
+        <div style="font-size:12px;color:#888;margin-top:6px;">Clique para copiar e envie esta URL para os colaboradores configurarem o app deles.</div>
         <button class="btn" style="margin-top:12px;" onclick="copyUrl()">📋 Copiar URL</button>
       </div>
       <div class="card">
@@ -170,14 +214,17 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <button class="btn" style="background:#A32D2D;" onclick="desconectar()">Desconectar e reconfigurar</button>
       </div>
     </div>
+
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 let DB_URL=localStorage.getItem('paineis_db_url')||'';
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
+
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';}
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2500);}
 function msg(id,txt,tipo){const el=document.getElementById(id);if(!el)return;el.style.color=tipo==='ok'?'#1D9E75':'#A32D2D';el.textContent=txt;setTimeout(()=>el.textContent='',3000);}
@@ -186,6 +233,7 @@ function fmtD(iso){if(!iso)return'—';const d=iso.includes('T')?iso.split('T')[
 function fmtDH(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(a))/60000);}
 function td(){return new Date().toISOString().split('T')[0];}
+
 function tempoLiquido(apt){
   if(!apt.inicio)return 0;
   const fim=apt.fim||new Date().toISOString();
@@ -200,6 +248,7 @@ function estaPausado(apt){
   const u=pausas[pausas.length-1];
   return u.inicio&&!u.fim;
 }
+
 async function load(){
   try{
     const r=await fetch(DB_URL+'/paineis.json');
@@ -209,12 +258,14 @@ async function load(){
     setSync(true);return true;
   }catch(e){setSync(false);return false;}
 }
+
 async function save(){
   try{
     await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
 }
+
 async function conectar(){
   const url=document.getElementById('fbUrl').value.trim().replace(/\/$/,'');
   if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
@@ -224,8 +275,10 @@ async function conectar(){
   if(ok){localStorage.setItem('paineis_db_url',DB_URL);showApp();}
   else document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL.';
 }
+
 function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
 function copyUrl(){navigator.clipboard.writeText(DB_URL).then(()=>toast('URL copiada!')).catch(()=>toast(DB_URL));}
+
 function showApp(){
   document.getElementById('setupScreen').style.display='none';
   document.getElementById('appScreen').style.display='block';
@@ -235,9 +288,10 @@ function showApp(){
   document.getElementById('mFiltro').addEventListener('input',renderMes);
   document.getElementById('mMeta').addEventListener('input',renderMes);
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
-  renderDash();renderColabs();
+  renderDash();renderColabs();if(!S.modelos)S.modelos=[];
   setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},10000);
 }
+
 function nav(id,btn){
   currentPage=id;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -246,9 +300,115 @@ function nav(id,btn){
   btn.classList.add('active');
   if(id==='dash')renderDash();
   if(id==='ops'){load().then(renderOPs);}
+  if(id==='apt'){load().then(renderApt);}
+  if(id==='mod'){load().then(renderModelos);}
   if(id==='col'){load().then(renderColabs);}
+
+/* ── APONTAMENTOS LIVRES ── */
+function renderApt(){
+  if(!S.modelos)S.modelos=[];
+  // populate colab filter
+  const sel=document.getElementById('filtColab');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">Todos</option>'+S.colaboradores.map(c=>`<option value="${c.id}" ${cur==c.id?'selected':''}>${c.nome}</option>`).join('');
+  }
+  const filtOp=(document.getElementById('filtOp')||{}).value||'';
+  const filtColabId=parseInt((document.getElementById('filtColab')||{}).value)||0;
+
+  // apontamentos do novo modelo (com opNum digitado)
+  let apts=S.apontamentos.filter(a=>a.opNum);
+  if(filtOp)apts=apts.filter(a=>a.opNum.toLowerCase().includes(filtOp.toLowerCase()));
+  if(filtColabId)apts=apts.filter(a=>a.colabId===filtColabId);
+  apts=[...apts].sort((a,b)=>b.inicio.localeCompare(a.inicio));
+
+  const div=document.getElementById('apt-lista');if(!div)return;
+  if(!apts.length){div.innerHTML='<p class="empty">Nenhum apontamento encontrado.</p>';return;}
+
+  const rows=apts.map(a=>{
+    const c=S.colaboradores.find(x=>x.id===a.colabId);
+    const m=S.modelos.find(x=>x.id===a.modeloId);
+    const liq=tempoLiquido(a);
+    const pausas=(a.pausas||[]).filter(p=>p.fim).length;
+    const erros=a.erros||[];
+    const obs=(a.observacoes||[]);
+    let statusBadge='';
+    if(a.fim){statusBadge=erros.length?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>';}
+    else if(estaPausado(a)){statusBadge='<span class="badge bpause">⏸ Pausado</span>';}
+    else{statusBadge='<span class="badge bwarn">▶ Em andamento</span>';}
+    let itensFalt='—';
+    if(a.itensFaltando)itensFalt=`<span class="obs-pill erro">⚠ ${a.obsItensFaltando}</span>`;
+    else if(a.itensFaltando===false)itensFalt='<span class="obs-pill" style="color:#3B6D11;background:#EAF3DE;">✓ Completo</span>';
+    let obsHtml=obs.length?obs.map(o=>`<span class="obs-pill" title="${o.texto}">${o.texto.substring(0,35)}${o.texto.length>35?'...':''}</span>`).join(''):'—';
+    let erroHtml=erros.length?(erros.map(e=>`<span class="obs-pill erro">${e}</span>`).join('')+(a.obsErro?`<div style="font-size:11px;color:#A32D2D;font-style:italic;">${a.obsErro}</div>`:'')):'—';
+    return`<tr>
+      <td style="font-size:13px;font-weight:700;">${a.opNum}</td>
+      <td style="font-size:12px;">${m?m.codigo:'—'}</td>
+      <td style="font-size:12px;">${c?c.nome:'—'}</td>
+      <td style="font-size:12px;">${fmtDH(a.inicio)}</td>
+      <td style="font-size:12px;">${a.fim?fmtDH(a.fim):statusBadge}</td>
+      <td style="font-size:12px;font-weight:600;">${liq?liq+'min':'—'}</td>
+      <td style="font-size:12px;">${pausas||'—'}</td>
+      <td>${itensFalt}</td>
+      <td>${obsHtml}</td>
+      <td>${erroHtml}</td>
+    </tr>`;
+  }).join('');
+
+  div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''}</h3>
+    <div style="overflow-x:auto;"><table><thead><tr>
+      <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
+      <th>T. líquido</th><th>Pausas</th><th>Itens</th><th>Observações</th><th>Erros</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
   if(id==='mes')renderMes();
 }
+
+/* ── MODELOS ── */
+async function addModelo(){
+  const cod=document.getElementById('modCod').value.trim();
+  const desc=document.getElementById('modDesc').value.trim();
+  if(!cod){msg('modMsg','Informe o código do modelo.','bad');return;}
+  if(!S.modelos)S.modelos=[];
+  if(S.modelos.find(m=>m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
+  S.modelos.push({id:S.nid++,codigo:cod,descricao:desc});
+  document.getElementById('modCod').value='';
+  document.getElementById('modDesc').value='';
+  await save();msg('modMsg','Modelo cadastrado!','ok');renderModelos();
+}
+
+function renderModelos(){
+  if(!S.modelos)S.modelos=[];
+  const cnt=document.getElementById('modCount');if(cnt)cnt.textContent=S.modelos.length;
+  const div=document.getElementById('mod-lista');if(!div)return;
+  if(!S.modelos.length){div.innerHTML='<p class="empty">Nenhum modelo cadastrado.</p>';return;}
+  const tbl=document.createElement('table');
+  tbl.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Usos</th><th></th></tr></thead>';
+  const tbody=document.createElement('tbody');
+  S.modelos.forEach(m=>{
+    const usos=S.apontamentos.filter(a=>a.modeloId===m.id).length;
+    const tr=document.createElement('tr');
+    const t1=document.createElement('td');t1.style.fontWeight='600';t1.textContent=m.codigo;
+    const t2=document.createElement('td');t2.textContent=m.descricao||'—';
+    const t3=document.createElement('td');t3.textContent=usos+' apontamentos';
+    const t4=document.createElement('td');
+    const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
+    btn.addEventListener('click',()=>{
+      const row=document.createElement('div');row.className='confirm-row';
+      row.innerHTML=`⚠️ Remover <strong>${m.codigo}</strong>?`;
+      const sim=document.createElement('button');sim.className='btn-sm';sim.textContent='Sim';
+      sim.addEventListener('click',async()=>{S.modelos=S.modelos.filter(x=>x.id!==m.id);await save();renderModelos();});
+      const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
+      nao.addEventListener('click',renderModelos);
+      row.append(sim,nao);t4.innerHTML='';t4.appendChild(row);
+    });
+    t4.appendChild(btn);tr.append(t1,t2,t3,t4);tbody.appendChild(tr);
+  });
+  tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
+}
+
+/* ── OPs ── */
 async function addOP(){
   const num=document.getElementById('opNum').value.trim();
   const modelo=document.getElementById('opModelo').value.trim();
@@ -262,6 +422,7 @@ async function addOP(){
   document.getElementById('opQtd').value='';
   await save();msg('opMsg','OP cadastrada!','ok');renderOPs();
 }
+
 function renderOPs(){
   const div=document.getElementById('ops-lista');if(!div)return;
   if(!S.ops.length){div.innerHTML='<p class="empty">Nenhuma OP cadastrada.</p>';return;}
@@ -295,9 +456,11 @@ function renderOPs(){
   }
   div.innerHTML=html;
 }
+
 function renderAponTabela(op){
   const apts=S.apontamentos.filter(a=>a.opId===op.id);
   if(!apts.length)return'<div style="font-size:12px;color:#bbb;margin-top:6px;">Nenhum apontamento ainda.</div>';
+
   const rows=apts.map(a=>{
     const c=S.colaboradores.find(x=>x.id===a.colabId);
     const liq=tempoLiquido(a);
@@ -305,18 +468,32 @@ function renderAponTabela(op){
     const obs=a.observacoes||[];
     const erros=a.erros||[];
     const pausado=estaPausado(a);
+
     let statusBadge='';
     if(a.fim){statusBadge=erros.length?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>';}
     else if(pausado){statusBadge='<span class="badge bpause">⏸ Pausado</span>';}
     else if(a.inicio){statusBadge='<span class="badge bwarn">▶ Em andamento</span>';}
     else{statusBadge='<span class="badge bgray">Aguardando</span>';}
+
+    // observações em pills
     let obsHtml='—';
-    if(obs.length){obsHtml=obs.map(o=>`<span class="obs-pill" title="${o.texto}">${o.texto.substring(0,40)}${o.texto.length>40?'...':''}</span>`).join('');}
+    if(obs.length){
+      obsHtml=obs.map(o=>`<span class="obs-pill" title="${o.texto}">${o.texto.substring(0,40)}${o.texto.length>40?'...':''}</span>`).join('');
+    }
+
+    // erros
     let erroHtml='—';
     if(erros.length){
       erroHtml=erros.map(e=>`<span class="obs-pill erro">${e}</span>`).join('');
       if(a.obsErro)erroHtml+=`<div style="font-size:11px;color:#A32D2D;margin-top:3px;font-style:italic;">${a.obsErro}</div>`;
     }
+
+    // pausas detalhadas
+    let pausaHtml='—';
+    if((a.pausas||[]).length){
+      pausaHtml=(a.pausas||[]).map((p,i)=>`<span class="obs-pill">Pausa ${i+1}: ${fmtH(p.inicio)}${p.fim?' → '+fmtH(p.fim):' (em pausa)'}</span>`).join('');
+    }
+
     return`<tr>
       <td style="font-size:12px;">Quadro ${a.quadroIdx}</td>
       <td style="font-size:12px;">${c?c.nome:'—'}</td>
@@ -328,15 +505,22 @@ function renderAponTabela(op){
       <td>${erroHtml}</td>
     </tr>`;
   }).join('');
+
   return`<div style="margin-top:10px;overflow-x:auto;">
-    <table><thead><tr>
-      <th>Quadro</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
-      <th>Tempo líquido</th><th>Pausas</th><th>Observações</th><th>Erros</th>
-    </tr></thead><tbody>${rows}</tbody></table>
+    <table>
+      <thead><tr>
+        <th>Quadro</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
+        <th>Tempo líquido</th><th>Pausas</th><th>Observações</th><th>Erros</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
   </div>`;
 }
+
 async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'concluida'}:o);await save();renderOPs();}
 async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
+
+/* ── COLABORADORES ── */
 function renderColabs(){
   const cnt=document.getElementById('cCount');if(cnt)cnt.textContent=S.colaboradores.length;
   const div=document.getElementById('col-lista');if(!div)return;
@@ -368,6 +552,7 @@ function renderColabs(){
   });
   tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
 }
+
 async function addColab(){
   const nome=document.getElementById('cNome').value.trim();
   const funcao=document.getElementById('cFuncao').value;
@@ -376,6 +561,8 @@ async function addColab(){
   document.getElementById('cNome').value='';
   await save();renderColabs();toast('Colaborador adicionado!');
 }
+
+/* ── DASHBOARD ── */
 let chartT=null;
 function renderDash(){
   const hoje=td(),mes=hoje.substring(0,7);
@@ -387,6 +574,7 @@ function renderDash(){
   const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
   const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
   const comErro=S.apontamentos.filter(a=>a.fim&&a.erros&&a.erros.length>0).length;
+
   const md=document.getElementById('m-dash');if(!md)return;
   md.innerHTML=`
     <div class="metric"><div class="lbl">Quadros hoje</div><div class="val">${aptH.length}</div><div class="sub">finalizados</div></div>
@@ -396,6 +584,7 @@ function renderDash(){
     <div class="metric"><div class="lbl">Pausados</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
     <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">quadros relatados</div></div>
     <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>`;
+
   const dops=document.getElementById('dash-ops');
   const ab=S.ops.filter(o=>o.status==='aberta');
   if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
@@ -418,6 +607,7 @@ function renderDash(){
       <div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div>
     </div>`;
   }).join('');
+
   const datas=[...new Set(S.apontamentos.filter(a=>a.fim).map(a=>a.fim.split('T')[0]))].sort().slice(-10);
   const vals=datas.map(d=>S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(d)).length);
   const canvas=document.getElementById('cTrend');if(!canvas)return;
@@ -427,6 +617,8 @@ function renderDash(){
     datasets:[{label:'Quadros',data:vals,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',tension:0.3,fill:true,pointBackgroundColor:'#1D9E75',borderWidth:2,pointRadius:4}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
 }
+
+/* ── MENSAL ── */
 let chartM=null;
 function renderMes(){
   const mes=document.getElementById('mFiltro').value;
@@ -435,12 +627,14 @@ function renderMes(){
   const tot=aptM.length,pct=Math.round((tot/meta)*100),pc=pct>=100?'ok':pct>=60?'warn':'bad';
   const errosMes=aptM.filter(a=>a.erros&&a.erros.length>0).length;
   const obsMes=aptM.reduce((s,a)=>s+(a.observacoes||[]).length,0);
+
   const mm=document.getElementById('m-mes');if(!mm)return;
   mm.innerHTML=`
     <div class="metric"><div class="lbl">Quadros finalizados</div><div class="val ${pc}">${tot}</div><div class="sub">meta ${meta} · ${pct}%</div></div>
     <div class="metric"><div class="lbl">Com erros</div><div class="val ${errosMes?'bad':''}">${errosMes}</div><div class="sub">quadros no mês</div></div>
     <div class="metric"><div class="lbl">Observações</div><div class="val">${obsMes}</div><div class="sub">registradas no mês</div></div>
     <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o.status==='concluida').length}</div><div class="sub">total</div></div>`;
+
   const cd=S.colaboradores.map(c=>{
     const regs=aptM.filter(a=>a.colabId===c.id);
     const liqs=regs.map(a=>tempoLiquido(a));
@@ -449,6 +643,7 @@ function renderMes(){
     const obs=regs.reduce((s,a)=>s+(a.observacoes||[]).length,0);
     return{nome:c.nome.split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,mediaLiq,erros,obs};
   });
+
   if(chartM)chartM.destroy();
   const cv=document.getElementById('cMes');if(!cv)return;
   chartM=new Chart(cv,{type:'bar',data:{labels:cd.map(c=>c.nome),
@@ -457,10 +652,12 @@ function renderMes(){
       {label:'Com erros',data:cd.map(c=>c.erros),backgroundColor:'rgba(163,45,45,0.5)',borderColor:'#A32D2D',borderWidth:1},
     ]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:11}}}},scales:{x:{ticks:{font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
+
   document.getElementById('mes-tabela').innerHTML=`<table><thead><tr><th>Colaborador</th><th>Função</th><th>Quadros</th><th>Tempo médio líquido</th><th>Com erros</th><th>Observações</th></tr></thead><tbody>`+
     cd.map(c=>`<tr><td>${c.nomeC}</td><td>${c.funcao}</td><td><strong>${c.qtd}</strong></td><td>${c.mediaLiq?c.mediaLiq+'min':'—'}</td>
       <td>${c.erros?`<span class="badge bbad">${c.erros}</span>`:'<span class="badge bok">0</span>'}</td>
       <td>${c.obs||'—'}</td></tr>`).join('')+`</tbody></table>`;
+
   const apts=[...aptM].sort((a,b)=>b.fim.localeCompare(a.fim));
   const opMap={};S.ops.forEach(o=>opMap[o.id]=o);
   const ad=document.getElementById('mes-apon');
@@ -477,20 +674,28 @@ function renderMes(){
       const obs=(a.observacoes||[]).map(o=>o.texto).join(' | ')||'—';
       const erros=(a.erros||[]).length?((a.erros||[]).join(', ')+(a.obsErro?' — '+a.obsErro:'')):'—';
       return`<tr>
-        <td>${fmtD(a.fim)}</td><td>${c?c.nome:'—'}</td><td>${op?op.num:'—'}</td><td>${op?op.modelo:'—'}</td>
-        <td>${a.quadroIdx}</td><td>${fmtH(a.inicio)}</td><td>${fmtH(a.fim)}</td>
-        <td>${liq?liq+'min':'—'}</td><td>${pausas||'—'}</td>
+        <td>${fmtD(a.fim)}</td>
+        <td>${c?c.nome:'—'}</td>
+        <td>${op?op.num:'—'}</td>
+        <td>${op?op.modelo:'—'}</td>
+        <td>${a.quadroIdx}</td>
+        <td>${fmtH(a.inicio)}</td>
+        <td>${fmtH(a.fim)}</td>
+        <td>${liq?liq+'min':'—'}</td>
+        <td>${pausas||'—'}</td>
         <td style="font-size:12px;max-width:200px;">${obs}</td>
         <td style="font-size:12px;max-width:200px;color:${(a.erros||[]).length?'#A32D2D':'inherit'}">${erros}</td>
       </tr>`;
     }).join('')+`</tbody></table></div>`;
 }
+
 async function init(){
   if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();
   if(ok)showApp();
   else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
 }
+
 init();
 </script>
 </body>

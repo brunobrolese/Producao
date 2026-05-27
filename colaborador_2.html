@@ -266,7 +266,7 @@ function abrirConfirmacao(){
   if(!modeloId){toast('Selecione o modelo do quadro.');return;}
   if(!hora){toast('Informe o horário de início.');return;}
   const modelo=S.modelos.find(m=>m.id==modeloId);
-  const modeloLabel=modelo?`${modelo.codigo}${modelo.descricao?' — '+modelo.descricao:''}`:'';\
+  const modeloLabel=modelo?`${modelo.codigo}${modelo.descricao?' — '+modelo.descricao:''}`:'';
   document.getElementById('addFormConfirm').innerHTML=`<div class="confirm-card">
     <h4>⚠️ Confirmar início</h4>
     <p>OP: <strong>${opNum}</strong><br>Modelo: <strong>${modeloLabel}</strong><br>Horário: <strong>${hora}</strong></p>

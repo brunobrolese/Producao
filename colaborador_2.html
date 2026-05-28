@@ -174,10 +174,26 @@ function toast(t){const el=document.getElementById('toast');el.textContent=t;el.
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
 
 function tempoLiquido(apt){
+  // Reconstroi apenas os periodos realmente trabalhados.
+  // Pausas maiores que 4h (240min) sao consideradas "overnight" e ignoradas.
   if(!apt.inicio)return 0;
-  const fim=apt.fim||new Date().toISOString();
-  let total=durMin(apt.inicio,fim);
-  (apt.pausas||[]).forEach(p=>{if(p.inicio&&p.fim)total-=durMin(p.inicio,p.fim);});
+  const MAX_PAUSA=240;
+  const pausas=(apt.pausas||[]).filter(p=>p.inicio);
+  let total=0;
+  let periodoInicio=new Date(apt.inicio);
+  pausas.forEach(p=>{
+    const pIni=new Date(p.inicio);
+    const trabalhado=Math.round((pIni-periodoInicio)/60000);
+    if(trabalhado>0)total+=trabalhado;
+    if(p.fim){
+      const durPausa=Math.round((new Date(p.fim)-pIni)/60000);
+      // retoma o periodo a partir do fim da pausa (curta ou longa)
+      periodoInicio=new Date(p.fim);
+    }
+  });
+  const fim=apt.fim?new Date(apt.fim):new Date();
+  const restante=Math.round((fim-periodoInicio)/60000);
+  if(restante>0)total+=restante;
   return Math.max(0,total);
 }
 function estaPausado(apt){

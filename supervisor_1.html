@@ -278,10 +278,26 @@ function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(
 function td(){return new Date().toISOString().split('T')[0];}
 
 function tempoLiquido(apt){
+  // Reconstroi apenas os periodos realmente trabalhados.
+  // Pausas maiores que 4h (240min) sao consideradas "overnight" e ignoradas.
   if(!apt.inicio)return 0;
-  const fim=apt.fim||new Date().toISOString();
-  let total=dur(apt.inicio,fim)||0;
-  (apt.pausas||[]).forEach(p=>{if(p.inicio&&p.fim)total-=dur(p.inicio,p.fim)||0;});
+  const MAX_PAUSA=240;
+  const pausas=(apt.pausas||[]).filter(p=>p.inicio);
+  let total=0;
+  let periodoInicio=new Date(apt.inicio);
+  pausas.forEach(p=>{
+    const pIni=new Date(p.inicio);
+    const trabalhado=Math.round((pIni-periodoInicio)/60000);
+    if(trabalhado>0)total+=trabalhado;
+    if(p.fim){
+      const durPausa=Math.round((new Date(p.fim)-pIni)/60000);
+      // retoma o periodo a partir do fim da pausa (curta ou longa)
+      periodoInicio=new Date(p.fim);
+    }
+  });
+  const fim=apt.fim?new Date(apt.fim):new Date();
+  const restante=Math.round((fim-periodoInicio)/60000);
+  if(restante>0)total+=restante;
   return Math.max(0,total);
 }
 function estaPausado(apt){
@@ -763,7 +779,7 @@ function renderLive(){
     const ini=new Date(a.inicio);
     const agora=new Date();
     const totalMin=Math.round((agora-ini)/60000);
-    const pausasMin=(a.pausas||[]).filter(p=>p.fim).reduce((s,p)=>s+dur(p.inicio,p.fim),0);
+    const pausasMin=(a.pausas||[]).filter(p=>p.fim).reduce((s,p)=>{const d=dur(p.inicio,p.fim);return s+(d<=240?d:0);},0);
 
     const avatar=(c?c.nome:'?').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
     const nome=c?c.nome:'Colaborador';

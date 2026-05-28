@@ -77,6 +77,16 @@ textarea{resize:vertical;}
 .outros{font-size:12px;color:#aaa;margin-bottom:8px;}
 .btn-end{width:100%;padding:13px;border-radius:10px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
 .btn-pause{width:100%;padding:13px;border-radius:10px;background:#fff;color:#3550B4;font-size:14px;font-weight:700;border:2px solid #3550B4;cursor:pointer;}
+.pausa-selector{background:#EEF1FF;border:1.5px solid #3550B4;border-radius:12px;padding:14px;margin-top:8px;}
+.pausa-selector h5{font-size:13px;font-weight:700;color:#3550B4;margin-bottom:12px;}
+.pausa-tipos{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.pausa-tipo{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #ddd;border-radius:9px;cursor:pointer;background:#fff;}
+.pausa-tipo.sel{border-color:#3550B4;background:#f0f4ff;}
+.pausa-tipo-icon{font-size:20px;flex-shrink:0;}
+.pausa-tipo-label{font-size:13px;font-weight:600;}
+.pausa-tipo-sub{font-size:11px;color:#888;margin-top:1px;}
+.btn-confirmar-pausa{width:100%;padding:12px;border-radius:10px;background:#3550B4;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.btn-cancel-pausa{width:100%;padding:9px;border-radius:10px;background:#fff;color:#888;font-size:13px;border:1px solid #ddd;cursor:pointer;margin-top:6px;}
 .btn-resume{width:100%;padding:14px;border-radius:10px;background:#3550B4;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;}
 .acoes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
 .timer-box{background:#FFF3E0;border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
@@ -174,10 +184,11 @@ function toast(t){const el=document.getElementById('toast');el.textContent=t;el.
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
 
 function tempoLiquido(apt){
-  // Reconstroi apenas os periodos realmente trabalhados.
-  // Pausas maiores que 4h (240min) sao consideradas "overnight" e ignoradas.
+  // Reconstroi apenas periodos realmente trabalhados.
+  // - fimdia: sempre ignorado (overnight)
+  // - pausas > 4h sem tipo definido: ignoradas (overnight implicito)
+  // - intervalo / almoco / atividade: descontados normalmente
   if(!apt.inicio)return 0;
-  const MAX_PAUSA=240;
   const pausas=(apt.pausas||[]).filter(p=>p.inicio);
   let total=0;
   let periodoInicio=new Date(apt.inicio);
@@ -187,7 +198,11 @@ function tempoLiquido(apt){
     if(trabalhado>0)total+=trabalhado;
     if(p.fim){
       const durPausa=Math.round((new Date(p.fim)-pIni)/60000);
-      // retoma o periodo a partir do fim da pausa (curta ou longa)
+      const overnight=p.tipo==='fimdia'||(durPausa>240&&!p.tipo);
+      if(!overnight){
+        // pausa normal: desconta do total
+        total-=durPausa;
+      }
       periodoInicio=new Date(p.fim);
     }
   });
@@ -460,7 +475,10 @@ function renderQuadro(apt){
     return`<div class="qcard pausado">
       <div class="qh"><span class="qnum">OP ${apt.opNum}</span><span class="badge bpause">⏸ Pausado</span></div>
       <div style="font-size:13px;font-weight:600;margin-bottom:6px;">${apt.modeloLabel||''}${modeloDesc}</div>
-      <div class="pause-box"><div class="pause-txt">⏸ Pausado</div><div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · ${liq}min trabalhados</div></div>
+      <div class="pause-box">
+      <div class="pause-txt">${ultima.tipoLabel?TIPOS_PAUSA.find(t=>t.id===ultima.tipo)?.icon+' ':'⏸ '}${ultima.tipoLabel||'Pausado'}</div>
+      <div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · ${liq}min trabalhados</div>
+    </div>
       ${renderProgressBar(apt)}
       ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
       ${outrosHtml}
@@ -481,7 +499,8 @@ function renderQuadro(apt){
     ${outrosHtml}
     ${renderObsLista(apt)}${renderObsInput(apt.id)}
     <div class="acoes-grid">
-      <button class="btn-pause" onclick="pausar(${apt.id})">⏸ Pausar</button>
+      <button class="btn-pause" onclick="abrirSeletorPausa(${apt.id})">⏸ Pausar</button>
+    <div id="pausa-sel-${apt.id}"></div>
       <button class="btn-end" onclick="abrirFinalizar(${apt.id})">⏹ Finalizar</button>
     </div>
     <div id="fin-${apt.id}"></div>
@@ -504,10 +523,59 @@ async function adicionarObs(aptId){
   apt.observacoes.push({hora:new Date().toISOString(),texto});
   await save();toast('Observação registrada!');renderAll();
 }
-async function pausar(aptId){
+let _tipoPausa=null;
+
+const TIPOS_PAUSA=[
+  {id:'intervalo',  icon:'☕', label:'Intervalo',          sub:'Café, banheiro, descanso rápido'},
+  {id:'atividade',  icon:'📋', label:'Atividade interna',  sub:'Palestra, reunião, treinamento'},
+  {id:'almoco',     icon:'🍽️', label:'Almoço',             sub:'Intervalo de almoço'},
+  {id:'fimdia',     icon:'🌙', label:'Fim do dia',         sub:'Retorno amanhã'},
+];
+
+function abrirSeletorPausa(aptId){
+  _tipoPausa=null;
+  const div=document.getElementById('pausa-sel-'+aptId);
+  if(!div)return;
+  div.innerHTML=`<div class="pausa-selector">
+    <h5>⏸ Motivo da pausa</h5>
+    <div class="pausa-tipos">
+      ${TIPOS_PAUSA.map(t=>`
+        <div class="pausa-tipo ${_tipoPausa===t.id?'sel':''}" onclick="selecionarTipoPausa('${t.id}',${aptId})">
+          <span class="pausa-tipo-icon">${t.icon}</span>
+          <div><div class="pausa-tipo-label">${t.label}</div><div class="pausa-tipo-sub">${t.sub}</div></div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-confirmar-pausa" onclick="confirmarPausa(${aptId})">Confirmar pausa</button>
+    <button class="btn-cancel-pausa" onclick="cancelarSeletorPausa(${aptId})">Cancelar</button>
+  </div>`;
+}
+
+function selecionarTipoPausa(tipo,aptId){
+  _tipoPausa=tipo;
+  abrirSeletorPausa(aptId);
+}
+
+function cancelarSeletorPausa(aptId){
+  _tipoPausa=null;
+  const div=document.getElementById('pausa-sel-'+aptId);
+  if(div)div.innerHTML='';
+}
+
+async function confirmarPausa(aptId){
+  if(!_tipoPausa){toast('Selecione o motivo da pausa.');return;}
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
   if(!apt.pausas)apt.pausas=[];
-  apt.pausas.push({inicio:new Date().toISOString(),fim:null});
+  const tipo=TIPOS_PAUSA.find(t=>t.id===_tipoPausa);
+  apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:_tipoPausa,tipoLabel:tipo?tipo.label:''});
+  _tipoPausa=null;
+  await save();renderAll();toast('Pausado: '+(tipo?tipo.label:'')+'  ⏸');
+}
+
+async function pausar(aptId){
+  // mantido para compatibilidade
+  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+  if(!apt.pausas)apt.pausas=[];
+  apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:'intervalo',tipoLabel:'Intervalo'});
   await save();renderAll();toast('Pausado ⏸');
 }
 async function retomar(aptId){

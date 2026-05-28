@@ -496,40 +496,95 @@ function renderModelos(){
   const cnt=document.getElementById('modCount');if(cnt)cnt.textContent=S.modelos.length;
   const div=document.getElementById('mod-lista');if(!div)return;
   if(!S.modelos.length){div.innerHTML='<p class="empty">Nenhum modelo cadastrado.</p>';return;}
-  const tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Tempo previsto</th><th>Usos</th><th></th></tr></thead>';
-  const tbody=document.createElement('tbody');
+
+  const wrap=document.createElement('div');
   S.modelos.forEach(m=>{
     const usos=S.apontamentos.filter(a=>a.modeloId===m.id).length;
     const finalizados=S.apontamentos.filter(a=>a.modeloId===m.id&&a.fim);
     const noTempo=finalizados.filter(a=>tempoLiquido(a)<=(m.tempoPrevisto||Infinity)).length;
     const atrasados=finalizados.filter(a=>m.tempoPrevisto&&tempoLiquido(a)>m.tempoPrevisto).length;
-    const tr=document.createElement('tr');
-    const t1=document.createElement('td');t1.style.fontWeight='600';t1.textContent=m.codigo;
-    const t2=document.createElement('td');t2.textContent=m.descricao||'—';
-    const t3=document.createElement('td');
-    if(m.tempoPrevisto){
-      const h=Math.floor(m.tempoPrevisto/60),min=m.tempoPrevisto%60;
-      t3.innerHTML=`<strong>${m.tempoPrevisto}min</strong> <span style="font-size:11px;color:#888;">(${h>0?h+'h ':''}${min>0?min+'min':''})</span>
-        ${finalizados.length?`<div style="font-size:11px;margin-top:2px;"><span style="color:#3B6D11;">✓ ${noTempo} no prazo</span>${atrasados?` · <span style="color:#A32D2D;">⚠ ${atrasados} atrasados</span>`:''}  </div>`:''}`;
-    } else {
-      t3.innerHTML='<span style="color:#aaa;font-size:12px;">Não definido</span>';
-    }
-    const t4=document.createElement('td');t4.textContent=usos+' apontamentos';
-    const t5=document.createElement('td');
-    const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
-    btn.addEventListener('click',()=>{
-      const row=document.createElement('div');row.className='confirm-row';
-      row.innerHTML=`⚠️ Remover <strong>${m.codigo}</strong>?`;
+    const h=m.tempoPrevisto?Math.floor(m.tempoPrevisto/60):0;
+    const mn=m.tempoPrevisto?m.tempoPrevisto%60:0;
+
+    const card=document.createElement('div');
+    card.id='mod-card-'+m.id;
+    card.style.cssText='border:1px solid #e5e5e5;border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;';
+
+    // VIEW
+    const view=document.createElement('div');
+    view.id='mod-view-'+m.id;
+    view.innerHTML=`<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;">${m.codigo}</div>
+        ${m.descricao?`<div style="font-size:12px;color:#888;margin-top:2px;">${m.descricao}</div>`:''}
+        <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
+          ${m.tempoPrevisto?`<span style="font-size:12px;"><strong>${m.tempoPrevisto}min</strong> <span style="color:#888;">(${h>0?h+'h ':''}${mn>0?mn+'min':''})</span></span>`:'<span style="font-size:12px;color:#aaa;">Tempo não definido</span>'}
+          <span style="font-size:12px;color:#888;">${usos} apontamentos</span>
+          ${finalizados.length?`<span style="font-size:12px;color:#3B6D11;">✓ ${noTempo} no prazo</span>${atrasados?`<span style="font-size:12px;color:#A32D2D;">⚠ ${atrasados} atrasados</span>`:'`}`:''}`+`
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;" id="mod-btns-${m.id}"></div>
+    </div>`;
+
+    const btnEdit=document.createElement('button');
+    btnEdit.className='btn-green';btnEdit.innerHTML='✏ Editar';
+    btnEdit.addEventListener('click',()=>{
+      document.getElementById('mod-view-'+m.id).style.display='none';
+      document.getElementById('mod-edit-'+m.id).style.display='block';
+    });
+    const btnRem=document.createElement('button');
+    btnRem.className='btn-sm';btnRem.textContent='Remover';
+    btnRem.addEventListener('click',()=>{
+      const btns=document.getElementById('mod-btns-'+m.id);
+      const conf=document.createElement('div');conf.className='confirm-row';
+      conf.innerHTML=`⚠️ Remover <strong>${m.codigo}</strong>?`;
       const sim=document.createElement('button');sim.className='btn-sm';sim.textContent='Sim';
       sim.addEventListener('click',async()=>{S.modelos=S.modelos.filter(x=>x.id!==m.id);await save();renderModelos();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderModelos);
-      row.append(sim,nao);t5.innerHTML='';t5.appendChild(row);
+      conf.append(sim,nao);btns.innerHTML='';btns.appendChild(conf);
     });
-    t5.appendChild(btn);tr.append(t1,t2,t3,t4,t5);tbody.appendChild(tr);
+    view.querySelector('#mod-btns-'+m.id).append(btnEdit,btnRem);
+
+    // EDIT
+    const edit=document.createElement('div');
+    edit.id='mod-edit-'+m.id;
+    edit.style.display='none';
+    edit.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:12px;">✏ Editando modelo</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div><label>Código do modelo</label><input id="edit-cod-${m.id}" value="${m.codigo}"/></div>
+        <div><label>Descrição</label><input id="edit-desc-${m.id}" value="${m.descricao||''}"/></div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label>Tempo previsto (minutos)</label>
+        <input type="number" id="edit-tempo-${m.id}" value="${m.tempoPrevisto||''}" min="1" placeholder="Ex: 800"/>
+        <div style="font-size:11px;color:#888;margin-top:3px;">Deixe em branco para não definir</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" style="margin-top:0;padding:8px 16px;width:auto;" onclick="salvarEdicaoModelo(${m.id})">✓ Salvar</button>
+        <button class="btn-cancel" style="padding:8px 14px;" onclick="cancelarEdicaoModelo(${m.id})">Cancelar</button>
+      </div>`;
+
+    card.append(view,edit);
+    wrap.appendChild(card);
   });
-  tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
+  div.innerHTML='';div.appendChild(wrap);
+}
+
+function cancelarEdicaoModelo(id){
+  document.getElementById('mod-edit-'+id).style.display='none';
+  document.getElementById('mod-view-'+id).style.display='block';
+}
+
+async function salvarEdicaoModelo(id){
+  const cod=document.getElementById('edit-cod-'+id).value.trim();
+  const desc=document.getElementById('edit-desc-'+id).value.trim();
+  const tempo=parseInt(document.getElementById('edit-tempo-'+id).value)||0;
+  if(!cod){toast('O código não pode estar vazio.');return;}
+  if(S.modelos.find(m=>m.codigo===cod&&m.id!==id)){toast('Já existe outro modelo com este código.');return;}
+  const m=S.modelos.find(x=>x.id===id);if(!m)return;
+  m.codigo=cod;m.descricao=desc;m.tempoPrevisto=tempo||0;
+  await save();toast('Modelo atualizado!');renderModelos();
 }
 
 /* ── OPs ── */

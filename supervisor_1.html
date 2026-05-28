@@ -128,8 +128,19 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <div id="dash-live"></div>
       </div>
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
-      <div class="card"><h3>📈 Quadros finalizados — últimos 10 dias</h3>
-        <div style="position:relative;height:180px;"><canvas id="cTrend"></canvas></div>
+      <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+        <div class="card">
+          <h3>📈 Quadros por dia — últimos 14 dias</h3>
+          <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>📊 Quadros por semana — últimas 8 semanas</h3>
+          <div style="position:relative;height:160px;"><canvas id="cTrendSemana"></canvas></div>
+        </div>
+        <div class="card">
+          <h3>📅 Quadros por mês — últimos 12 meses</h3>
+          <div style="position:relative;height:160px;"><canvas id="cTrendMes"></canvas></div>
+        </div>
       </div>
     </div>
 
@@ -836,7 +847,6 @@ function renderLive(){
 }
 
 /* ── DASHBOARD ── */
-let chartT=null;
 function renderDash(){
   const hoje=td(),mes=hoje.substring(0,7);
   const aptH=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(hoje));
@@ -883,14 +893,83 @@ function renderDash(){
     </div>`;
   }).join('');
 
-  const datas=[...new Set(S.apontamentos.filter(a=>a.fim).map(a=>a.fim.split('T')[0]))].sort().slice(-10);
-  const vals=datas.map(d=>S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(d)).length);
-  const canvas=document.getElementById('cTrend');if(!canvas)return;
-  if(chartT)chartT.destroy();
-  if(!datas.length){canvas.parentElement.innerHTML='<p class="empty" style="padding:10px 0;">Nenhum apontamento ainda.</p>';return;}
-  chartT=new Chart(canvas,{type:'line',data:{labels:datas.map(d=>{const[,m,dd]=d.split('-');return`${dd}/${m}`;}),
-    datasets:[{label:'Quadros',data:vals,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.08)',tension:0.3,fill:true,pointBackgroundColor:'#1D9E75',borderWidth:2,pointRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:11}}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}});
+  renderGraficos();
+}
+
+let chartDia=null,chartSem=null,chartMesD=null;
+
+function semanaLabel(dateStr){
+  const d=new Date(dateStr+'T12:00:00');
+  const ini=new Date(d);ini.setDate(d.getDate()-d.getDay()+1);
+  return ini.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+}
+
+function mkChart(canvasId,labels,data,color,existingChart,tipo){
+  const canvas=document.getElementById(canvasId);if(!canvas)return null;
+  if(existingChart)existingChart.destroy();
+  if(!data.length||data.every(v=>v===0)){
+    canvas.parentElement.innerHTML='<p class="empty" style="padding:10px 0;">Nenhum apontamento ainda.</p>';return null;
+  }
+  return new Chart(canvas,{
+    type:tipo||'bar',
+    data:{labels,datasets:[{label:'Quadros',data,
+      backgroundColor:color+'33',borderColor:color,borderWidth:2,
+      ...(tipo==='line'?{tension:0.3,fill:true,pointBackgroundColor:color,pointRadius:4}:{borderRadius:5})
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{font:{size:11}},grid:{display:false}},y:{beginAtZero:true,ticks:{font:{size:11},stepSize:1}}}}
+  });
+}
+
+function renderGraficos(){
+  const apts=S.apontamentos.filter(a=>a.fim);
+
+  // ── DIÁRIO — últimos 14 dias ──
+  const hoje=new Date();
+  const diasLabels=[],diasVals=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(hoje);d.setDate(hoje.getDate()-i);
+    const ds=d.toISOString().split('T')[0];
+    diasLabels.push(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`);
+    diasVals.push(apts.filter(a=>a.fim.startsWith(ds)).length);
+  }
+  chartDia=mkChart('cTrendDia',diasLabels,diasVals,'#1D9E75',chartDia,'line');
+
+  // ── SEMANAL — últimas 8 semanas ──
+  const semanas={};
+  for(let i=7;i>=0;i--){
+    const d=new Date(hoje);
+    d.setDate(hoje.getDate()-hoje.getDay()+1-(i*7));
+    const ini=d.toISOString().split('T')[0];
+    semanas[ini]=0;
+  }
+  apts.forEach(a=>{
+    const d=new Date(a.fim+'');
+    const ini=new Date(d);ini.setDate(d.getDate()-d.getDay()+1);
+    const k=ini.toISOString().split('T')[0];
+    if(k in semanas)semanas[k]++;
+  });
+  const semKeys=Object.keys(semanas).sort();
+  const semLabels=semKeys.map(k=>semanaLabel(k)+' →');
+  const semVals=semKeys.map(k=>semanas[k]);
+  chartSem=mkChart('cTrendSemana',semLabels,semVals,'#2563eb',chartSem,'bar');
+
+  // ── MENSAL — últimos 12 meses ──
+  const meses={};
+  for(let i=11;i>=0;i--){
+    const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
+    const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    meses[k]=0;
+  }
+  apts.forEach(a=>{
+    const k=a.fim.substring(0,7);
+    if(k in meses)meses[k]++;
+  });
+  const mesKeys=Object.keys(meses).sort();
+  const mesLabels=mesKeys.map(k=>{const[y,m]=k.split('-');return`${['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m)-1]}/${y.slice(2)}`;});
+  const mesVals=mesKeys.map(k=>meses[k]);
+  chartMesD=mkChart('cTrendMes',mesLabels,mesVals,'#7c3aed',chartMesD,'bar');
 }
 
 /* ── MENSAL ── */

@@ -92,9 +92,20 @@ textarea{resize:vertical;}
 .timer-box{background:#FFF3E0;border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
 .timer-txt{font-size:14px;color:#BA7517;font-weight:700;}
 .timer-liq{font-size:11px;color:#888;}
-.pause-box{background:#EEF1FF;border-radius:9px;padding:10px 14px;margin-bottom:10px;}
-.pause-txt{font-size:14px;color:#3550B4;font-weight:700;}
-.pause-sub{font-size:11px;color:#888;margin-top:2px;}
+.pause-box{border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+.pause-box.intervalo{background:#FFF3E0;border:1.5px solid #f0c060;}
+.pause-box.atividade{background:#EEF1FF;border:1.5px solid #a0a8e8;}
+.pause-box.almoco{background:#FFF0F5;border:1.5px solid #e8a0c0;}
+.pause-box.fimdia{background:#F0F0F5;border:1.5px solid #c0c0d8;}
+.pause-box.default{background:#EEF1FF;border:1.5px solid #3550B4;}
+.pause-icon{font-size:32px;flex-shrink:0;line-height:1;}
+.pause-info{}
+.pause-txt{font-size:15px;font-weight:700;margin-bottom:3px;}
+.pause-txt.intervalo{color:#BA7517;}
+.pause-txt.atividade{color:#3550B4;}
+.pause-txt.almoco{color:#c0357a;}
+.pause-txt.fimdia{color:#555;}
+.pause-sub{font-size:12px;color:#888;}
 .obs-section{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
 .obs-section h5{font-size:12px;font-weight:700;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
 .obs-item{background:#f8f8f6;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;}
@@ -472,13 +483,26 @@ function renderQuadro(apt){
   if(estaPausado(apt)){
     const ultima=(apt.pausas||[]).slice(-1)[0];
     const liq=tempoLiquido(apt);
+    const tipoInfo={
+      intervalo:{cor:'#BA7517',bg:'#FFF3E0',borda:'#f0c060'},
+      atividade:{cor:'#3550B4',bg:'#EEF1FF',borda:'#a0a8e8'},
+      almoco:{cor:'#c0357a',bg:'#FFF0F5',borda:'#e8a0c0'},
+      fimdia:{cor:'#555',bg:'#F0F0F5',borda:'#c0c0d8'},
+    };
+    const tInfo=tipoInfo[ultima.tipo]||{cor:'#3550B4',bg:'#EEF1FF',borda:'#3550B4'};
+    const tObj=TIPOS_PAUSA.find(t=>t.id===ultima.tipo)||{icon:'⏸',label:'Pausado'};
     return`<div class="qcard pausado">
-      <div class="qh"><span class="qnum">OP ${apt.opNum}</span><span class="badge bpause">⏸ Pausado</span></div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:6px;">${apt.modeloLabel||''}${modeloDesc}</div>
-      <div class="pause-box">
-      <div class="pause-txt">${ultima.tipoLabel?TIPOS_PAUSA.find(t=>t.id===ultima.tipo)?.icon+' ':'⏸ '}${ultima.tipoLabel||'Pausado'}</div>
-      <div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · ${liq}min trabalhados</div>
-    </div>
+      <div class="qh"><span class="qnum">OP ${apt.opNum}</span>
+        <span class="badge" style="background:${tInfo.bg};color:${tInfo.cor};border:1px solid ${tInfo.borda};">${tObj.icon} ${tObj.label}</span>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">${apt.modeloLabel||''}${modeloDesc}</div>
+      <div class="pause-box" style="background:${tInfo.bg};border:1.5px solid ${tInfo.borda};">
+        <div class="pause-icon">${tObj.icon}</div>
+        <div class="pause-info">
+          <div class="pause-txt" style="color:${tInfo.cor};">${tObj.label}</div>
+          <div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · ${liq}min trabalhados</div>
+        </div>
+      </div>
       ${renderProgressBar(apt)}
       ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
       ${outrosHtml}

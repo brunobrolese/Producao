@@ -533,26 +533,52 @@ const TIPOS_PAUSA=[
 ];
 
 function abrirSeletorPausa(aptId){
-  _tipoPausa=null;
   const div=document.getElementById('pausa-sel-'+aptId);
   if(!div)return;
-  div.innerHTML=`<div class="pausa-selector">
-    <h5>⏸ Motivo da pausa</h5>
-    <div class="pausa-tipos">
-      ${TIPOS_PAUSA.map(t=>`
-        <div class="pausa-tipo ${_tipoPausa===t.id?'sel':''}" onclick="selecionarTipoPausa('${t.id}',${aptId})">
-          <span class="pausa-tipo-icon">${t.icon}</span>
-          <div><div class="pausa-tipo-label">${t.label}</div><div class="pausa-tipo-sub">${t.sub}</div></div>
-        </div>`).join('')}
-    </div>
-    <button class="btn-confirmar-pausa" onclick="confirmarPausa(${aptId})">Confirmar pausa</button>
-    <button class="btn-cancel-pausa" onclick="cancelarSeletorPausa(${aptId})">Cancelar</button>
-  </div>`;
-}
 
-function selecionarTipoPausa(tipo,aptId){
-  _tipoPausa=tipo;
-  abrirSeletorPausa(aptId);
+  // monta via DOM para evitar problemas com onclick inline
+  div.innerHTML='';
+  const wrap=document.createElement('div');
+  wrap.className='pausa-selector';
+
+  const titulo=document.createElement('h5');
+  titulo.textContent='⏸ Motivo da pausa';
+  wrap.appendChild(titulo);
+
+  const lista=document.createElement('div');
+  lista.className='pausa-tipos';
+
+  TIPOS_PAUSA.forEach(t=>{
+    const item=document.createElement('div');
+    item.className='pausa-tipo'+(_tipoPausa===t.id?' sel':'');
+    item.innerHTML=`<span class="pausa-tipo-icon">${t.icon}</span>
+      <div><div class="pausa-tipo-label">${t.label}</div><div class="pausa-tipo-sub">${t.sub}</div></div>`;
+    item.addEventListener('click',function(){
+      _tipoPausa=t.id;
+      // atualiza visual sem re-renderizar tudo
+      div.querySelectorAll('.pausa-tipo').forEach(el=>el.classList.remove('sel'));
+      item.classList.add('sel');
+    });
+    lista.appendChild(item);
+  });
+  wrap.appendChild(lista);
+
+  const btnConf=document.createElement('button');
+  btnConf.className='btn-confirmar-pausa';
+  btnConf.textContent='Confirmar pausa';
+  btnConf.addEventListener('click',function(){ confirmarPausa(aptId); });
+
+  const btnCanc=document.createElement('button');
+  btnCanc.className='btn-cancel-pausa';
+  btnCanc.textContent='Cancelar';
+  btnCanc.addEventListener('click',function(){
+    _tipoPausa=null;
+    div.innerHTML='';
+  });
+
+  wrap.appendChild(btnConf);
+  wrap.appendChild(btnCanc);
+  div.appendChild(wrap);
 }
 
 function cancelarSeletorPausa(aptId){

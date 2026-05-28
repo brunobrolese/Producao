@@ -154,7 +154,10 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <!-- COLABORADORES -->
     <!-- APONTAMENTOS -->
     <div id="page-apt" class="page">
-      <div class="card"><h3>🔍 Filtrar</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;" id="hist-metrics"></div>
+      <div class="card" id="hist-antes" style="border-left:4px solid #1D9E75;"></div>
+      <div class="card" id="hist-depois" style="border-left:4px solid #A32D2D;margin-bottom:12px;"></div>
+      <div class="card"><h3>🔍 Filtrar todos os apontamentos</h3>
         <div class="frow">
           <div><label>OP</label><input id="filtOp" placeholder="Digite a OP..." oninput="renderApt()"/></div>
           <div><label>Colaborador</label><select id="filtColab" onchange="renderApt()"><option value="">Todos</option></select></div>
@@ -169,6 +172,12 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <div class="frow">
           <div><label>Código do modelo</label><input id="modCod" placeholder="Ex: QD-200A, CCMB-100"/></div>
           <div><label>Descrição (opcional)</label><input id="modDesc" placeholder="Ex: Quadro de distribuição 200A"/></div>
+        </div>
+        <div class="frow">
+          <div><label>Tempo previsto de montagem (minutos)</label><input type="number" id="modTempo" min="1" placeholder="Ex: 800"/></div>
+          <div style="display:flex;align-items:flex-end;padding-bottom:1px;">
+            <div style="font-size:12px;color:#888;padding-bottom:8px;">💡 Ex: 800min = ~13h20. Usado para monitorar desempenho em tempo real.</div>
+          </div>
         </div>
         <button class="btn" onclick="addModelo()">Cadastrar modelo</button>
         <div id="modMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
@@ -342,7 +351,72 @@ function nav(id,btn){
 /* ── APONTAMENTOS LIVRES ── */
 function renderApt(){
   if(!S.modelos)S.modelos=[];
-  // populate colab filter
+
+  // ── HISTÓRICO DE DESEMPENHO ──
+  const finalizados=S.apontamentos.filter(a=>a.fim&&a.opNum);
+  const comTempo=finalizados.filter(a=>{const m=S.modelos.find(x=>x.id===a.modeloId);return m&&m.tempoPrevisto;});
+  const noPrazo=comTempo.filter(a=>{const m=S.modelos.find(x=>x.id===a.modeloId);return tempoLiquido(a)<=m.tempoPrevisto;});
+  const atrasados=comTempo.filter(a=>{const m=S.modelos.find(x=>x.id===a.modeloId);return tempoLiquido(a)>m.tempoPrevisto;});
+
+  const hm=document.getElementById('hist-metrics');
+  if(hm) hm.innerHTML=`
+    <div class="metric" style="border-left:4px solid #1D9E75;">
+      <div class="lbl">✓ Finalizados no prazo</div>
+      <div class="val ok">${noPrazo.length}</div>
+      <div class="sub">${comTempo.length?Math.round((noPrazo.length/comTempo.length)*100)+'% dos quadros com tempo definido':'—'}</div>
+    </div>
+    <div class="metric" style="border-left:4px solid #A32D2D;">
+      <div class="lbl">⚠ Finalizados com atraso</div>
+      <div class="val bad">${atrasados.length}</div>
+      <div class="sub">${comTempo.length?Math.round((atrasados.length/comTempo.length)*100)+'% dos quadros com tempo definido':'—'}</div>
+    </div>`;
+
+  const ha=document.getElementById('hist-antes');
+  if(ha){
+    ha.innerHTML=`<h3 style="color:#3B6D11;margin-bottom:10px;">✓ Finalizados antes do prazo (${noPrazo.length})</h3>`+
+    (noPrazo.length?`<div style="overflow-x:auto;"><table><thead><tr><th>OP</th><th>Modelo</th><th>Colaborador</th><th>Previsto</th><th>Realizado</th><th>Economia</th><th>Data</th></tr></thead><tbody>`+
+    noPrazo.map(a=>{
+      const m=S.modelos.find(x=>x.id===a.modeloId);
+      const c=S.colaboradores.find(x=>x.id===a.colabId);
+      const liq=tempoLiquido(a);
+      const economia=m.tempoPrevisto-liq;
+      return`<tr>
+        <td style="font-weight:700;">${a.opNum}</td>
+        <td>${m?m.codigo:'—'}</td>
+        <td>${c?c.nome:'—'}</td>
+        <td>${m?m.tempoPrevisto+'min':'—'}</td>
+        <td><strong style="color:#3B6D11;">${liq}min</strong></td>
+        <td><span class="badge bok">-${economia}min</span></td>
+        <td style="font-size:11px;">${fmtD(a.fim)}</td>
+      </tr>`;
+    }).join('')+`</tbody></table></div>`
+    :'<p class="empty">Nenhum quadro finalizado antes do prazo ainda.</p>');
+  }
+
+  const hd=document.getElementById('hist-depois');
+  if(hd){
+    hd.innerHTML=`<h3 style="color:#A32D2D;margin-bottom:10px;">⚠ Finalizados com atraso (${atrasados.length})</h3>`+
+    (atrasados.length?`<div style="overflow-x:auto;"><table><thead><tr><th>OP</th><th>Modelo</th><th>Colaborador</th><th>Previsto</th><th>Realizado</th><th>Atraso</th><th>Motivo</th><th>Data</th></tr></thead><tbody>`+
+    atrasados.map(a=>{
+      const m=S.modelos.find(x=>x.id===a.modeloId);
+      const c=S.colaboradores.find(x=>x.id===a.colabId);
+      const liq=tempoLiquido(a);
+      const atraso=liq-(m?m.tempoPrevisto:0);
+      return`<tr>
+        <td style="font-weight:700;">${a.opNum}</td>
+        <td>${m?m.codigo:'—'}</td>
+        <td>${c?c.nome:'—'}</td>
+        <td>${m?m.tempoPrevisto+'min':'—'}</td>
+        <td><strong style="color:#A32D2D;">${liq}min</strong></td>
+        <td><span class="badge bbad">+${atraso}min</span></td>
+        <td style="font-size:12px;max-width:200px;font-style:italic;color:#555;">${a.motivoAtraso||'<span style="color:#aaa;">Não informado</span>'}</td>
+        <td style="font-size:11px;">${fmtD(a.fim)}</td>
+      </tr>`;
+    }).join('')+`</tbody></table></div>`
+    :'<p class="empty">Nenhum quadro finalizado com atraso.</p>');
+  }
+
+  // ── FILTROS E TABELA GERAL ──
   const sel=document.getElementById('filtColab');
   if(sel){
     const cur=sel.value;
@@ -350,8 +424,6 @@ function renderApt(){
   }
   const filtOp=(document.getElementById('filtOp')||{}).value||'';
   const filtColabId=parseInt((document.getElementById('filtColab')||{}).value)||0;
-
-  // apontamentos do novo modelo (com opNum digitado)
   let apts=S.apontamentos.filter(a=>a.opNum);
   if(filtOp)apts=apts.filter(a=>a.opNum.toLowerCase().includes(filtOp.toLowerCase()));
   if(filtColabId)apts=apts.filter(a=>a.colabId===filtColabId);
@@ -368,7 +440,10 @@ function renderApt(){
     const erros=a.erros||[];
     const obs=(a.observacoes||[]);
     let statusBadge='';
-    if(a.fim){statusBadge=erros.length?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>';}
+    if(a.fim){
+      const atrasado=m&&m.tempoPrevisto&&liq>m.tempoPrevisto;
+      statusBadge=erros.length?'<span class="badge bbad">⚠ Com erros</span>':atrasado?'<span class="badge bbad">⏰ Atrasado</span>':'<span class="badge bok">✓ No prazo</span>';
+    }
     else if(estaPausado(a)){statusBadge='<span class="badge bpause">⏸ Pausado</span>';}
     else{statusBadge='<span class="badge bwarn">▶ Em andamento</span>';}
     let itensFalt='—';
@@ -383,6 +458,7 @@ function renderApt(){
       <td style="font-size:12px;">${fmtDH(a.inicio)}</td>
       <td style="font-size:12px;">${a.fim?fmtDH(a.fim):statusBadge}</td>
       <td style="font-size:12px;font-weight:600;">${liq?liq+'min':'—'}</td>
+      <td style="font-size:12px;">${m&&m.tempoPrevisto?m.tempoPrevisto+'min':'—'}</td>
       <td style="font-size:12px;">${pausas||'—'}</td>
       <td>${itensFalt}</td>
       <td>${obsHtml}</td>
@@ -393,7 +469,7 @@ function renderApt(){
   div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''}</h3>
     <div style="overflow-x:auto;"><table><thead><tr>
       <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
-      <th>T. líquido</th><th>Pausas</th><th>Itens</th><th>Observações</th><th>Erros</th>
+      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Itens</th><th>Observações</th><th>Erros</th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
@@ -404,12 +480,14 @@ function renderApt(){
 async function addModelo(){
   const cod=document.getElementById('modCod').value.trim();
   const desc=document.getElementById('modDesc').value.trim();
+  const tempo=parseInt(document.getElementById('modTempo').value)||0;
   if(!cod){msg('modMsg','Informe o código do modelo.','bad');return;}
   if(!S.modelos)S.modelos=[];
   if(S.modelos.find(m=>m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
-  S.modelos.push({id:S.nid++,codigo:cod,descricao:desc});
+  S.modelos.push({id:S.nid++,codigo:cod,descricao:desc,tempoPrevisto:tempo});
   document.getElementById('modCod').value='';
   document.getElementById('modDesc').value='';
+  document.getElementById('modTempo').value='';
   await save();msg('modMsg','Modelo cadastrado!','ok');renderModelos();
 }
 
@@ -419,15 +497,26 @@ function renderModelos(){
   const div=document.getElementById('mod-lista');if(!div)return;
   if(!S.modelos.length){div.innerHTML='<p class="empty">Nenhum modelo cadastrado.</p>';return;}
   const tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Usos</th><th></th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th>Código</th><th>Descrição</th><th>Tempo previsto</th><th>Usos</th><th></th></tr></thead>';
   const tbody=document.createElement('tbody');
   S.modelos.forEach(m=>{
     const usos=S.apontamentos.filter(a=>a.modeloId===m.id).length;
+    const finalizados=S.apontamentos.filter(a=>a.modeloId===m.id&&a.fim);
+    const noTempo=finalizados.filter(a=>tempoLiquido(a)<=(m.tempoPrevisto||Infinity)).length;
+    const atrasados=finalizados.filter(a=>m.tempoPrevisto&&tempoLiquido(a)>m.tempoPrevisto).length;
     const tr=document.createElement('tr');
     const t1=document.createElement('td');t1.style.fontWeight='600';t1.textContent=m.codigo;
     const t2=document.createElement('td');t2.textContent=m.descricao||'—';
-    const t3=document.createElement('td');t3.textContent=usos+' apontamentos';
-    const t4=document.createElement('td');
+    const t3=document.createElement('td');
+    if(m.tempoPrevisto){
+      const h=Math.floor(m.tempoPrevisto/60),min=m.tempoPrevisto%60;
+      t3.innerHTML=`<strong>${m.tempoPrevisto}min</strong> <span style="font-size:11px;color:#888;">(${h>0?h+'h ':''}${min>0?min+'min':''})</span>
+        ${finalizados.length?`<div style="font-size:11px;margin-top:2px;"><span style="color:#3B6D11;">✓ ${noTempo} no prazo</span>${atrasados?` · <span style="color:#A32D2D;">⚠ ${atrasados} atrasados</span>`:''}  </div>`:''}`;
+    } else {
+      t3.innerHTML='<span style="color:#aaa;font-size:12px;">Não definido</span>';
+    }
+    const t4=document.createElement('td');t4.textContent=usos+' apontamentos';
+    const t5=document.createElement('td');
     const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
     btn.addEventListener('click',()=>{
       const row=document.createElement('div');row.className='confirm-row';
@@ -436,9 +525,9 @@ function renderModelos(){
       sim.addEventListener('click',async()=>{S.modelos=S.modelos.filter(x=>x.id!==m.id);await save();renderModelos();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderModelos);
-      row.append(sim,nao);t4.innerHTML='';t4.appendChild(row);
+      row.append(sim,nao);t5.innerHTML='';t5.appendChild(row);
     });
-    t4.appendChild(btn);tr.append(t1,t2,t3,t4);tbody.appendChild(tr);
+    t5.appendChild(btn);tr.append(t1,t2,t3,t4,t5);tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
 }

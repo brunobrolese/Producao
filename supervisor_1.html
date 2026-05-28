@@ -282,22 +282,19 @@ function tempoLiquido(apt){
   const pausas=(apt.pausas||[]).filter(p=>p.inicio);
   let total=0;
   let periodoInicio=new Date(apt.inicio);
-  pausas.forEach(p=>{
+  for(const p of pausas){
     const pIni=new Date(p.inicio);
     const trabalhado=Math.round((pIni-periodoInicio)/60000);
     if(trabalhado>0)total+=trabalhado;
-    if(p.fim){
-      const durPausa=Math.round((new Date(p.fim)-pIni)/60000);
-      const overnight=p.tipo==='fimdia'||(durPausa>240&&!p.tipo);
-      if(!overnight)total-=durPausa;
-      periodoInicio=new Date(p.fim);
-    }
-  });
+    if(p.fim){periodoInicio=new Date(p.fim);}
+    else{return Math.max(0,total);}
+  }
   const fim=apt.fim?new Date(apt.fim):new Date();
   const restante=Math.round((fim-periodoInicio)/60000);
   if(restante>0)total+=restante;
   return Math.max(0,total);
 }
+
 function estaPausado(apt){
   if(!apt||apt.fim)return false;
   const pausas=apt.pausas||[];

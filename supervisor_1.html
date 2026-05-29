@@ -107,6 +107,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 <div id="appScreen" style="display:none;">
   <div class="nav">
     <button class="active" onclick="nav('dash',this)">Dashboard</button>
+    <button onclick="nav('live',this)">🔴 Tempo Real</button>
     <button onclick="nav('ops',this)">Ordens de Produção</button>
     <button onclick="nav('apt',this)">Apontamentos</button>
     <button onclick="nav('mod',this)">Modelos</button>
@@ -120,13 +121,6 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
       <div class="metrics" id="m-dash"></div>
-      <div class="card" style="border-color:#BA7517;">
-        <h3 style="display:flex;align-items:center;justify-content:space-between;">
-          <span>🔴 Produção em tempo real</span>
-          <span id="liveCount" style="font-size:11px;font-weight:400;color:#888;"></span>
-        </h3>
-        <div id="dash-live"></div>
-      </div>
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
       <div style="display:grid;grid-template-columns:1fr;gap:12px;">
         <div class="card">
@@ -141,6 +135,18 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
           <h3>📈 Quadros por dia — últimos 14 dias</h3>
           <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
         </div>
+      </div>
+    </div>
+
+    <!-- TEMPO REAL -->
+    <div id="page-live" class="page">
+      <div class="metrics" id="m-live"></div>
+      <div class="card" style="border-color:#BA7517;">
+        <h3 style="display:flex;align-items:center;justify-content:space-between;">
+          <span>🔴 Produção em tempo real</span>
+          <span id="liveCount" style="font-size:11px;font-weight:400;color:#888;"></span>
+        </h3>
+        <div id="dash-live"></div>
       </div>
     </div>
 
@@ -354,7 +360,7 @@ function showApp(){
   document.getElementById('mMeta').addEventListener('input',renderMes);
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
   renderDash();renderColabs();if(!S.modelos)S.modelos=[];carregarTema();
-  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='ops')renderOPs();},5000);
+  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();if(currentPage==='ops')renderOPs();},5000);
 }
 
 function nav(id,btn){
@@ -364,6 +370,7 @@ function nav(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
   if(id==='dash')renderDash();
+  if(id==='live')renderLivePage();
   if(id==='ops'){load().then(renderOPs);}
   if(id==='apt'){load().then(renderApt);}
   if(id==='cfg')renderThemeGrid();
@@ -770,6 +777,27 @@ async function addColab(){
   await save();renderColabs();toast('Colaborador adicionado!');
 }
 
+function renderLivePage(){
+  const hoje=td(),mes=hoje.substring(0,7);
+  const aptH=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(hoje));
+  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
+  const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
+  const meta=parseInt(document.getElementById('mMeta')?.value)||50;
+  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const pct=Math.round((aptM.length/meta)*100);
+  const pc=pct>=100?'ok':pct>=60?'warn':'bad';
+
+  const ml=document.getElementById('m-live');
+  if(ml) ml.innerHTML=`
+    <div class="metric"><div class="lbl">Trabalhando agora</div><div class="val warn">${emAnd}</div><div class="sub">em andamento</div></div>
+    <div class="metric"><div class="lbl">Pausados agora</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
+    <div class="metric"><div class="lbl">Quadros hoje</div><div class="val">${aptH.length}</div><div class="sub">finalizados</div></div>
+    <div class="metric"><div class="lbl">Quadros no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%</div>
+      <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
+
+  renderLive();
+}
+
 /* ── TEMPO REAL ── */
 function renderLive(){
   const div=document.getElementById('dash-live');
@@ -876,8 +904,7 @@ function renderDash(){
     <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>
     <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length>0?'bad':''}">${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length}</div><div class="sub">no mês</div></div>`;
 
-  renderLive();
-
+  // live page is separate now
   const dops=document.getElementById('dash-ops');
   const ab=S.ops.filter(o=>o.status==='aberta');
   if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}

@@ -468,6 +468,12 @@ function renderApt(){
     }
     else if(estaPausado(a)){statusBadge='<span class="badge bpause">⏸ Pausado</span>';}
     else{statusBadge='<span class="badge bwarn">▶ Em andamento</span>';}
+    const SETOR_LABELS={mecanica:'Mecânica',chapa:'Chapa',cabos:'Prep. de cabos',eletrica:'Mont. elétrica'};
+    let retrabHtml='—';
+    if(a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length){
+      retrabHtml=a.retrabalho.setores.map(s=>`<span class="obs-pill erro">${SETOR_LABELS[s]||s}</span>`).join(' ');
+      if(a.retrabalho.obs)retrabHtml+=`<div style="font-size:11px;color:#A32D2D;font-style:italic;margin-top:2px;">${a.retrabalho.obs}</div>`;
+    }
     let itensFalt='—';
     if(a.itensFaltando)itensFalt=`<span class="obs-pill erro">⚠ ${a.obsItensFaltando}</span>`;
     else if(a.itensFaltando===false)itensFalt='<span class="obs-pill" style="color:#3B6D11;background:#EAF3DE;">✓ Completo</span>';
@@ -482,6 +488,7 @@ function renderApt(){
       <td style="font-size:12px;font-weight:600;">${liq?liq+'min':'—'}</td>
       <td style="font-size:12px;">${m&&m.tempoPrevisto?m.tempoPrevisto+'min':'—'}</td>
       <td style="font-size:12px;">${pausas||'—'}</td>
+      <td>${retrabHtml}</td>
       <td>${itensFalt}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
@@ -491,7 +498,7 @@ function renderApt(){
   div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''}</h3>
     <div style="overflow-x:auto;"><table><thead><tr>
       <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
-      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Itens</th><th>Observações</th><th>Erros</th>
+      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
@@ -866,7 +873,8 @@ function renderDash(){
     <div class="metric"><div class="lbl">Em andamento</div><div class="val warn">${emAnd}</div><div class="sub">agora</div></div>
     <div class="metric"><div class="lbl">Pausados</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
     <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">quadros relatados</div></div>
-    <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>`;
+    <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>
+    <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length>0?'bad':''}">${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length}</div><div class="sub">no mês</div></div>`;
 
   renderLive();
 

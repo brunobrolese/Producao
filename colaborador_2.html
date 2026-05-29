@@ -107,6 +107,27 @@ textarea{resize:vertical;}
 .pause-txt.fimdia{color:#555;}
 .pause-sub{font-size:12px;color:#888;}
 .obs-section{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+.retrab-card{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-top:12px;}
+.retrab-card.ativo{border-color:#A32D2D;background:#fff8f8;}
+.retrab-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.retrab-header-info{}
+.retrab-title{font-size:13px;font-weight:700;color:#1a1a1a;}
+.retrab-sub{font-size:11px;color:#888;margin-top:2px;}
+.toggle-wrap{flex-shrink:0;margin-top:2px;}
+.toggle-btn{width:42px;height:24px;border-radius:99px;background:#ddd;border:none;cursor:pointer;position:relative;transition:background .2s;}
+.toggle-btn.on{background:#A32D2D;}
+.toggle-knob{width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle-btn.on .toggle-knob{left:20px;}
+.retrab-body{margin-top:14px;padding-top:14px;border-top:1px solid #f0f0f0;}
+.retrab-label{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.setores-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.setor-btn{padding:10px 8px;border-radius:9px;border:1.5px solid #e5e5e5;background:#fff;text-align:center;font-size:12px;font-weight:600;color:#666;cursor:pointer;transition:all .15s;}
+.setor-btn:active{opacity:.8;}
+.setor-btn.sel{border-color:#A32D2D;background:#FCEBEB;color:#A32D2D;}
+.setor-icon{font-size:20px;margin-bottom:5px;}
+.retrab-obs{margin-top:8px;}
+.retrab-obs label{font-size:12px;color:#666;display:block;margin-bottom:4px;}
+.retrab-obs textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-family:inherit;resize:vertical;}
 .obs-section h5{font-size:12px;font-weight:700;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
 .obs-item{background:#f8f8f6;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;}
 .obs-item .obs-hora{font-size:11px;color:#aaa;margin-bottom:2px;}
@@ -185,6 +206,7 @@ let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
 let _semErro=false,_errosSel=[],_obsErro='';
 let _itensFaltando=null,_obsItens='';
+let _retrabAtivo={};  // {aptId: {ativo, setores[], obs}}
 const TIPOS_ERRO=['Erro de cabeamento','Componente incorreto','Falta de componente','Erro de montagem','Dano em componente','Erro de identificação','Outro'];
 
 function ini(n){return n.split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();}
@@ -398,7 +420,13 @@ async function confirmarIniciar(){
 }
 
 /* ── RENDER ── */
-function renderAll(){renderOps();aplicarTemaColab();}
+function renderAll(){
+  renderOps();
+  aplicarTemaColab();
+  // bind retrabalho toggles/setores after DOM update
+  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim);
+  meusApts.forEach(a=>bindRetrab(a.id));
+}
 
 function renderOps(){
   const div=document.getElementById('opsDiv');
@@ -497,6 +525,7 @@ function renderQuadro(apt){
       ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
       ${outrosHtml}
       ${renderObsLista(apt)}${renderObsInput(apt.id)}
+      ${renderRetrabCard(apt.id)}
       <button class="btn-resume" onclick="retomar(${apt.id})">▶ Retomar produção</button>
     </div>`;
   }
@@ -512,6 +541,7 @@ function renderQuadro(apt){
     ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
     ${outrosHtml}
     ${renderObsLista(apt)}${renderObsInput(apt.id)}
+    ${renderRetrabCard(apt.id)}
     <div class="acoes-grid">
       <button class="btn-pause" onclick="abrirSeletorPausa(${apt.id})">⏸ Pausar</button>
     <div id="pausa-sel-${apt.id}"></div>
@@ -528,6 +558,94 @@ function renderObsLista(apt){
 }
 function renderObsInput(aptId){
   return`<div class="obs-section"><h5>📝 Observação</h5><div class="obs-input-row"><textarea id="obs-${aptId}" placeholder="Registre um problema ou observação..." rows="2"></textarea><button class="btn-obs" onclick="adicionarObs(${aptId})">Registrar</button></div></div>`;
+}
+
+function renderRetrabCard(aptId){
+  const estado=_retrabAtivo[aptId]||{ativo:false,setores:[],obs:''};
+  const SETORES=[
+    {id:'mecanica',  label:'Mecânica',       icon:'ti-settings-2'},
+    {id:'chapa',     label:'Chapa',          icon:'ti-cut'},
+    {id:'cabos',     label:'Prep. de cabos', icon:'ti-cable'},
+    {id:'eletrica',  label:'Mont. elétrica', icon:'ti-bolt'},
+  ];
+  const setoresSel=estado.setores||[];
+  const setoresHtml=estado.ativo?`<div class="retrab-body">
+    <div class="retrab-label">Setor responsável</div>
+    <div class="setores-grid" id="setores-grid-${aptId}">
+      ${SETORES.map(s=>`<div class="setor-btn ${setoresSel.includes(s.id)?'sel':''}" id="setor-${aptId}-${s.id}" data-apt="${aptId}" data-setor="${s.id}">
+        <div class="setor-icon"><i class="ti ${s.icon}" aria-hidden="true"></i></div>
+        ${s.label}
+      </div>`).join('')}
+    </div>
+    <div class="retrab-obs">
+      <label>Descreva o retrabalho</label>
+      <textarea id="retrab-obs-${aptId}" rows="2" placeholder="Ex: Furação incorreta na chapa, necessário refazer...">${estado.obs||''}</textarea>
+    </div>
+  </div>`:'';
+
+  return`<div class="retrab-card ${estado.ativo?'ativo':''}" id="retrab-card-${aptId}">
+    <div class="retrab-header">
+      <div class="retrab-header-info">
+        <div class="retrab-title"><i class="ti ti-tools" aria-hidden="true"></i> Apontar retrabalho</div>
+        <div class="retrab-sub">${estado.ativo?`${setoresSel.length} setor(es) selecionado(s)`:'Ative se precisou refazer alguma etapa'}</div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle-btn ${estado.ativo?'on':''}" id="toggle-retrab-${aptId}" aria-label="Ativar retrabalho">
+          <div class="toggle-knob"></div>
+        </button>
+      </div>
+    </div>
+    ${setoresHtml}
+  </div>`;
+}
+
+function bindRetrab(aptId){
+  // toggle
+  const tog=document.getElementById('toggle-retrab-'+aptId);
+  if(tog){
+    tog.addEventListener('click',function(){
+      if(!_retrabAtivo[aptId])_retrabAtivo[aptId]={ativo:false,setores:[],obs:''};
+      _retrabAtivo[aptId].ativo=!_retrabAtivo[aptId].ativo;
+      const card=document.getElementById('retrab-card-'+aptId);
+      if(card){
+        const newHtml=renderRetrabCard(aptId);
+        const tmp=document.createElement('div');
+        tmp.innerHTML=newHtml;
+        card.replaceWith(tmp.firstChild);
+        bindRetrab(aptId);
+      }
+    });
+  }
+  // setores
+  const grid=document.getElementById('setores-grid-'+aptId);
+  if(grid){
+    grid.querySelectorAll('.setor-btn').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        const sid=this.getAttribute('data-setor');
+        if(!_retrabAtivo[aptId])_retrabAtivo[aptId]={ativo:true,setores:[],obs:''};
+        const arr=_retrabAtivo[aptId].setores;
+        const idx=arr.indexOf(sid);
+        if(idx>=0)arr.splice(idx,1);else arr.push(sid);
+        // update visual without full re-render
+        grid.querySelectorAll('.setor-btn').forEach(b=>{
+          b.classList.toggle('sel',arr.includes(b.getAttribute('data-setor')));
+        });
+        // update subtitle
+        const sub=document.querySelector('#retrab-card-'+aptId+' .retrab-sub');
+        if(sub)sub.textContent=arr.length+' setor(es) selecionado(s)';
+      });
+    });
+    // save obs on blur
+    const obsEl=document.getElementById('retrab-obs-'+aptId);
+    if(obsEl){
+      obsEl.addEventListener('blur',function(){
+        if(_retrabAtivo[aptId])_retrabAtivo[aptId].obs=this.value;
+      });
+      obsEl.addEventListener('input',function(){
+        if(_retrabAtivo[aptId])_retrabAtivo[aptId].obs=this.value;
+      });
+    }
+  }
 }
 async function adicionarObs(aptId){
   const el=document.getElementById(`obs-${aptId}`);if(!el)return;
@@ -681,6 +799,15 @@ async function confirmarFin(aptId){
   apt.obsErro=_semErro?'':obsErro;
   apt.motivoAtraso=atrasado?motivo:'';
   apt.finalizadoNoPrazo=!atrasado;
+  // salva retrabalho se ativo
+  const retrab=_retrabAtivo[aptId];
+  if(retrab&&retrab.ativo&&retrab.setores.length>0){
+    const obsEl2=document.getElementById('retrab-obs-'+aptId);
+    apt.retrabalho={setores:retrab.setores,obs:obsEl2?obsEl2.value.trim():retrab.obs||''};
+  } else {
+    apt.retrabalho=null;
+  }
+  delete _retrabAtivo[aptId];
   finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
   await save();renderAll();
   toast(atrasado?'Finalizado com atraso ⚠':!apt.erros.length?'Quadro finalizado ✓':'Finalizado com erros ⚠');

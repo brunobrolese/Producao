@@ -454,10 +454,13 @@ function renderAll(){
   aplicarTemaColab();
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   meusApts.forEach(a=>bindRetrab(a.id));
-  // show tabs if there is production or MF work
-  const mfPendentes=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
+  // show MF tab only for the designated MF responsible
+  const isMfResp=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+  const mfPendentes=isMfResp?S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length:0;
   const tabs=document.getElementById('colTabs');
-  if(tabs)tabs.style.display=mfPendentes||meusApts.length?'flex':'none';
+  if(tabs)tabs.style.display=(isMfResp||meusApts.length)?'flex':'none';
+  const tabMf=document.getElementById('tab-mf');
+  if(tabMf)tabMf.style.display=isMfResp?'block':'none';
   const badge=document.getElementById('mfBadge');
   if(badge){badge.textContent=mfPendentes;badge.style.display=mfPendentes?'inline':'none';}
 }
@@ -477,6 +480,19 @@ function renderOps(){
   if(meusApts.length){
     html+='<div class="sec-title" style="margin-top:20px;">Em andamento ('+meusApts.length+')</div>';
     meusApts.forEach(a=>{html+=renderQuadro(a);});
+  }
+  // show quadros waiting in MF queue
+  const mfMeus=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  if(mfMeus.length){
+    html+='<div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Aguardando Montagem Final ('+mfMeus.length+')</div>';
+    mfMeus.forEach(a=>{
+      const m2=S.modelos.find(x=>x.id===a.modeloId);
+      html+=`<div class="qcard" style="border-color:#7c3aed;background:#faf5ff;opacity:.85;">
+        <div class="qh"><span class="qnum">OP ${a.opNum||'—'}</span><span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span></div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m2?m2.codigo:a.modeloLabel||'—'}</div>
+        <div style="font-size:12px;color:#888;">Quadro enviado para inspeção do responsável</div>
+      </div>`;
+    });
   }
   if(finHoje.length){
     html+='<div class="sec-title" style="margin-top:20px;">Finalizados hoje ('+finHoje.length+')</div>';
@@ -847,8 +863,9 @@ async function confirmarFin(aptId){
   apt.etapa='montagem_final';
   apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
   await save();renderAll();renderMF();
+  const isMfResp2=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
   toast('Enviado para Montagem Final 🔍');
-  switchTab('mf');
+  if(isMfResp2)switchTab('mf');
 }
 function startTimer(aptId,apt){
   if(timerIv)clearInterval(timerIv);
@@ -875,7 +892,10 @@ function renderMF(){
   const div=document.getElementById('mfLista');
   if(!div)return;
   // quadros em montagem final deste colaborador
-  const mfApts=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  // MF responsible sees ALL pending quadros from any collaborator
+  const isMfResp=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+  if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
+  const mfApts=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   const badge=document.getElementById('mfBadge');
   const tabs=document.getElementById('colTabs');
   if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final').length?'flex':'none';
@@ -886,12 +906,14 @@ function renderMF(){
     if(!_mfEstado[apt.id])_mfEstado[apt.id]={checklist:{},obs:''};
     const est=_mfEstado[apt.id];
     const m=S.modelos.find(x=>x.id===apt.modeloId);
+    const autor=S.colaboradores.find(x=>x.id===apt.colabId);
     const card=document.createElement('div');
     card.className='mf-card';
     card.id='mf-card-'+apt.id;
     card.innerHTML=`<div class="mf-header">
       <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
-        <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div></div>
+        <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
       <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Aguardando inspeção</span>
     </div>
     <div style="font-size:12px;color:#888;margin-bottom:12px;">Verifique cada item antes de aprovar o quadro</div>`;

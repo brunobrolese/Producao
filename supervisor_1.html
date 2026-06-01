@@ -220,6 +220,17 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     </div>
 
     <div id="page-col" class="page">
+      <div class="card" style="border-left:4px solid #7c3aed;">
+        <h3>🔍 Responsável pela Montagem Final</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:12px;">Este colaborador receberá todos os quadros finalizados para inspeção na tela de Montagem Final.</p>
+        <div style="max-width:320px;">
+          <label>Selecionar responsável</label>
+          <select id="mfResponsavelSel" onchange="salvarMfResponsavel()">
+            <option value="">— Nenhum designado —</option>
+          </select>
+        </div>
+        <div id="mfResponsavelInfo" style="margin-top:10px;font-size:13px;color:#7c3aed;font-weight:500;"></div>
+      </div>
       <div class="card"><h3>➕ Adicionar colaborador</h3>
         <div class="frow">
           <div><label>Nome</label><input id="cNome" placeholder="Nome completo"/></div>
@@ -393,7 +404,7 @@ function nav(id,btn){
   if(id==='apt'){load().then(renderApt);}
   if(id==='cfg')renderThemeGrid();
   if(id==='mod'){load().then(renderModelos);}
-  if(id==='col'){load().then(renderColabs);}
+  if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
 
 /* ── APONTAMENTOS LIVRES ── */
 function renderApt(){
@@ -774,7 +785,38 @@ async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'conclui
 async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
 
 /* ── COLABORADORES ── */
+async function salvarMfResponsavel(){
+  const sel=document.getElementById('mfResponsavelSel');
+  if(!sel)return;
+  const id=parseInt(sel.value)||0;
+  S.mfResponsavel=id||null;
+  await save();
+  const info=document.getElementById('mfResponsavelInfo');
+  if(info){
+    if(id){
+      const c=S.colaboradores.find(x=>x.id===id);
+      info.textContent=c?'✓ '+c.nome+' está designado para Montagem Final':'';
+    } else {
+      info.textContent='';
+    }
+  }
+  toast('Responsável MF atualizado!');
+}
+
+function popularSeletorMF(){
+  const sel=document.getElementById('mfResponsavelSel');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— Nenhum designado —</option>'+
+    S.colaboradores.map(c=>`<option value="${c.id}" ${S.mfResponsavel===c.id?'selected':''}>${c.nome} — ${c.funcao}</option>`).join('');
+  const info=document.getElementById('mfResponsavelInfo');
+  if(info&&S.mfResponsavel){
+    const c=S.colaboradores.find(x=>x.id===S.mfResponsavel);
+    info.textContent=c?'✓ '+c.nome+' está designado para Montagem Final':'';
+  }
+}
+
 function renderColabs(){
+  popularSeletorMF();
   const cnt=document.getElementById('cCount');if(cnt)cnt.textContent=S.colaboradores.length;
   const div=document.getElementById('col-lista');if(!div)return;
   if(!S.colaboradores.length){div.innerHTML='<p class="empty">Nenhum colaborador.</p>';return;}

@@ -37,7 +37,7 @@ textarea{resize:vertical;}
 .c-avatar{width:48px;height:48px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;}
 .c-nome{font-size:13px;font-weight:600;}
 .c-func{font-size:11px;color:#888;margin-top:2px;}
-.main{padding:14px 18px 60px;}
+.main{padding:14px 18px 80px;}
 .header-user{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
 .user-info{display:flex;align-items:center;gap:10px;}
 .u-avatar{width:40px;height:40px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;}
@@ -148,6 +148,22 @@ textarea{resize:vertical;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;display:none;z-index:999;text-align:center;}
 .sec-title{font-size:13px;font-weight:700;color:#1a1a1a;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #1a1a1a;}
 .modelo-desc{font-size:11px;color:#888;margin-top:3px;}
+.mf-card{background:#fff;border:1.5px solid #7c3aed;border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+.mf-card.aprovado{border-color:#1D9E75;background:#f5fbf7;}
+.mf-card.reprovado{border-color:#A32D2D;background:#fff8f8;}
+.mf-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.mf-title{font-size:14px;font-weight:700;}
+.checklist{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.check-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e5e5e5;border-radius:9px;background:#fff;cursor:pointer;}
+.check-item.ok{border-color:#1D9E75;background:#f5fbf7;}
+.check-item.nok{border-color:#A32D2D;background:#fff8f8;}
+.check-icon{font-size:18px;flex-shrink:0;}
+.check-label{font-size:13px;font-weight:600;flex:1;}
+.check-status{font-size:12px;font-weight:500;}
+.btn-aprovar{width:100%;padding:13px;border-radius:10px;background:#1D9E75;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;}
+.btn-reprovar{width:100%;padding:13px;border-radius:10px;background:#A32D2D;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.mf-obs{margin-top:10px;}
+.mf-obs label{font-size:12px;font-weight:700;color:#A32D2D;display:block;margin-bottom:4px;}
 </style>
 </head>
 <body>
@@ -156,7 +172,10 @@ textarea{resize:vertical;}
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
   </div>
-  <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
+    <button onclick="abrirSupervisor()" style="font-size:11px;padding:4px 10px;border-radius:7px;border:1px solid #444;background:transparent;color:#aaa;cursor:pointer;">⚙ Supervisor</button>
+  </div>
 </div>
 
 <div id="setupScreen" class="setup" style="display:none;">
@@ -196,7 +215,17 @@ textarea{resize:vertical;}
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
     <div id="opsDiv"></div>
+    <div id="mfDiv" style="display:none;">
+      <div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Montagem Final — Inspeção</div>
+      <div id="mfLista"></div>
+    </div>
   </div>
+</div>
+
+<!-- TABS COLABORADOR -->
+<div id="colTabs" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e5e5;display:none;z-index:100;padding:8px 12px;gap:8px;justify-content:center;">
+  <button id="tab-producao" onclick="switchTab('producao')" style="flex:1;padding:10px;border-radius:9px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">▶ Produção</button>
+  <button id="tab-mf" onclick="switchTab('mf')" style="flex:1;padding:10px;border-radius:9px;border:1px solid #7c3aed;background:#fff;color:#7c3aed;font-size:13px;font-weight:600;cursor:pointer;">🔍 Mont. Final <span id="mfBadge" style="display:none;background:#A32D2D;color:#fff;border-radius:99px;padding:0 6px;font-size:11px;margin-left:4px;"></span></button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -423,16 +452,21 @@ async function confirmarIniciar(){
 function renderAll(){
   renderOps();
   aplicarTemaColab();
-  // bind retrabalho toggles/setores after DOM update
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim);
+  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   meusApts.forEach(a=>bindRetrab(a.id));
+  // show tabs if there is production or MF work
+  const mfPendentes=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
+  const tabs=document.getElementById('colTabs');
+  if(tabs)tabs.style.display=mfPendentes||meusApts.length?'flex':'none';
+  const badge=document.getElementById('mfBadge');
+  if(badge){badge.textContent=mfPendentes;badge.style.display=mfPendentes?'inline':'none';}
 }
 
 function renderOps(){
   const div=document.getElementById('opsDiv');
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim);
+  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   const hoje=new Date().toISOString().split('T')[0];
-  const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje));
+  const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido');
 
   if(!meusApts.length&&!finHoje.length){
     div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros em andamento</div><div class="empty" style="padding:20px 0;">Nenhum quadro em andamento.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span></div>';
@@ -809,8 +843,12 @@ async function confirmarFin(aptId){
   }
   delete _retrabAtivo[aptId];
   finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
-  await save();renderAll();
-  toast(atrasado?'Finalizado com atraso ⚠':!apt.erros.length?'Quadro finalizado ✓':'Finalizado com erros ⚠');
+  // envia para montagem final
+  apt.etapa='montagem_final';
+  apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
+  await save();renderAll();renderMF();
+  toast('Enviado para Montagem Final 🔍');
+  switchTab('mf');
 }
 function startTimer(aptId,apt){
   if(timerIv)clearInterval(timerIv);
@@ -822,6 +860,123 @@ function startTimer(aptId,apt){
   const el=document.getElementById(`tmr-${aptId}`);
   if(el){const liq=tempoLiquido(apt);el.textContent=`${liq}min trabalhados`;}
 }
+const MF_CHECKLIST=[
+  {id:'cabeamento',    label:'Cabeamento',              icon:'🔌'},
+  {id:'identificacao', label:'Identificação de cabos',  icon:'🏷️'},
+  {id:'torque',        label:'Torque dos bornes',        icon:'🔩'},
+  {id:'limpeza',       label:'Limpeza interna',          icon:'🧹'},
+  {id:'visual',        label:'Inspeção visual geral',    icon:'👁️'},
+  {id:'documentacao',  label:'Documentação',             icon:'📄'},
+];
+
+let _mfEstado={}; // {aptId: {checklist:{id:true/false}, obs}}
+
+function renderMF(){
+  const div=document.getElementById('mfLista');
+  if(!div)return;
+  // quadros em montagem final deste colaborador
+  const mfApts=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const badge=document.getElementById('mfBadge');
+  const tabs=document.getElementById('colTabs');
+  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final').length?'flex':'none';
+  if(badge){badge.textContent=mfApts.length;badge.style.display=mfApts.length?'inline':'none';}
+  if(!mfApts.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
+  div.innerHTML='';
+  mfApts.forEach(apt=>{
+    if(!_mfEstado[apt.id])_mfEstado[apt.id]={checklist:{},obs:''};
+    const est=_mfEstado[apt.id];
+    const m=S.modelos.find(x=>x.id===apt.modeloId);
+    const card=document.createElement('div');
+    card.className='mf-card';
+    card.id='mf-card-'+apt.id;
+    card.innerHTML=`<div class="mf-header">
+      <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
+        <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div></div>
+      <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Aguardando inspeção</span>
+    </div>
+    <div style="font-size:12px;color:#888;margin-bottom:12px;">Verifique cada item antes de aprovar o quadro</div>`;
+
+    // checklist items
+    const cl=document.createElement('div');cl.className='checklist';
+    MF_CHECKLIST.forEach(item=>{
+      const row=document.createElement('div');
+      const val=est.checklist[item.id];
+      row.className='check-item'+(val===true?' ok':val===false?' nok':'');
+      row.innerHTML=`<span class="check-icon">${item.icon}</span>
+        <span class="check-label">${item.label}</span>
+        <span class="check-status">${val===true?'✓ OK':val===false?'✗ NOK':'—'}</span>`;
+      row.addEventListener('click',function(){
+        const cur=est.checklist[item.id];
+        est.checklist[item.id]=cur===true?false:cur===false?undefined:true;
+        renderMF();
+      });
+      cl.appendChild(row);
+    });
+    card.appendChild(cl);
+
+    // obs
+    const obsDiv=document.createElement('div');obsDiv.className='mf-obs';
+    obsDiv.innerHTML='<label>Observações (opcional)</label>';
+    const ta=document.createElement('textarea');
+    ta.rows=2;ta.placeholder='Registre observações da inspeção...';ta.value=est.obs||'';
+    ta.style.cssText='width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-family:inherit;';
+    ta.addEventListener('input',function(){est.obs=this.value;});
+    obsDiv.appendChild(ta);
+    card.appendChild(obsDiv);
+
+    // botões aprovar/reprovar
+    const btns=document.createElement('div');btns.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;';
+    const btnAp=document.createElement('button');btnAp.className='btn-aprovar';btnAp.textContent='✓ Aprovar';
+    btnAp.addEventListener('click',function(){finalizarMF(apt.id,'aprovado');});
+    const btnRe=document.createElement('button');btnRe.className='btn-reprovar';btnRe.textContent='✗ Reprovar';
+    btnRe.addEventListener('click',function(){finalizarMF(apt.id,'reprovado');});
+    btns.append(btnAp,btnRe);
+    card.appendChild(btns);
+    div.appendChild(card);
+  });
+}
+
+async function finalizarMF(aptId, resultado){
+  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
+  const est=_mfEstado[aptId]||{checklist:{},obs:''};
+  const checks=Object.values(est.checklist);
+  const nok=MF_CHECKLIST.filter(i=>est.checklist[i.id]===false).map(i=>i.label);
+  if(resultado==='aprovado'&&nok.length){toast('Corrija os itens NOK antes de aprovar.');return;}
+  if(resultado==='reprovado'&&!est.obs.trim()){toast('Descreva o motivo da reprovação nas observações.');return;}
+  if(!apt.mf)apt.mf={};
+  apt.mf.checklist=est.checklist;
+  apt.mf.obs=est.obs;
+  apt.mf.resultado=resultado;
+  apt.mf.fim=new Date().toISOString();
+  apt.etapa=resultado==='aprovado'?'concluido':'retrabalho_mf';
+  await save();renderAll();renderMF();
+  toast(resultado==='aprovado'?'✓ Quadro aprovado na inspeção!':'⚠ Quadro reprovado — registrado para retrabalho');
+}
+
+function switchTab(tab){
+  const prod=document.getElementById('opsDiv');
+  const mf=document.getElementById('mfDiv');
+  const t1=document.getElementById('tab-producao');
+  const t2=document.getElementById('tab-mf');
+  if(tab==='producao'){
+    if(prod)prod.style.display='block';
+    if(mf)mf.style.display='none';
+    if(t1){t1.style.background='#1a1a1a';t1.style.color='#fff';t1.style.border='none';}
+    if(t2){t2.style.background='#fff';t2.style.color='#7c3aed';t2.style.border='1px solid #7c3aed';}
+  } else {
+    if(prod)prod.style.display='none';
+    if(mf)mf.style.display='block';
+    if(t1){t1.style.background='#fff';t1.style.color='#1a1a1a';t1.style.border='1px solid #ddd';}
+    if(t2){t2.style.background='#7c3aed';t2.style.color='#fff';t2.style.border='none';}
+    renderMF();
+  }
+}
+
+function abrirSupervisor(){
+  const url=window.location.href.replace(/colaborador[^/]*\.html.*/,'supervisor.html');
+  window.open(url,'_blank');
+}
+
 async function init(){
   if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();

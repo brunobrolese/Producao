@@ -561,6 +561,34 @@ function renderOps(){
     return;
   }
 
+  // render active apts
+  let html='';
+  if(meusApts.length){
+    html+='<div class="sec-title" style="margin-top:20px;">Em andamento ('+meusApts.length+')</div>';
+    meusApts.forEach(a=>{html+=renderQuadro(a);});
+  }
+  // show quadros waiting in MF queue
+  const mfMeus=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  if(mfMeus.length){
+    html+='<div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Aguardando Montagem Final ('+mfMeus.length+')</div>';
+    mfMeus.forEach(a=>{
+      const m2=S.modelos.find(x=>x.id===a.modeloId);
+      html+=`<div class="qcard" style="border-color:#7c3aed;background:#faf5ff;opacity:.85;"><div class="qh"><span class="qnum">OP ${a.opNum||'—'}</span><span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span></div><div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m2?m2.codigo:a.modeloLabel||'—'}</div><div style="font-size:12px;color:#888;">Aguardando inspeção do responsável</div></div>`;
+    });
+  }
+  if(finHoje.length){
+    html+='<div class="sec-title" style="margin-top:20px;">Finalizados hoje ('+finHoje.length+')</div>';
+    finHoje.forEach(a=>{
+      const temErro=a.erros&&a.erros.length>0;
+      const liq=tempoLiquido(a);
+      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span>${liq}min</span></div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
+    });
+  }
+  div.innerHTML=html;
+  meusApts.forEach(a=>{if(!estaPausado(a))startTimer(a.id,a);});
+  if(finalizando){const p=document.getElementById(`fin-${finalizando.id}`);if(p)renderFinPanel(finalizando.id);}
+}
+
 function renderProgressBar(apt){
   const m=S.modelos.find(x=>x.id===apt.modeloId);
   if(!m||!m.tempoPrevisto)return'';
@@ -1067,7 +1095,6 @@ async function init(){
       await load();renderAll();
     }
   },12000);
-}
 }
 
 init();

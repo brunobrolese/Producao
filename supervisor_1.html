@@ -387,8 +387,28 @@ async function load(){
   }catch(e){setSync(false);return false;}
 }
 
+// Salva de forma segura: mescla apontamentos antes de sobrescrever
+// Evita perda de dados de colaboradores em saves simultâneos
 async function save(){
   try{
+    // Lê estado atual
+    const r=await fetch(DB_URL+'/paineis.json');
+    let servidor=null;
+    if(r.ok){try{servidor=await r.json();}catch(e){}}
+
+    // Mescla apontamentos: une servidor + local
+    if(servidor&&servidor.apontamentos&&Array.isArray(servidor.apontamentos)){
+      const localMap={};
+      S.apontamentos.forEach(a=>localMap[a.id]=a);
+      // mantém apontamentos do servidor que não estão no local
+      servidor.apontamentos.forEach(a=>{
+        if(!localMap[a.id]) localMap[a.id]=a;
+      });
+      S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
+    }
+    // garante nid maior que o servidor
+    if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
+
     await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}

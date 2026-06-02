@@ -277,7 +277,11 @@ async function load(){
     const r=await fetch(DB_URL+'/paineis.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
-    if(d){S=d;['colaboradores','ops','apontamentos','modelos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
+    if(d){
+      S=d;
+      ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{if(!S[k])S[k]=[];});
+      if(!S.nid)S.nid=1;
+    }
     setSync(true);
     aplicarTemaColab();
     return true;
@@ -298,8 +302,32 @@ function aplicarTemaColab(){
   document.documentElement.style.setProperty('--theme-primary',primary);
   document.documentElement.style.setProperty('--theme-accent',accent);
 }
+// Salva de forma segura: lê o estado atual, mescla apontamentos e salva
+// Evita que saves simultâneos de colaboradores diferentes apaguem dados uns dos outros
 async function save(){
   try{
+    // 1. Lê estado atual do Firebase
+    const r=await fetch(DB_URL+'/paineis.json');
+    let servidor=null;
+    if(r.ok){
+      try{servidor=await r.json();}catch(e){}
+    }
+
+    // 2. Mescla apontamentos: une servidor + local, sem perder nenhum
+    if(servidor&&servidor.apontamentos&&Array.isArray(servidor.apontamentos)){
+      const localMap={};
+      S.apontamentos.forEach(a=>localMap[a.id]=a);
+      // adiciona apontamentos do servidor que nao estao no local (de outros colaboradores)
+      servidor.apontamentos.forEach(a=>{
+        if(!localMap[a.id]) localMap[a.id]=a;
+      });
+      S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
+    }
+
+    // 3. Atualiza nid para evitar colisão de IDs
+    if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
+
+    // 4. Salva o estado mesclado
     await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}

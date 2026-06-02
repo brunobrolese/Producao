@@ -211,6 +211,7 @@ textarea{resize:vertical;}
       </div>
     </div>
     <div class="sec-title">➕ Iniciar novo quadro</div>
+    <div id="setorBadge" style="margin-bottom:10px;"></div>
     <div id="addFormArea">
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
@@ -326,6 +327,14 @@ function selColab(id){
   document.getElementById('uAvatar').textContent=ini(colab.nome);
   document.getElementById('uName').textContent=colab.nome;
   document.getElementById('uFunc').textContent=colab.funcao;
+  // show setor badge
+  const sb=document.getElementById('setorBadge');
+  if(sb){
+    const SETOR_COLORS={chapa:'background:#fff3e0;color:#b45309;border:1px solid #f0c060;',eletrica:'background:#EEF1FF;color:#3550B4;border:1px solid #a0a8e8;',mf:'background:#ede9fe;color:#7c3aed;border:1px solid #c4b5fd;',geral:'background:#f0f0f0;color:#555;border:1px solid #ddd;'};
+    const s=colab.setor||'eletrica';
+    const lbl={chapa:'🔧 Setor: Chapa',eletrica:'⚡ Setor: Montagem Elétrica',mf:'🔍 Setor: Montagem Final',geral:'🔀 Setor: Geral'}[s]||'⚡ Montagem Elétrica';
+    sb.innerHTML=`<span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:99px;${SETOR_COLORS[s]||SETOR_COLORS.eletrica}">${lbl}</span>`;
+  }
   renderAll();
 }
 function trocar(){colab=null;finalizando=null;showSelect();}
@@ -337,6 +346,14 @@ async function refresh(){
 }
 
 /* ── FORM ADICIONAR QUADRO ── */
+function getSectorLabel(setor){
+  return {chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Mont. Final',geral:'🔀 Geral'}[setor]||'⚡ Montagem Elétrica';
+}
+function getColabSetor(){
+  if(!colab)return'eletrica';
+  return colab.setor||'eletrica';
+}
+
 function mostrarFormAdicionar(){
   const modelos=S.modelos||[];
   const horaAtual=new Date().toTimeString().substring(0,5);
@@ -346,6 +363,7 @@ function mostrarFormAdicionar(){
 
   document.getElementById('addFormArea').innerHTML=`<div class="add-form">
     <h4>📋 Qual quadro você vai iniciar?</h4>
+    ${(()=>{const s=getColabSetor();if(s==='chapa')return `<div style="background:#fff3e0;border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:12px;color:#b45309;margin-top:8px;">🔧 Setor <strong>Chapa</strong> — ao finalizar, avança para Montagem Elétrica</div>`;if(s==='eletrica')return `<div style="background:#EEF1FF;border:1px solid #a0a8e8;border-radius:8px;padding:8px 12px;font-size:12px;color:#3550B4;margin-top:8px;">⚡ Setor <strong>Montagem Elétrica</strong> — ao finalizar, vai para Montagem Final</div>`;return '';})()}
 
     <label>Número da OP <span style="color:#A32D2D">*</span></label>
     <input type="text" id="addOpNum" placeholder="Ex: 2025-001, OP-123..." autocomplete="off"/>
@@ -431,6 +449,7 @@ async function confirmarIniciar(){
     modeloId:parseInt(modeloId),
     modeloLabel:modelo?modelo.codigo:'',
     colabId:colab.id,
+    setor:getColabSetor(),
     inicio:inicioISO,
     fim:null,
     pausas:[],
@@ -471,8 +490,14 @@ function renderOps(){
   const hoje=new Date().toISOString().split('T')[0];
   const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido');
 
-  if(!meusApts.length&&!finHoje.length){
-    div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros em andamento</div><div class="empty" style="padding:20px 0;">Nenhum quadro em andamento.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span></div>';
+  const setor=getColabSetor();
+  // For eletrica: also show quadros released from chapa
+  const liberadosParaEletrica=setor==='eletrica'||setor==='geral'
+    ? S.apontamentos.filter(a=>a.etapa==='eletrica'&&a.colabId===colab.id&&!a.mf)
+    : [];
+  if(!meusApts.length&&!finHoje.length&&!liberadosParaEletrica.length){
+    const setorMsg=setor==='chapa'?'Nenhuma chapa em produção.':setor==='eletrica'?'Nenhum quadro em montagem elétrica.':'Nenhum quadro em andamento.';
+    div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros em andamento</div><div class="empty" style="padding:20px 0;">'+setorMsg+'<br><span style="font-size:12px;">Use o botão acima para adicionar.</span></div>';
     return;
   }
 
@@ -859,13 +884,20 @@ async function confirmarFin(aptId){
   }
   delete _retrabAtivo[aptId];
   finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
-  // envia para montagem final
-  apt.etapa='montagem_final';
-  apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
-  await save();renderAll();renderMF();
-  const isMfResp2=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
-  toast('Enviado para Montagem Final 🔍');
-  if(isMfResp2)switchTab('mf');
+  // roteamento por setor
+  const aptSetor=apt.setor||getColabSetor();
+  if(aptSetor==='chapa'){
+    apt.etapa='eletrica';
+    await save();renderAll();
+    toast('✓ Chapa finalizada! Liberado para Montagem Elétrica');
+  } else {
+    apt.etapa='montagem_final';
+    apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
+    await save();renderAll();renderMF();
+    const isMfResp2=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+    toast('Enviado para Montagem Final 🔍');
+    if(isMfResp2)switchTab('mf');
+  }
 }
 function startTimer(aptId,apt){
   if(timerIv)clearInterval(timerIv);

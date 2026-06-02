@@ -346,6 +346,12 @@ async function refresh(){
 }
 
 /* ── FORM ADICIONAR QUADRO ── */
+function getSetorBannerHtml(){
+  const s=getColabSetor();
+  if(s==='chapa')return '<div style="background:#fff3e0;border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:12px;color:#b45309;margin-top:8px;">🔧 Setor <strong>Chapa</strong> — ao finalizar, avança para Montagem Elétrica</div>';
+  if(s==='eletrica')return '<div style="background:#EEF1FF;border:1px solid #a0a8e8;border-radius:8px;padding:8px 12px;font-size:12px;color:#3550B4;margin-top:8px;">⚡ Setor <strong>Montagem Elétrica</strong> — ao finalizar, vai para Montagem Final</div>';
+  return '';
+}
 function getSectorLabel(setor){
   return {chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Mont. Final',geral:'🔀 Geral'}[setor]||'⚡ Montagem Elétrica';
 }
@@ -363,7 +369,7 @@ function mostrarFormAdicionar(){
 
   document.getElementById('addFormArea').innerHTML=`<div class="add-form">
     <h4>📋 Qual quadro você vai iniciar?</h4>
-    ${(()=>{const s=getColabSetor();if(s==='chapa')return `<div style="background:#fff3e0;border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:12px;color:#b45309;margin-top:8px;">🔧 Setor <strong>Chapa</strong> — ao finalizar, avança para Montagem Elétrica</div>`;if(s==='eletrica')return `<div style="background:#EEF1FF;border:1px solid #a0a8e8;border-radius:8px;padding:8px 12px;font-size:12px;color:#3550B4;margin-top:8px;">⚡ Setor <strong>Montagem Elétrica</strong> — ao finalizar, vai para Montagem Final</div>`;return '';})()}
+    ${getSetorBannerHtml()}
 
     <label>Número da OP <span style="color:#A32D2D">*</span></label>
     <input type="text" id="addOpNum" placeholder="Ex: 2025-001, OP-123..." autocomplete="off"/>

@@ -140,16 +140,16 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
       <div style="display:grid;grid-template-columns:1fr;gap:12px;">
         <div class="card">
-          <h3>📊 Quadros por semana — últimas 8 semanas</h3>
-          <div style="position:relative;height:160px;"><canvas id="cTrendSemana"></canvas></div>
+          <h3>📈 Quadros por dia — últimos 14 dias</h3>
+          <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
         </div>
         <div class="card">
           <h3>📅 Quadros por mês — últimos 12 meses</h3>
           <div style="position:relative;height:160px;"><canvas id="cTrendMes"></canvas></div>
         </div>
         <div class="card">
-          <h3>📈 Quadros por dia — últimos 14 dias</h3>
-          <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
+          <h3>📊 Quadros por semana — últimas 8 semanas</h3>
+          <div style="position:relative;height:160px;"><canvas id="cTrendSemana"></canvas></div>
         </div>
       </div>
     </div>
@@ -239,6 +239,19 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
               <option>Montador</option><option>Cabeador</option><option>Conferente</option>
               <option>Programador</option><option>Auxiliar</option>
             </select>
+          </div>
+        </div>
+        <div class="frow">
+          <div><label>Setor</label>
+            <select id="cSetor">
+              <option value="eletrica">⚡ Montagem Elétrica</option>
+              <option value="chapa">🔧 Chapa</option>
+              <option value="mf">🔍 Montagem Final</option>
+              <option value="geral">🔀 Geral (todos os setores)</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:flex-end;">
+            <div style="font-size:12px;color:#888;padding-bottom:8px;">Define quais OPs o colaborador verá no app</div>
           </div>
         </div>
         <button class="btn" onclick="addColab()">Adicionar</button>
@@ -821,18 +834,20 @@ function renderColabs(){
   const div=document.getElementById('col-lista');if(!div)return;
   if(!S.colaboradores.length){div.innerHTML='<p class="empty">Nenhum colaborador.</p>';return;}
   const tbl=document.createElement('table');
-  tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Quadros finalizados</th><th>Erros relatados</th><th></th></tr></thead>';
+  tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Setor</th><th>Quadros finalizados</th><th>Erros</th><th></th></tr></thead>';
   const tbody=document.createElement('tbody');
   S.colaboradores.forEach(c=>{
     const apts=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim);
     const total=apts.length;
     const erros=apts.filter(a=>a.erros&&a.erros.length>0).length;
     const tr=document.createElement('tr');
+    const SETOR_LABELS_C={'chapa':'🔧 Chapa','eletrica':'⚡ Mont. Elétrica','mf':'🔍 Mont. Final','geral':'🔀 Geral'};
     const t1=document.createElement('td');t1.textContent=c.nome;
     const t2=document.createElement('td');t2.textContent=c.funcao;
-    const t3=document.createElement('td');t3.textContent=total+' quadros';
-    const t4=document.createElement('td');t4.innerHTML=erros?`<span class="badge bbad">${erros} com erros</span>`:'<span class="badge bok">Sem erros</span>';
-    const t5=document.createElement('td');
+    const t3=document.createElement('td');t3.innerHTML=`<span class="badge bgray">${SETOR_LABELS_C[c.setor||'eletrica']||c.setor||'⚡ Mont. Elétrica'}</span>`;
+    const t4=document.createElement('td');t4.textContent=total+' quadros';
+    const t5=document.createElement('td');t5.innerHTML=erros?`<span class="badge bbad">${erros} com erros</span>`:'<span class="badge bok">Sem erros</span>';
+    const t6=document.createElement('td');
     const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
     btn.addEventListener('click',()=>{
       const row=document.createElement('div');row.className='confirm-row';
@@ -841,9 +856,9 @@ function renderColabs(){
       sim.addEventListener('click',async()=>{S.colaboradores=S.colaboradores.filter(x=>x.id!==c.id);await save();renderColabs();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderColabs);
-      row.append(sim,nao);t5.innerHTML='';t5.appendChild(row);
+      row.append(sim,nao);t6.innerHTML='';t6.appendChild(row);
     });
-    t5.appendChild(btn);tr.append(t1,t2,t3,t4,t5);tbody.appendChild(tr);
+    t6.appendChild(btn);tr.append(t1,t2,t3,t4,t5,t6);tbody.appendChild(tr);
   });
   tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
 }
@@ -851,10 +866,11 @@ function renderColabs(){
 async function addColab(){
   const nome=document.getElementById('cNome').value.trim();
   const funcao=document.getElementById('cFuncao').value;
+  const setor=document.getElementById('cSetor').value;
   if(!nome)return;
-  S.colaboradores.push({id:S.nid++,nome,funcao});
+  S.colaboradores.push({id:S.nid++,nome,funcao,setor:setor||'eletrica'});
   document.getElementById('cNome').value='';
-  await save();renderColabs();toast('Colaborador adicionado!');
+  await save();renderColabs();popularSeletorMF();toast('Colaborador adicionado!');
 }
 
 function renderLivePage(){
@@ -1001,8 +1017,11 @@ function renderDash(){
         <span style="display:flex;gap:6px;flex-wrap:wrap;">
           ${venc?'<span class="badge bbad">Atrasada</span>':''}
           ${errosOp?`<span class="badge bbad">⚠ ${errosOp} erro${errosOp>1?'s':''}</span>`:''}
-          ${obsOp?`<span class="badge bgray">💬 ${obsOp} obs.</span>`:''}
-          <span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd} quadros</span>
+          ${emChapa?`<span class="badge" style="background:#fff3e0;color:#b45309;">🔧 ${emChapa} em Chapa</span>`:''}
+          ${emEletrica?`<span class="badge bwarn">⚡ ${emEletrica} em Elétrica</span>`:''}
+          ${emMF?`<span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 ${emMF} em MF</span>`:''}
+          ${concluidos?`<span class="badge bok">✓ ${concluidos} concluídos</span>`:''}
+          <span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span>
         </span>
       </div>
       <div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div>

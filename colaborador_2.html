@@ -210,11 +210,11 @@ textarea{resize:vertical;}
         <button class="btn-sm" onclick="trocar()">Trocar</button>
       </div>
     </div>
-    <div class="sec-title">➕ Iniciar novo quadro</div>
     <div id="setorBadge" style="margin-bottom:10px;"></div>
     <div id="addFormArea">
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
+    <div id="filaEletricaDiv"></div>
     <div id="opsDiv"></div>
     <div id="mfDiv" style="display:none;">
       <div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Montagem Final — Inspeção</div>
@@ -484,63 +484,63 @@ function renderAll(){
   if(badge){badge.textContent=mfPendentes;badge.style.display=mfPendentes?'inline':'none';}
 }
 
+function renderFilaEletrica(){
+  const divFila=document.getElementById('filaEletricaDiv');
+  const setor=getColabSetor();
+  if(!divFila)return;
+  if(setor!=='eletrica'&&setor!=='geral'){divFila.innerHTML='';return;}
+  const chapaConcluidos=S.apontamentos.filter(a=>a.etapa==='eletrica');
+  const jaIniciados=new Set(S.apontamentos.filter(a=>a.setor==='eletrica').map(a=>a.opNum+'_'+a.modeloId));
+  const disponiveis=chapaConcluidos.filter(a=>!jaIniciados.has(a.opNum+'_'+a.modeloId));
+  if(!disponiveis.length){divFila.innerHTML='';return;}
+  let html='<div class="sec-title" style="color:#3550B4;border-bottom-color:#3550B4;margin-top:10px;">⚡ Prontos para Montagem Elétrica ('+disponiveis.length+')</div>';
+  disponiveis.forEach(a=>{
+    const m=S.modelos.find(x=>x.id===a.modeloId);
+    const autor=S.colaboradores.find(c=>c.id===a.colabId);
+    html+=`<div class="qcard" style="border-color:#3550B4;background:#EEF1FF;">
+      <div class="qh">
+        <div>
+          <div style="font-size:14px;font-weight:700;">OP ${a.opNum||'—'}</div>
+          <div style="font-size:12px;color:#888;">${m?m.codigo:a.modeloLabel||'—'}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">Chapa: ${autor?autor.nome:'—'}</div>
+        </div>
+        <span class="badge" style="background:#dbeafe;color:#1d4ed8;">✓ Chapa OK</span>
+      </div>
+      <button class="btn-start" style="background:#3550B4;" onclick="iniciarEletrica('${a.opNum}',${a.modeloId},'${(a.modeloLabel||'').replace(/'/g,"\'")}')">⚡ Iniciar Montagem Elétrica</button>
+    </div>`;
+  });
+  divFila.innerHTML=html;
+}
+
+async function iniciarEletrica(opNum,modeloId,modeloLabel){
+  if(S.apontamentos.find(a=>a.opNum===opNum&&a.modeloId===modeloId&&a.setor==='eletrica'&&!a.fim)){
+    toast('Você já iniciou a montagem elétrica deste quadro.');return;
+  }
+  S.apontamentos.push({
+    id:S.nid++,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',
+    inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
+    erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
+  });
+  await save();renderAll();toast('⚡ Montagem elétrica iniciada!');
+}
+
 function renderOps(){
   const div=document.getElementById('opsDiv');
+  const setor=getColabSetor();
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   const hoje=new Date().toISOString().split('T')[0];
   const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido');
-
-  const setor=getColabSetor();
-  // For eletrica: also show quadros released from chapa
-  const liberadosParaEletrica=setor==='eletrica'||setor==='geral'
-    ? S.apontamentos.filter(a=>a.etapa==='eletrica'&&a.colabId===colab.id&&!a.mf)
-    : [];
-  if(!meusApts.length&&!finHoje.length&&!liberadosParaEletrica.length){
-    const setorMsg=setor==='chapa'?'Nenhuma chapa em produção.':setor==='eletrica'?'Nenhum quadro em montagem elétrica.':'Nenhum quadro em andamento.';
-    div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros em andamento</div><div class="empty" style="padding:20px 0;">'+setorMsg+'<br><span style="font-size:12px;">Use o botão acima para adicionar.</span></div>';
+  const addArea=document.getElementById('addFormArea');
+  if(addArea)addArea.style.display=setor==='eletrica'?'none':'block';
+  renderFilaEletrica();
+  if(!meusApts.length&&!finHoje.length){
+    const setorMsg=setor==='eletrica'
+      ?'Nenhum quadro em andamento.<br><span style="font-size:12px;">Aguarde quadros liberados da Chapa acima.</span>'
+      :setor==='chapa'?'Nenhuma chapa em produção.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span>'
+      :'Nenhum quadro em andamento.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span>';
+    div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros</div><div class="empty" style="padding:16px 0;">'+setorMsg+'</div>';
     return;
   }
-
-  let html='';
-  if(meusApts.length){
-    html+='<div class="sec-title" style="margin-top:20px;">Em andamento ('+meusApts.length+')</div>';
-    meusApts.forEach(a=>{html+=renderQuadro(a);});
-  }
-  // show quadros waiting in MF queue
-  const mfMeus=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
-  if(mfMeus.length){
-    html+='<div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Aguardando Montagem Final ('+mfMeus.length+')</div>';
-    mfMeus.forEach(a=>{
-      const m2=S.modelos.find(x=>x.id===a.modeloId);
-      html+=`<div class="qcard" style="border-color:#7c3aed;background:#faf5ff;opacity:.85;">
-        <div class="qh"><span class="qnum">OP ${a.opNum||'—'}</span><span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span></div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m2?m2.codigo:a.modeloLabel||'—'}</div>
-        <div style="font-size:12px;color:#888;">Quadro enviado para inspeção do responsável</div>
-      </div>`;
-    });
-  }
-  if(finHoje.length){
-    html+='<div class="sec-title" style="margin-top:20px;">Finalizados hoje ('+finHoje.length+')</div>';
-    finHoje.forEach(a=>{
-      const temErro=a.erros&&a.erros.length>0;
-      const liq=tempoLiquido(a);
-      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}">
-        <div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div>
-        <div class="hora-row">
-          <div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div>
-          <div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div>
-          <div class="hora-item">Tempo: <span>${liq}min</span></div>
-        </div>
-        ${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}
-        ${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando registrados: ${a.obsItensFaltando}</div>`:''}
-      </div>`;
-    });
-  }
-
-  div.innerHTML=html;
-  meusApts.forEach(a=>{if(!estaPausado(a))startTimer(a.id,a);});
-  if(finalizando){const p=document.getElementById(`fin-${finalizando.id}`);if(p)renderFinPanel(finalizando.id);}
-}
 
 function renderProgressBar(apt){
   const m=S.modelos.find(x=>x.id===apt.modeloId);
@@ -1049,6 +1049,8 @@ async function init(){
     }
   },12000);
 }
+}
+
 init();
 </script>
 </body>

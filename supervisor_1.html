@@ -343,6 +343,15 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)"/>
         <div id="backupMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
       </div>
+      <div class="card" style="border-left:4px solid #A32D2D;">
+        <h3>🔄 Reset de Produção</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:14px;">Apaga <strong>todos os apontamentos</strong> (quadros em andamento, finalizados e em montagem final). Colaboradores, modelos e configurações são mantidos.</p>
+        <div id="resetConfirmDiv">
+          <button class="btn" style="background:#A32D2D;width:auto;padding:10px 20px;" onclick="mostrarConfirmReset()">🔄 Resetar produção</button>
+        </div>
+        <div id="resetMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
+
       <div class="card">
         <h3>⚠️ Trocar banco de dados</h3>
         <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual.</p>
@@ -356,7 +365,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-let DB_URL=localStorage.getItem('paineis_db_url')||'';
+const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
 let _dadosCarregados=false;
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
@@ -398,7 +407,7 @@ function estaPausado(apt){
 
 async function load(){
   try{
-    const r=await fetch(DB_URL+'/paineis.json');
+    const r=await fetch(DB_URL+'.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
     if(d){S=d;['colaboradores','ops','apontamentos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
@@ -412,7 +421,7 @@ async function save(){
   if(!_dadosCarregados){console.warn('save() bloqueado: dados não carregados');return;}
   try{
     // Lê estado atual
-    const r=await fetch(DB_URL+'/paineis.json');
+    const r=await fetch(DB_URL+'.json');
     let servidor=null;
     if(r.ok){try{servidor=await r.json();}catch(e){}}
 
@@ -429,7 +438,7 @@ async function save(){
     // garante nid maior que o servidor
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
 
-    await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
+    await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
 }
@@ -438,13 +447,49 @@ async function conectar(){
   const url=document.getElementById('fbUrl').value.trim().replace(/\/$/,'');
   if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
   document.getElementById('setupErr').textContent='Testando conexão...';
-  DB_URL=url;
+  // DB_URL é fixo, ignorando url digitada
   const ok=await load();
-  if(ok){localStorage.setItem('paineis_db_url',DB_URL);showApp();}
+  if(ok){showApp();}
   else document.getElementById('setupErr').textContent='Não foi possível conectar. Verifique a URL.';
 }
 
-function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
+function desconectar(){location.reload();}
+
+function mostrarConfirmReset(){
+  const div=document.getElementById('resetConfirmDiv');
+  if(!div)return;
+  div.innerHTML=`
+    <div style="background:#fff8f8;border:1.5px solid #A32D2D;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:14px;font-weight:700;color:#A32D2D;margin-bottom:6px;">⚠️ Tem certeza?</div>
+      <div style="font-size:13px;color:#555;margin-bottom:14px;">Esta ação irá apagar <strong>todos os ${S.apontamentos.length} apontamentos</strong> permanentemente. Um backup será exportado automaticamente antes.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn" style="margin-top:0;background:#A32D2D;" onclick="executarReset()">Sim, resetar</button>
+        <button class="btn" style="margin-top:0;background:#fff;color:#1a1a1a;border:1px solid #ddd;" onclick="cancelarReset()">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+function cancelarReset(){
+  const div=document.getElementById('resetConfirmDiv');
+  if(div)div.innerHTML='<button class="btn" style="background:#A32D2D;width:auto;padding:10px 20px;" onclick="mostrarConfirmReset()">🔄 Resetar produção</button>';
+}
+
+async function executarReset(){
+  // 1. Exporta backup antes de apagar
+  exportarBackup(false);
+  // 2. Aguarda um momento para o download iniciar
+  await new Promise(r=>setTimeout(r,800));
+  // 3. Apaga apenas os apontamentos
+  S.apontamentos=[];
+  S.nid=S.nid; // mantém o nid para evitar colisão de IDs futuros
+  await save();
+  // 4. Reseta a UI
+  cancelarReset();
+  const msg=document.getElementById('resetMsg');
+  if(msg)msg.innerHTML='<span style="color:#1D9E75;">✓ Reset concluído! Backup exportado automaticamente.</span>';
+  renderDash();
+  toast('✓ Produção resetada com sucesso!');
+}
 
 function exportarBackup(automatico=false){
   const agora=new Date();
@@ -1411,10 +1456,13 @@ document.addEventListener('keydown',function(e){
 });
 
 async function init(){
-  if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();
   if(ok)showApp();
-  else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
+  else{
+    // tenta reconectar em vez de mostrar setup
+    setTimeout(()=>init(),3000);
+    document.getElementById('syncTxt').textContent='reconectando...';
+  }
 }
 
 init();

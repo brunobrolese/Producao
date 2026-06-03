@@ -1025,11 +1025,11 @@ async function addColab(){
 
 function renderLivePage(){
   const hoje=td(),mes=hoje.substring(0,7);
-  const aptH=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(hoje));
+  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
   const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
   const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
-  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
 
@@ -1128,8 +1128,8 @@ function renderLive(){
 /* ── DASHBOARD ── */
 function renderDash(){
   const hoje=td(),mes=hoje.substring(0,7);
-  const aptH=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(hoje));
-  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
+  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
@@ -1206,7 +1206,8 @@ function mkChart(canvasId,labels,data,color,existingChart,tipo){
 }
 
 function renderGraficos(){
-  const apts=S.apontamentos.filter(a=>a.fim);
+  // conta apenas quadros que saíram aprovados da Montagem Final
+  const apts=S.apontamentos.filter(a=>a.etapa==='concluido');
 
   // ── DIÁRIO — últimos 14 dias ──
   const hoje=new Date();
@@ -1260,7 +1261,7 @@ let chartM=null;
 function renderMes(){
   const mes=document.getElementById('mFiltro').value;
   const meta=parseInt(document.getElementById('mMeta').value)||50;
-  const aptM=S.apontamentos.filter(a=>a.fim&&a.fim.startsWith(mes));
+  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const tot=aptM.length,pct=Math.round((tot/meta)*100),pc=pct>=100?'ok':pct>=60?'warn':'bad';
   const errosMes=aptM.filter(a=>a.erros&&a.erros.length>0).length;
   const obsMes=aptM.reduce((s,a)=>s+(a.observacoes||[]).length,0);

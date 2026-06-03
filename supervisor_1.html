@@ -237,13 +237,21 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 
     <div id="page-col" class="page">
       <div class="card" style="border-left:4px solid #7c3aed;">
-        <h3>🔍 Responsável pela Montagem Final</h3>
-        <p style="font-size:13px;color:#888;margin-bottom:12px;">Este colaborador receberá todos os quadros finalizados para inspeção na tela de Montagem Final.</p>
-        <div style="max-width:320px;">
-          <label>Selecionar responsável</label>
-          <select id="mfResponsavelSel" onchange="salvarMfResponsavel()">
-            <option value="">— Nenhum designado —</option>
-          </select>
+        <h3>🔍 Responsáveis pela Montagem Final</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:12px;">Selecione até 2 colaboradores responsáveis pela inspeção. Ambos verão todos os quadros pendentes.</p>
+        <div class="frow">
+          <div>
+            <label>1º Responsável</label>
+            <select id="mfResponsavel1Sel" onchange="salvarMfResponsaveis()">
+              <option value="">— Nenhum —</option>
+            </select>
+          </div>
+          <div>
+            <label>2º Responsável</label>
+            <select id="mfResponsavel2Sel" onchange="salvarMfResponsaveis()">
+              <option value="">— Nenhum —</option>
+            </select>
+          </div>
         </div>
         <div id="mfResponsavelInfo" style="margin-top:10px;font-size:13px;color:#7c3aed;font-weight:500;"></div>
       </div>
@@ -890,33 +898,38 @@ async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'conclui
 async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
 
 /* ── COLABORADORES ── */
-async function salvarMfResponsavel(){
-  const sel=document.getElementById('mfResponsavelSel');
-  if(!sel)return;
-  const id=parseInt(sel.value)||0;
-  S.mfResponsavel=id||null;
+async function salvarMfResponsaveis(){
+  const s1=document.getElementById('mfResponsavel1Sel');
+  const s2=document.getElementById('mfResponsavel2Sel');
+  const id1=parseInt(s1?.value)||0;
+  const id2=parseInt(s2?.value)||0;
+  // mfResponsaveis: array de ids (compatível com campo antigo mfResponsavel)
+  S.mfResponsaveis=[id1||null,id2||null].filter(Boolean);
+  S.mfResponsavel=S.mfResponsaveis[0]||null; // compatibilidade legado
   await save();
   const info=document.getElementById('mfResponsavelInfo');
   if(info){
-    if(id){
-      const c=S.colaboradores.find(x=>x.id===id);
-      info.textContent=c?'✓ '+c.nome+' está designado para Montagem Final':'';
-    } else {
-      info.textContent='';
-    }
+    const nomes=S.mfResponsaveis.map(id=>{const c=S.colaboradores.find(x=>x.id===id);return c?c.nome:'?';});
+    info.textContent=nomes.length?'✓ '+nomes.join(' e ')+' designados para Montagem Final':'';
   }
-  toast('Responsável MF atualizado!');
+  toast('Responsáveis MF atualizados!');
 }
 
+// manter compatibilidade com código antigo
+async function salvarMfResponsavel(){await salvarMfResponsaveis();}
+
 function popularSeletorMF(){
-  const sel=document.getElementById('mfResponsavelSel');
-  if(!sel)return;
-  sel.innerHTML='<option value="">— Nenhum designado —</option>'+
-    S.colaboradores.map(c=>`<option value="${c.id}" ${S.mfResponsavel===c.id?'selected':''}>${c.nome} — ${c.funcao}</option>`).join('');
+  if(!S.mfResponsaveis)S.mfResponsaveis=S.mfResponsavel?[S.mfResponsavel]:[];
+  const opts='<option value="">— Nenhum —</option>'+
+    S.colaboradores.map(c=>`<option value="${c.id}">${c.nome} — ${c.funcao}</option>`).join('');
+  const s1=document.getElementById('mfResponsavel1Sel');
+  const s2=document.getElementById('mfResponsavel2Sel');
+  if(s1){s1.innerHTML=opts;s1.value=S.mfResponsaveis[0]||'';}
+  if(s2){s2.innerHTML=opts;s2.value=S.mfResponsaveis[1]||'';}
   const info=document.getElementById('mfResponsavelInfo');
-  if(info&&S.mfResponsavel){
-    const c=S.colaboradores.find(x=>x.id===S.mfResponsavel);
-    info.textContent=c?'✓ '+c.nome+' está designado para Montagem Final':'';
+  if(info&&S.mfResponsaveis.length){
+    const nomes=S.mfResponsaveis.map(id=>{const c=S.colaboradores.find(x=>x.id===id);return c?c.nome:'?';});
+    info.textContent='✓ '+nomes.join(' e ')+' designados para Montagem Final';
   }
 }
 

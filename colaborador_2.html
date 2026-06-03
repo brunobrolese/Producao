@@ -231,7 +231,7 @@ textarea{resize:vertical;}
 
 <div class="toast" id="toast"></div>
 <script>
-let DB_URL=localStorage.getItem('paineis_db_url')||'';
+const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
 let _dadosCarregados=false; // proteção: só salva após carregar do Firebase
 let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
@@ -275,7 +275,7 @@ function estaPausado(apt){
 
 async function load(){
   try{
-    const r=await fetch(DB_URL+'/paineis.json');
+    const r=await fetch(DB_URL+'.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
     if(d){
@@ -310,7 +310,7 @@ async function save(){
   if(!_dadosCarregados){console.warn('save() bloqueado: dados ainda não carregados');return;}
   try{
     // 1. Lê estado atual do Firebase
-    const r=await fetch(DB_URL+'/paineis.json');
+    const r=await fetch(DB_URL+'.json');
     let servidor=null;
     if(r.ok){
       try{servidor=await r.json();}catch(e){}
@@ -331,7 +331,7 @@ async function save(){
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
 
     // 4. Salva o estado mesclado
-    await fetch(DB_URL+'/paineis.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
+    await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
 }
@@ -339,9 +339,9 @@ async function conectar(){
   const url=document.getElementById('setupUrl').value.trim().replace(/\/$/,'');
   if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
   document.getElementById('setupErr').textContent='Testando...';
-  DB_URL=url;
+  // DB_URL é fixo, ignorando url digitada
   const ok=await load();
-  if(ok){localStorage.setItem('paineis_db_url',DB_URL);showSelect();}
+  if(ok){showSelect();}
   else document.getElementById('setupErr').textContent='Não foi possível conectar.';
 }
 function showSelect(){
@@ -1110,10 +1110,11 @@ function abrirSupervisor(){
 }
 
 async function init(){
-  if(!DB_URL){document.getElementById('setupScreen').style.display='flex';return;}
   const ok=await load();
   if(ok)showSelect();
-  else{localStorage.removeItem('paineis_db_url');document.getElementById('setupScreen').style.display='flex';}
+  else{
+    document.getElementById('setupScreen').style.display='flex';
+  }
   let ultimaDigitacao=0;
   document.addEventListener('keydown',()=>ultimaDigitacao=Date.now());
 

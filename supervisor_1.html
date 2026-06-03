@@ -438,7 +438,7 @@ async function conectar(){
 
 function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
 
-function exportarBackup(){
+function exportarBackup(automatico=false){
   const agora=new Date();
   const nome=`backup_paineis_${agora.getFullYear()}${String(agora.getMonth()+1).padStart(2,'0')}${String(agora.getDate()).padStart(2,'0')}_${String(agora.getHours()).padStart(2,'0')}${String(agora.getMinutes()).padStart(2,'0')}.json`;
   const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
@@ -446,7 +446,9 @@ function exportarBackup(){
   a.href=URL.createObjectURL(blob);
   a.download=nome;
   a.click();
-  document.getElementById('backupMsg').innerHTML='<span style="color:#1D9E75;">✓ Backup exportado: '+nome+'</span>';
+  const msg=document.getElementById('backupMsg');
+  if(msg)msg.innerHTML='<span style="color:#1D9E75;">✓ Backup exportado: '+nome+'</span>';
+  if(automatico)toast('💾 Backup automático salvo: '+nome);
 }
 
 async function importarBackup(event){
@@ -486,6 +488,13 @@ function showApp(){
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
   renderDash();renderColabs();if(!S.modelos)S.modelos=[];carregarTema();
   setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();if(currentPage==='ops')renderOPs();},5000);
+
+  // backup automático a cada 3 horas
+  const TRES_HORAS=3*60*60*1000;
+  setInterval(()=>{
+    if(!_dadosCarregados||!S.apontamentos.length)return;
+    exportarBackup(true);
+  },TRES_HORAS);
 }
 
 function nav(id,btn){
@@ -983,13 +992,13 @@ function renderLive(){
   const tipoColors={chapa:'#b45309',eletrica:'#3550B4',mf:'#7c3aed',geral:'#555'};
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-  const ativos=S.apontamentos.filter(a=>!a.fim);
+  const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final');
   const mfPendentes=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
 
   // group by setor/etapa
   const grupos={
-    chapa: ativos.filter(a=>a.setor==='chapa'||(a.setor==='geral'&&!a.etapa)),
-    eletrica: ativos.filter(a=>a.setor==='eletrica'||(a.setor==='geral'&&a.etapa==='eletrica')),
+    chapa: ativos.filter(a=>a.setor==='chapa'),
+    eletrica: ativos.filter(a=>a.setor==='eletrica'||a.setor==='geral'||!a.setor),
     mf: mfPendentes
   };
 

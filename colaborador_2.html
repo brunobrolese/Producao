@@ -214,8 +214,8 @@ textarea{resize:vertical;}
     <div id="addFormArea">
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
-    <div id="filaEletricaDiv"></div>
     <div id="opsDiv"></div>
+    <div id="filaEletricaDiv"></div>
     <div id="mfDiv" style="display:none;">
       <div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Montagem Final — Inspeção</div>
       <div id="mfLista"></div>
@@ -511,7 +511,7 @@ function renderAll(){
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   meusApts.forEach(a=>bindRetrab(a.id));
   // show MF tab only for the designated MF responsible
-  const isMfResp=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+  const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
   const mfPendentes=isMfResp?S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length:0;
   const tabs=document.getElementById('colTabs');
   if(tabs)tabs.style.display=(isMfResp||meusApts.length)?'flex':'none';
@@ -972,7 +972,7 @@ async function confirmarFin(aptId){
     apt.etapa='montagem_final';
     apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
     await save();renderAll();renderMF();
-    const isMfResp2=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+    const isMfResp2=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
     toast('Enviado para Montagem Final 🔍');
     if(isMfResp2)switchTab('mf');
   }
@@ -1003,7 +1003,7 @@ function renderMF(){
   if(!div)return;
   // quadros em montagem final deste colaborador
   // MF responsible sees ALL pending quadros from any collaborator
-  const isMfResp=S.mfResponsavel&&colab&&S.mfResponsavel===colab.id;
+  const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
   if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
   const mfApts=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   const badge=document.getElementById('mfBadge');

@@ -325,6 +325,16 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         </div>
       </div>
 
+      <div class="card" style="border-left:4px solid #1D9E75;">
+        <h3>💾 Backup dos dados</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:14px;">Exporte todos os dados antes de atualizar o código. Importe para restaurar.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <button class="btn" style="margin-top:0;background:#1D9E75;" onclick="exportarBackup()">⬇ Exportar backup</button>
+          <button class="btn" style="margin-top:0;background:#fff;color:#1a1a1a;border:1px solid #ddd;" onclick="document.getElementById('importFile').click()">⬆ Importar backup</button>
+        </div>
+        <input type="file" id="importFile" accept=".json" style="display:none;" onchange="importarBackup(event)"/>
+        <div id="backupMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
+      </div>
       <div class="card">
         <h3>⚠️ Trocar banco de dados</h3>
         <p style="font-size:13px;color:#888;margin-bottom:10px;">Isso desconecta o sistema atual.</p>
@@ -339,6 +349,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
 let DB_URL=localStorage.getItem('paineis_db_url')||'';
+let _dadosCarregados=false;
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
 
@@ -383,13 +394,14 @@ async function load(){
     if(!r.ok)throw new Error();
     const d=await r.json();
     if(d){S=d;['colaboradores','ops','apontamentos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
-    setSync(true);return true;
+    setSync(true);_dadosCarregados=true;return true;
   }catch(e){setSync(false);return false;}
 }
 
 // Salva de forma segura: mescla apontamentos antes de sobrescrever
 // Evita perda de dados de colaboradores em saves simultâneos
 async function save(){
+  if(!_dadosCarregados){console.warn('save() bloqueado: dados não carregados');return;}
   try{
     // Lê estado atual
     const r=await fetch(DB_URL+'/paineis.json');
@@ -425,6 +437,41 @@ async function conectar(){
 }
 
 function desconectar(){localStorage.removeItem('paineis_db_url');location.reload();}
+
+function exportarBackup(){
+  const agora=new Date();
+  const nome=`backup_paineis_${agora.getFullYear()}${String(agora.getMonth()+1).padStart(2,'0')}${String(agora.getDate()).padStart(2,'0')}_${String(agora.getHours()).padStart(2,'0')}${String(agora.getMinutes()).padStart(2,'0')}.json`;
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=nome;
+  a.click();
+  document.getElementById('backupMsg').innerHTML='<span style="color:#1D9E75;">✓ Backup exportado: '+nome+'</span>';
+}
+
+async function importarBackup(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  try{
+    const text=await file.text();
+    const dados=JSON.parse(text);
+    if(!dados.apontamentos||!dados.colaboradores){
+      document.getElementById('backupMsg').innerHTML='<span style="color:#A32D2D;">Arquivo inválido — não é um backup do sistema.</span>';
+      return;
+    }
+    const conf=window.confirm('Isso vai substituir TODOS os dados atuais pelo backup. Tem certeza?');
+    if(!conf)return;
+    S=dados;
+    _dadosCarregados=true;
+    await save();
+    document.getElementById('backupMsg').innerHTML='<span style="color:#1D9E75;">✓ Backup restaurado com sucesso! '+dados.apontamentos.length+' apontamentos recuperados.</span>';
+    renderDash();
+    toast('Backup restaurado!');
+  }catch(e){
+    document.getElementById('backupMsg').innerHTML='<span style="color:#A32D2D;">Erro ao ler arquivo: '+e.message+'</span>';
+  }
+  event.target.value='';
+}
 function copyUrl(){navigator.clipboard.writeText(DB_URL).then(()=>toast('URL copiada!')).catch(()=>toast(DB_URL));}
 
 function showApp(){

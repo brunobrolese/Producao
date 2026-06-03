@@ -1377,7 +1377,7 @@ function carregarTema(){
 /* ── LOGIN / NAVEGAÇÃO ── */
 const LOGIN_USER='BrunoBrolese';
 const LOGIN_PASS='123456';
-let loginAutenticado=localStorage.getItem('sup_auth')==='1';
+let loginAutenticado=localStorage.getItem('sup_auth')==='1'||sessionStorage.getItem('sup_auth')==='1';
 
 function abrirColaborador(){
   const url=window.location.href.replace(/supervisor[^/]*\.html.*/,'colaborador_2.html');
@@ -1398,6 +1398,7 @@ function tentarLogin(){
   if(u===LOGIN_USER&&p===LOGIN_PASS){
     loginAutenticado=true;
     localStorage.setItem('sup_auth','1');
+    sessionStorage.setItem('sup_auth','1');
     fecharLogin();
     toast('Bem-vindo, '+u+'!');
   } else {

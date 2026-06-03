@@ -232,6 +232,7 @@ textarea{resize:vertical;}
 <div class="toast" id="toast"></div>
 <script>
 let DB_URL=localStorage.getItem('paineis_db_url')||'';
+let _dadosCarregados=false; // proteção: só salva após carregar do Firebase
 let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
 let _semErro=false,_errosSel=[],_obsErro='';
@@ -283,6 +284,7 @@ async function load(){
       if(!S.nid)S.nid=1;
     }
     setSync(true);
+    _dadosCarregados=true;
     aplicarTemaColab();
     return true;
   }catch(e){setSync(false);return false;}
@@ -305,6 +307,7 @@ function aplicarTemaColab(){
 // Salva de forma segura: lê o estado atual, mescla apontamentos e salva
 // Evita que saves simultâneos de colaboradores diferentes apaguem dados uns dos outros
 async function save(){
+  if(!_dadosCarregados){console.warn('save() bloqueado: dados ainda não carregados');return;}
   try{
     // 1. Lê estado atual do Firebase
     const r=await fetch(DB_URL+'/paineis.json');

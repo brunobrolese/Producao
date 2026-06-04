@@ -609,22 +609,24 @@ function nav(id,btn){
 /* ── APONTAMENTOS LIVRES ── */
 
 
-async function excluirApontamento(id){
-  const btn=document.querySelector('.btn-excluir-apt[data-id="'+id+'"]');
-  if(!btn)return;
-  const td=btn.closest('td');if(!td)return;
-  // mostra confirmação inline com data-id para o event delegation capturar
-  td.innerHTML='<div style="display:flex;gap:4px;align-items:center;white-space:nowrap;">'
-    +'<span style="font-size:11px;color:#A32D2D;">Excluir?</span>'
-    +'<button class="btn-sm btn-sim-exc" data-id="'+id+'" style="color:#A32D2D;border-color:#A32D2D;padding:2px 7px;font-size:11px;" onclick="confirmarExcluir('+id+')">Sim</button>'
-    +'<button class="btn-sm btn-nao-exc" style="padding:2px 7px;font-size:11px;" onclick="renderApt()">Não</button>'
-    +'</div>';
-}
+let _pendingExcluir=null;
 
-async function confirmarExcluir(id){
-  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
-  await save();renderApt();
-  toast('Apontamento excluído.');
+async function excluirApontamento(id){
+  // primeiro clique: mostra toast de confirmação
+  if(_pendingExcluir===id){
+    // segundo clique: confirma exclusão
+    _pendingExcluir=null;
+    S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+    await save();renderApt();
+    toast('✓ Apontamento excluído.');
+    return;
+  }
+  _pendingExcluir=id;
+  const apt=S.apontamentos.find(a=>a.id===id);
+  const label=apt?'OP '+(apt.opNum||'—'):'apontamento';
+  toast('Clique ✕ novamente para confirmar exclusão de '+label);
+  // cancela se não confirmar em 4 segundos
+  setTimeout(()=>{if(_pendingExcluir===id)_pendingExcluir=null;},4000);
 }
 
 function renderApt(){

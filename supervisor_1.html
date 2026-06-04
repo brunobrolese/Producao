@@ -621,34 +621,37 @@ Esta ação não pode ser desfeita.`);
 }
 
 async function excluirApontamento(id){
-  const apt=S.apontamentos.find(a=>a.id===id);
-  if(!apt)return;
-  // busca o botão pelo data-id e mostra confirmação inline
-  const btn=document.querySelector(`.btn-excluir-apt[data-id="${id}"]`);
+  const btn=document.querySelector('.btn-excluir-apt[data-id="'+id+'"]');
   if(!btn)return;
-  const td=btn.closest('td');
-  if(!td)return;
-  td.innerHTML=`
-    <div style="display:flex;gap:4px;align-items:center;">
-      <span style="font-size:11px;color:#A32D2D;white-space:nowrap;">Excluir?</span>
-      <button class="btn-sm btn-sim-exc" style="color:#A32D2D;border-color:#A32D2D;padding:2px 7px;font-size:11px;">Sim</button>
-      <button class="btn-sm btn-nao-exc" style="padding:2px 7px;font-size:11px;">Não</button>
-    </div>`;
-  td.querySelector('.btn-sim-exc').addEventListener('click',async function(){
-    S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
-    await save();
-    renderApt();
-    toast('Apontamento excluído.');
-  });
-  td.querySelector('.btn-nao-exc').addEventListener('click',function(){
-    td.innerHTML=`<button class="btn-sm btn-excluir-apt" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" data-id="${id}">✕</button>`;
-    td.querySelector('.btn-excluir-apt').addEventListener('click',function(){
-      excluirApontamento(parseInt(this.getAttribute('data-id')));
-    });
-  });
+  const td=btn.closest('td');if(!td)return;
+  // mostra confirmação inline com data-id para o event delegation capturar
+  td.innerHTML='<div style="display:flex;gap:4px;align-items:center;white-space:nowrap;">'
+    +'<span style="font-size:11px;color:#A32D2D;">Excluir?</span>'
+    +'<button class="btn-sm btn-sim-exc" data-id="'+id+'" style="color:#A32D2D;border-color:#A32D2D;padding:2px 7px;font-size:11px;" onclick="confirmarExcluir('+id+')">Sim</button>'
+    +'<button class="btn-sm btn-nao-exc" style="padding:2px 7px;font-size:11px;" onclick="renderApt()">Não</button>'
+    +'</div>';
+}
+
+async function confirmarExcluir(id){
+  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+  await save();renderApt();
+  toast('Apontamento excluído.');
 }
 
 function renderApt(){
+  // event delegation: um listener no container captura todos os cliques
+  const aptLista=document.getElementById('apt-lista');
+  if(aptLista&&!aptLista._delegated){
+    aptLista._delegated=true;
+    aptLista.addEventListener('click',function(e){
+      const btn=e.target.closest('.btn-excluir-apt');
+      if(btn){excluirApontamento(parseInt(btn.getAttribute('data-id')));}
+      const sim=e.target.closest('.btn-sim-exc');
+      if(sim){sim.dispatchEvent(new Event('_confirmar'));}
+      const nao=e.target.closest('.btn-nao-exc');
+      if(nao){nao.dispatchEvent(new Event('_cancelar'));}
+    });
+  }
   if(!S.modelos)S.modelos=[];
 
   // ── HISTÓRICO DE DESEMPENHO ──
@@ -799,12 +802,6 @@ function renderApt(){
       <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
-  // bind delete buttons via addEventListener
-  div.querySelectorAll('.btn-excluir-apt').forEach(btn=>{
-    btn.addEventListener('click',function(){
-      excluirApontamento(parseInt(this.getAttribute('data-id')));
-    });
-  });
 }
   if(id==='mes')renderMes();
 }

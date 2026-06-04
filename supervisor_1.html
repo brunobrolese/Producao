@@ -136,21 +136,63 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 
     <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
-      <div class="metrics" id="m-dash"></div>
-      <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
-      <div style="display:grid;grid-template-columns:1fr;gap:12px;">
-        <div class="card">
-          <h3>📈 Quadros por dia — últimos 14 dias</h3>
-          <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
+      <!-- abas dos setores -->
+      <div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #e5e5e5;">
+        <button id="dash-tab-mf" onclick="switchDashTab('mf')" style="padding:10px 20px;border:none;background:none;font-size:13px;font-weight:700;color:#1D9E75;border-bottom:2px solid #1D9E75;margin-bottom:-2px;cursor:pointer;">✅ Montagem Final</button>
+        <button id="dash-tab-chapa" onclick="switchDashTab('chapa')" style="padding:10px 20px;border:none;background:none;font-size:13px;font-weight:600;color:#888;cursor:pointer;">🔧 Chapa</button>
+        <button id="dash-tab-eletrica" onclick="switchDashTab('eletrica')" style="padding:10px 20px;border:none;background:none;font-size:13px;font-weight:600;color:#888;cursor:pointer;">⚡ Elétrica</button>
+      </div>
+
+      <!-- MF (gol) -->
+      <div id="dash-content-mf">
+        <div class="metrics" id="m-dash-mf"></div>
+        <div class="card"><h3>📋 Status das OPs em aberto</h3><div id="dash-ops"></div></div>
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+          <div class="card">
+            <h3>📈 Quadros aprovados por dia — últimos 14 dias</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendDia"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>📅 Quadros aprovados por mês — últimos 12 meses</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendMes"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>📊 Quadros aprovados por semana — últimas 8 semanas</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendSemana"></canvas></div>
+          </div>
         </div>
-        <div class="card">
-          <h3>📅 Quadros por mês — últimos 12 meses</h3>
-          <div style="position:relative;height:160px;"><canvas id="cTrendMes"></canvas></div>
+      </div>
+
+      <!-- CHAPA -->
+      <div id="dash-content-chapa" style="display:none;">
+        <div class="metrics" id="m-dash-chapa"></div>
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+          <div class="card">
+            <h3>📈 Quadros da Chapa por dia — últimos 14 dias</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendChapaD"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>📊 Quadros da Chapa por semana — últimas 8 semanas</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendChapaS"></canvas></div>
+          </div>
         </div>
-        <div class="card">
-          <h3>📊 Quadros por semana — últimas 8 semanas</h3>
-          <div style="position:relative;height:160px;"><canvas id="cTrendSemana"></canvas></div>
+        <div class="card" style="margin-top:12px;"><h3>👥 Desempenho por colaborador — Chapa</h3><div id="dash-colab-chapa"></div></div>
+      </div>
+
+      <!-- ELÉTRICA -->
+      <div id="dash-content-eletrica" style="display:none;">
+        <div class="metrics" id="m-dash-eletrica"></div>
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+          <div class="card">
+            <h3>📈 Quadros da Elétrica por dia — últimos 14 dias</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendEletricaD"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>📊 Quadros da Elétrica por semana — últimas 8 semanas</h3>
+            <div style="position:relative;height:160px;"><canvas id="cTrendEletricaS"></canvas></div>
+          </div>
         </div>
+        <div class="card" style="margin-top:12px;"><h3>👥 Desempenho por colaborador — Elétrica</h3><div id="dash-colab-eletrica"></div></div>
       </div>
     </div>
 
@@ -565,6 +607,30 @@ function nav(id,btn){
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
 
 /* ── APONTAMENTOS LIVRES ── */
+async function excluirApontamento(id){
+  const apt=S.apontamentos.find(a=>a.id===id);
+  if(!apt)return;
+  const conf=window.confirm(`Excluir apontamento OP ${apt.opNum||'—'} (${apt.modeloLabel||'—'})?
+
+Esta ação não pode ser desfeita.`);
+  if(!conf)return;
+  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+  await save();
+  renderApt();
+  toast('Apontamento excluído.');
+}
+
+async function excluirApontamento(id){
+  const apt=S.apontamentos.find(a=>a.id===id);
+  if(!apt)return;
+  const conf=window.confirm('Excluir apontamento OP '+(apt.opNum||'—')+' ('+( apt.modeloLabel||'—')+')? Esta ação não pode ser desfeita.');
+  if(!conf)return;
+  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+  await save();
+  renderApt();
+  toast('Apontamento excluído.');
+}
+
 function renderApt(){
   if(!S.modelos)S.modelos=[];
 
@@ -706,13 +772,14 @@ function renderApt(){
       <td>${itensFalt}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
+      <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;" onclick="excluirApontamento(${a.id})">✕</button></td>
     </tr>`;
   }).join('');
 
   div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''}</h3>
     <div style="overflow-x:auto;"><table><thead><tr>
       <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
-      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th>
+      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
@@ -925,6 +992,7 @@ function renderAponTabela(op){
       <td style="font-size:12px;">${pausas||'—'}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
+      <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" onclick="excluirApontamento(${a.id})">✕</button></td>
     </tr>`;
   }).join('');
 
@@ -1127,55 +1195,130 @@ function renderLive(){
 
 /* ── DASHBOARD ── */
 function renderDash(){
+  const tab=window._dashTab||'mf';
+  if(tab==='chapa') renderDashSetor('chapa');
+  else if(tab==='eletrica') renderDashSetor('eletrica');
+  else renderDashMF();
+}
+
+function switchDashTab(tab){
+  window._dashTab=tab;
+  // update tab styles
+  ['mf','chapa','eletrica'].forEach(t=>{
+    const btn=document.getElementById('dash-tab-'+t);
+    const content=document.getElementById('dash-content-'+t);
+    const colors={mf:'#1D9E75',chapa:'#db2777',eletrica:'#EA580C'};
+    if(btn){
+      const active=t===tab;
+      btn.style.color=active?colors[t]:'#888';
+      btn.style.borderBottom=active?'2px solid '+colors[t]:'none';
+      btn.style.marginBottom=active?'-2px':'0';
+      btn.style.fontWeight=active?'700':'600';
+    }
+    if(content)content.style.display=t===tab?'block':'none';
+  });
+  renderDash();
+}
+
+let chartChapaD=null,chartChapaS=null,chartEletricaD=null,chartEletricaS=null;
+
+function renderDashSetor(setor){
+  const hoje=td(),mes=hoje.substring(0,7);
+  const cor=setor==='chapa'?'#db2777':'#EA580C';
+  const apts=S.apontamentos.filter(a=>a.setor===setor&&a.fim);
+  const aptH=apts.filter(a=>a.fim.startsWith(hoje));
+  const aptM=apts.filter(a=>a.fim.startsWith(mes));
+  const emAnd=S.apontamentos.filter(a=>a.setor===setor&&!a.fim).length;
+  const comErro=apts.filter(a=>a.erros&&a.erros.length>0).length;
+  const retrabalhos=apts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length;
+  const tempos=apts.filter(a=>tempoLiquido(a)>0).map(a=>tempoLiquido(a));
+  const tmedio=tempos.length?Math.round(tempos.reduce((s,v)=>s+v,0)/tempos.length):0;
+
+  const md=document.getElementById('m-dash-'+setor);
+  if(md)md.innerHTML=`
+    <div class="metric"><div class="lbl">Finalizados hoje</div><div class="val">${aptH.length}</div><div class="sub">na ${setor==='chapa'?'Chapa':'Elétrica'}</div></div>
+    <div class="metric"><div class="lbl">No mês</div><div class="val">${aptM.length}</div><div class="sub">quadros finalizados</div></div>
+    <div class="metric"><div class="lbl">Em andamento</div><div class="val warn">${emAnd}</div><div class="sub">agora</div></div>
+    <div class="metric"><div class="lbl">Tempo médio</div><div class="val">${tmedio>=60?Math.floor(tmedio/60)+'h '+tmedio%60+'m':tmedio+'min'}</div><div class="sub">por quadro</div></div>
+    <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">relatados</div></div>
+    <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${retrabalhos?'bad':''}">${retrabalhos}</div><div class="sub">registrados</div></div>`;
+
+  // charts
+  const hoje_d=new Date();
+  const diasLabels=[],diasVals=[];
+  for(let i=13;i>=0;i--){const d=new Date(hoje_d);d.setDate(hoje_d.getDate()-i);const ds=d.toISOString().split('T')[0];diasLabels.push(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`);diasVals.push(apts.filter(a=>a.fim.startsWith(ds)).length);}
+  if(setor==='chapa') chartChapaD=mkChart('cTrendChapaD',diasLabels,diasVals,cor,chartChapaD,'line');
+  else chartEletricaD=mkChart('cTrendEletricaD',diasLabels,diasVals,cor,chartEletricaD,'line');
+
+  const semanas={};
+  for(let i=7;i>=0;i--){const d=new Date(hoje_d);d.setDate(hoje_d.getDate()-hoje_d.getDay()+1-(i*7));const ini=d.toISOString().split('T')[0];semanas[ini]=0;}
+  apts.forEach(a=>{const d=new Date(a.fim);const ini=new Date(d);ini.setDate(d.getDate()-d.getDay()+1);const k=ini.toISOString().split('T')[0];if(k in semanas)semanas[k]++;});
+  const semKeys=Object.keys(semanas).sort();
+  if(setor==='chapa') chartChapaS=mkChart('cTrendChapaS',semKeys.map(k=>semanaLabel(k)+' →'),semKeys.map(k=>semanas[k]),cor,chartChapaS,'bar');
+  else chartEletricaS=mkChart('cTrendEletricaS',semKeys.map(k=>semanaLabel(k)+' →'),semKeys.map(k=>semanas[k]),cor,chartEletricaS,'bar');
+
+  // por colaborador
+  const divColab=document.getElementById('dash-colab-'+setor);
+  if(divColab){
+    const colabs=S.colaboradores.filter(c=>c.setor===setor||c.setor==='geral');
+    if(!colabs.length){divColab.innerHTML='<p class="empty">Nenhum colaborador neste setor.</p>';return;}
+    divColab.innerHTML='<div style="overflow-x:auto;"><table><thead><tr><th>Colaborador</th><th>Finalizados</th><th>T. médio</th><th>Erros</th><th>Retrabalhos</th></tr></thead><tbody>'+
+    colabs.map(c=>{
+      const ca=apts.filter(a=>a.colabId===c.id);
+      const tm=ca.filter(a=>tempoLiquido(a)>0).map(a=>tempoLiquido(a));
+      const med=tm.length?Math.round(tm.reduce((s,v)=>s+v,0)/tm.length):0;
+      const err=ca.filter(a=>a.erros&&a.erros.length).length;
+      const ret=ca.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length;
+      return`<tr><td>${c.nome}</td><td>${ca.length}</td><td>${med>=60?Math.floor(med/60)+'h '+med%60+'m':med+'min'}</td><td>${err?`<span class="badge bbad">${err}</span>`:'—'}</td><td>${ret?`<span class="badge bbad">${ret}</span>`:'—'}</td></tr>`;
+    }).join('')+'</tbody></table></div>';
+  }
+}
+
+function renderDashMF(){
   const hoje=td(),mes=hoje.substring(0,7);
   const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
   const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
-  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
-  const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
-  const comErro=S.apontamentos.filter(a=>a.fim&&a.erros&&a.erros.length>0).length;
+  const emMF=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
+  const reprovados=S.apontamentos.filter(a=>a.mf&&a.mf.resultado==='reprovado').length;
 
-  const md=document.getElementById('m-dash');if(!md)return;
-  md.innerHTML=`
-    <div class="metric"><div class="lbl">Quadros hoje</div><div class="val">${aptH.length}</div><div class="sub">finalizados</div></div>
-    <div class="metric"><div class="lbl">Quadros no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%</div>
-      <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>
-    <div class="metric"><div class="lbl">Em andamento</div><div class="val warn">${emAnd}</div><div class="sub">agora</div></div>
-    <div class="metric"><div class="lbl">Pausados</div><div class="val" style="color:#3550B4;">${pausados}</div><div class="sub">em pausa</div></div>
-    <div class="metric"><div class="lbl">Com erros</div><div class="val ${comErro?'bad':''}">${comErro}</div><div class="sub">quadros relatados</div></div>
+  const md=document.getElementById('m-dash-mf');
+  if(md)md.innerHTML=`
+    <div class="metric"><div class="lbl">✅ Aprovados hoje</div><div class="val ok">${aptH.length}</div><div class="sub">quadros prontos</div></div>
+    <div class="metric"><div class="lbl">✅ Aprovados no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%<div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div></div>
+    <div class="metric"><div class="lbl">🔍 Aguardando MF</div><div class="val" style="color:#7c3aed;">${emMF}</div><div class="sub">na fila</div></div>
     <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>
-    <div class="metric"><div class="lbl">🔍 Mont. Final</div><div class="val" style="color:#7c3aed;">${S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length}</div><div class="sub">aguardando inspeção</div></div>
-    <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length>0?'bad':''}">${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length}</div><div class="sub">no mês</div></div>`;
+    <div class="metric"><div class="lbl">Reprovados</div><div class="val ${reprovados?'bad':''}">${reprovados}</div><div class="sub">total</div></div>
+    <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length?'bad':''}">${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length}</div><div class="sub">no mês</div></div>`;
 
-  // live page is separate now
   const dops=document.getElementById('dash-ops');
   const ab=S.ops.filter(o=>o.status==='aberta');
-  if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
-  else dops.innerHTML=ab.map(op=>{
-    const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
-    const p=Math.round((fin/op.qtd)*100);
-    const venc=op.prazo&&op.prazo<hoje;
-    const errosOp=S.apontamentos.filter(a=>a.opId===op.id&&a.erros&&a.erros.length>0).length;
-    const obsOp=S.apontamentos.filter(a=>a.opId===op.id&&a.observacoes&&a.observacoes.length>0).length;
-    return`<div style="margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
-        <span style="font-weight:700;">${op.num} <span style="font-weight:400;color:#888;">— ${op.modelo}</span></span>
-        <span style="display:flex;gap:6px;flex-wrap:wrap;">
-          ${venc?'<span class="badge bbad">Atrasada</span>':''}
-          ${errosOp?`<span class="badge bbad">⚠ ${errosOp} erro${errosOp>1?'s':''}</span>`:''}
-          ${emChapa?`<span class="badge" style="background:#fff3e0;color:#b45309;">🔧 ${emChapa} em Chapa</span>`:''}
-          ${emEletrica?`<span class="badge bwarn">⚡ ${emEletrica} em Elétrica</span>`:''}
-          ${emMF?`<span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 ${emMF} em MF</span>`:''}
-          ${concluidos?`<span class="badge bok">✓ ${concluidos} concluídos</span>`:''}
-          <span class="badge ${p===100?'bok':p>0?'bwarn':'bgray'}">${fin}/${op.qtd}</span>
-        </span>
-      </div>
-      <div class="pbar" style="height:6px;"><div class="pfill ${p===100?'':p>0?'warn':'bad'}" style="width:${p}%"></div></div>
-    </div>`;
-  }).join('');
-
+  if(dops){
+    if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
+    else dops.innerHTML=ab.map(op=>{
+      const aptsOp=S.apontamentos.filter(a=>a.opNum===op.num);
+      const emChapa=aptsOp.filter(a=>!a.fim&&!a.etapa).length;
+      const emEletrica=aptsOp.filter(a=>a.etapa==='eletrica'&&!a.fim).length;
+      const emMFop=aptsOp.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
+      const concluidos=aptsOp.filter(a=>a.etapa==='concluido').length;
+      const venc=op.prazo&&op.prazo<hoje;
+      return`<div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+          <span style="font-weight:700;">${op.num} <span style="font-weight:400;color:#888;">— ${op.modelo}</span></span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${venc?'<span class="badge bbad">Atrasada</span>':''}
+            ${emChapa?`<span class="badge" style="background:#fce7f3;color:#db2777;">🔧 ${emChapa} Chapa</span>`:''}
+            ${emEletrica?`<span class="badge bwarn">⚡ ${emEletrica} Elétrica</span>`:''}
+            ${emMFop?`<span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 ${emMFop} MF</span>`:''}
+            ${concluidos?`<span class="badge bok">✅ ${concluidos} prontos</span>`:''}
+          </span>
+        </div>
+        <div class="pbar" style="height:6px;"><div class="pfill" style="width:${op.qtd?Math.min(Math.round((concluidos/op.qtd)*100),100):0}%"></div></div>
+      </div>`;
+    }).join('');
+  }
   renderGraficos();
 }
 

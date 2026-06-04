@@ -623,12 +623,29 @@ Esta ação não pode ser desfeita.`);
 async function excluirApontamento(id){
   const apt=S.apontamentos.find(a=>a.id===id);
   if(!apt)return;
-  const conf=window.confirm('Excluir apontamento OP '+(apt.opNum||'—')+' ('+( apt.modeloLabel||'—')+')? Esta ação não pode ser desfeita.');
-  if(!conf)return;
-  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
-  await save();
-  renderApt();
-  toast('Apontamento excluído.');
+  // busca o botão pelo data-id e mostra confirmação inline
+  const btn=document.querySelector(`.btn-excluir-apt[data-id="${id}"]`);
+  if(!btn)return;
+  const td=btn.closest('td');
+  if(!td)return;
+  td.innerHTML=`
+    <div style="display:flex;gap:4px;align-items:center;">
+      <span style="font-size:11px;color:#A32D2D;white-space:nowrap;">Excluir?</span>
+      <button class="btn-sm btn-sim-exc" style="color:#A32D2D;border-color:#A32D2D;padding:2px 7px;font-size:11px;">Sim</button>
+      <button class="btn-sm btn-nao-exc" style="padding:2px 7px;font-size:11px;">Não</button>
+    </div>`;
+  td.querySelector('.btn-sim-exc').addEventListener('click',async function(){
+    S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+    await save();
+    renderApt();
+    toast('Apontamento excluído.');
+  });
+  td.querySelector('.btn-nao-exc').addEventListener('click',function(){
+    td.innerHTML=`<button class="btn-sm btn-excluir-apt" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" data-id="${id}">✕</button>`;
+    td.querySelector('.btn-excluir-apt').addEventListener('click',function(){
+      excluirApontamento(parseInt(this.getAttribute('data-id')));
+    });
+  });
 }
 
 function renderApt(){

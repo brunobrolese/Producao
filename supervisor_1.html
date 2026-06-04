@@ -782,6 +782,12 @@ function renderApt(){
       <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
+  // bind delete buttons via addEventListener
+  div.querySelectorAll('.btn-excluir-apt').forEach(btn=>{
+    btn.addEventListener('click',function(){
+      excluirApontamento(parseInt(this.getAttribute('data-id')));
+    });
+  });
 }
   if(id==='mes')renderMes();
 }
@@ -992,7 +998,7 @@ function renderAponTabela(op){
       <td style="font-size:12px;">${pausas||'—'}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
-      <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" onclick="excluirApontamento(${a.id})">✕</button></td>
+      <td><button class="btn-sm btn-excluir-apt" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" data-id="${a.id}">✕</button></td>
     </tr>`;
   }).join('');
 

@@ -611,23 +611,22 @@ function nav(id,btn){
 
 let _pendingExcluir=null;
 
-async function excluirApontamento(id){
-  // primeiro clique: mostra toast de confirmação
+window.excluirApontamento=async function(id){
+  id=parseInt(id);
+  if(isNaN(id)){toast('ID inválido');return;}
   if(_pendingExcluir===id){
-    // segundo clique: confirma exclusão
     _pendingExcluir=null;
     S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
-    await save();renderApt();
-    toast('✓ Apontamento excluído.');
+    await save();
+    load().then(()=>{renderApt();toast('✓ Apontamento excluído.');});
     return;
   }
   _pendingExcluir=id;
   const apt=S.apontamentos.find(a=>a.id===id);
-  const label=apt?'OP '+(apt.opNum||'—'):'apontamento';
-  toast('Clique ✕ novamente para confirmar exclusão de '+label);
-  // cancela se não confirmar em 4 segundos
-  setTimeout(()=>{if(_pendingExcluir===id)_pendingExcluir=null;},4000);
-}
+  const label=apt?'OP '+(apt.opNum||apt.modeloLabel||'—'):'apontamento #'+id;
+  toast('⚠ Clique ✕ novamente para excluir '+label);
+  setTimeout(()=>{if(_pendingExcluir===id){_pendingExcluir=null;}},5000);
+};
 
 function renderApt(){
 

@@ -607,18 +607,7 @@ function nav(id,btn){
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
 
 /* ── APONTAMENTOS LIVRES ── */
-async function excluirApontamento(id){
-  const apt=S.apontamentos.find(a=>a.id===id);
-  if(!apt)return;
-  const conf=window.confirm(`Excluir apontamento OP ${apt.opNum||'—'} (${apt.modeloLabel||'—'})?
 
-Esta ação não pode ser desfeita.`);
-  if(!conf)return;
-  S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
-  await save();
-  renderApt();
-  toast('Apontamento excluído.');
-}
 
 async function excluirApontamento(id){
   const btn=document.querySelector('.btn-excluir-apt[data-id="'+id+'"]');
@@ -639,19 +628,7 @@ async function confirmarExcluir(id){
 }
 
 function renderApt(){
-  // event delegation: um listener no container captura todos os cliques
-  const aptLista=document.getElementById('apt-lista');
-  if(aptLista&&!aptLista._delegated){
-    aptLista._delegated=true;
-    aptLista.addEventListener('click',function(e){
-      const btn=e.target.closest('.btn-excluir-apt');
-      if(btn){excluirApontamento(parseInt(btn.getAttribute('data-id')));}
-      const sim=e.target.closest('.btn-sim-exc');
-      if(sim){sim.dispatchEvent(new Event('_confirmar'));}
-      const nao=e.target.closest('.btn-nao-exc');
-      if(nao){nao.dispatchEvent(new Event('_cancelar'));}
-    });
-  }
+
   if(!S.modelos)S.modelos=[];
 
   // ── HISTÓRICO DE DESEMPENHO ──
@@ -1012,7 +989,7 @@ function renderAponTabela(op){
       <td style="font-size:12px;">${pausas||'—'}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
-      <td><button class="btn-sm btn-excluir-apt" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" data-id="${a.id}">✕</button></td>
+      <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;padding:3px 8px;" onclick="excluirApontamento(${a.id})">✕</button></td>
     </tr>`;
   }).join('');
 

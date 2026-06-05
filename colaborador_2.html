@@ -972,7 +972,6 @@ async function confirmarFin(aptId){
   apt.erros=_semErro?[]:_errosSel;
   apt.obsErro=_semErro?'':obsErro;
 
-  apt.finalizadoNoPrazo=!atrasado;
   // salva retrabalho se ativo
   const retrab=_retrabAtivo[aptId];
   if(retrab&&retrab.ativo&&retrab.setores.length>0){

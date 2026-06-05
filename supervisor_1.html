@@ -409,6 +409,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 <script>
 const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
 let _dadosCarregados=false;
+let _idsExcluidos=new Set(); // IDs deletados — o merge não deve re-adicioná-los
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
 
@@ -452,7 +453,15 @@ async function load(){
     const r=await fetch(DB_URL+'.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
-    if(d){S=d;['colaboradores','ops','apontamentos'].forEach(k=>{if(!S[k])S[k]=[];});if(!S.nid)S.nid=1;}
+    if(d){
+      S=d;
+      // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
+      ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
+        if(!S[k]){S[k]=[];}
+        else if(!Array.isArray(S[k])){S[k]=Object.values(S[k]).filter(x=>x!=null);}
+      });
+      if(!S.nid)S.nid=1;
+    }
     setSync(true);_dadosCarregados=true;return true;
   }catch(e){setSync(false);return false;}
 }
@@ -467,19 +476,35 @@ async function save(){
     let servidor=null;
     if(r.ok){try{servidor=await r.json();}catch(e){}}
 
-    // Mescla apontamentos: une servidor + local
-    if(servidor&&servidor.apontamentos&&Array.isArray(servidor.apontamentos)){
+    // Mescla apontamentos: une servidor + local (aceita array OU objeto do Firebase)
+    if(servidor&&servidor.apontamentos){
+      let aptsServidor=servidor.apontamentos;
+      if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
-      S.apontamentos.forEach(a=>localMap[a.id]=a);
-      // mantém apontamentos do servidor que não estão no local
-      servidor.apontamentos.forEach(a=>{
-        if(!localMap[a.id]) localMap[a.id]=a;
+      S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
+      // mantém apontamentos do servidor que não estão no local (exceto os excluídos)
+      aptsServidor.forEach(a=>{
+        if(a&&a.id!=null&&!localMap[a.id]&&!_idsExcluidos.has(a.id)) localMap[a.id]=a;
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
     }
     // garante nid maior que o servidor
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
 
+    // PROTEÇÃO 3: trava de segurança contra perda de dados
+    // Se o servidor tem apontamentos e o local ficaria com menos da metade
+    // (e não foi exclusão intencional), aborta para não apagar dados
+    if(servidor&&servidor.apontamentos){
+      let nServidor=Array.isArray(servidor.apontamentos)?servidor.apontamentos.length:Object.keys(servidor.apontamentos).length;
+      const nLocal=S.apontamentos.length;
+      const exclusoesIntencionais=_idsExcluidos.size;
+      if(nServidor>5&&nLocal<(nServidor-exclusoesIntencionais)*0.5){
+        console.error('SAVE ABORTADO: tentativa de salvar '+nLocal+' apontamentos quando servidor tem '+nServidor+'. Recarregando dados.');
+        setSync(false);
+        await load();
+        return;
+      }
+    }
     await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
@@ -556,8 +581,23 @@ async function importarBackup(event){
       document.getElementById('backupMsg').innerHTML='<span style="color:#A32D2D;">Arquivo inválido — não é um backup do sistema.</span>';
       return;
     }
-    const conf=window.confirm('Isso vai substituir TODOS os dados atuais pelo backup. Tem certeza?');
-    if(!conf)return;
+    // confirmação inline em vez de window.confirm (pode ser bloqueado)
+    const confirmed=await new Promise(resolve=>{
+      const d=document.createElement('div');
+      d.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center;';
+      d.innerHTML=`<div style="background:#fff;border-radius:16px;padding:24px;max-width:360px;width:90%;text-align:center;">
+        <div style="font-size:16px;font-weight:700;margin-bottom:8px;">⚠️ Confirmar restauração</div>
+        <div style="font-size:13px;color:#555;margin-bottom:20px;">Isso vai substituir TODOS os dados atuais pelo backup. Não pode ser desfeito.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button id="_bkSim" style="padding:10px;border-radius:8px;background:#A32D2D;color:#fff;border:none;cursor:pointer;font-weight:600;">Sim, restaurar</button>
+          <button id="_bkNao" style="padding:10px;border-radius:8px;background:#fff;border:1px solid #ddd;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>`;
+      document.body.appendChild(d);
+      d.querySelector('#_bkSim').onclick=()=>{document.body.removeChild(d);resolve(true);};
+      d.querySelector('#_bkNao').onclick=()=>{document.body.removeChild(d);resolve(false);};
+    });
+    if(!confirmed)return;
     S=dados;
     _dadosCarregados=true;
     await save();
@@ -616,9 +656,11 @@ window.excluirApontamento=async function(id){
   if(isNaN(id)){toast('ID inválido');return;}
   if(_pendingExcluir===id){
     _pendingExcluir=null;
+    _idsExcluidos.add(id); // marca como excluído para o merge ignorar
     S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
     await save();
-    load().then(()=>{renderApt();toast('✓ Apontamento excluído.');});
+    renderApt();
+    toast('✓ Apontamento excluído.');
     return;
   }
   _pendingExcluir=id;
@@ -1117,7 +1159,7 @@ function renderLive(){
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
   const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final');
-  const mfPendentes=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const mfPendentes=S.apontamentos.filter(a=>(a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado))||a.etapa==='retrabalho_mf');
 
   // group by setor/etapa
   const grupos={
@@ -1185,10 +1227,6 @@ function renderLive(){
   renderColuna(grupos.chapa,'dash-live-chapa','chapa');
   renderColuna(grupos.eletrica,'dash-live-eletrica','eletrica');
   renderColuna(grupos.mf,'dash-live-mf','mf');
-
-  // update liveCount for old reference (now unused but kept for safety)
-  const lc=document.getElementById('liveCount');
-  if(lc)lc.textContent='';
 }
 
 /* ── DASHBOARD ── */
@@ -1244,7 +1282,7 @@ function renderDashSetor(setor){
   // charts
   const hoje_d=new Date();
   const diasLabels=[],diasVals=[];
-  for(let i=13;i>=0;i--){const d=new Date(hoje_d);d.setDate(hoje_d.getDate()-i);const ds=d.toISOString().split('T')[0];diasLabels.push(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`);diasVals.push(apts.filter(a=>a.fim.startsWith(ds)).length);}
+  for(let i=13;i>=0;i--){const d=new Date(hoje_d);d.setDate(hoje_d.getDate()-i);const ds=d.toISOString().split('T')[0];diasLabels.push(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`);diasVals.push(apts.filter(a=>dataConclusao(a).startsWith(ds)).length);}
   if(setor==='chapa') chartChapaD=mkChart('cTrendChapaD',diasLabels,diasVals,cor,chartChapaD,'line');
   else chartEletricaD=mkChart('cTrendEletricaD',diasLabels,diasVals,cor,chartEletricaD,'line');
 
@@ -1330,10 +1368,25 @@ function semanaLabel(dateStr){
 
 function mkChart(canvasId,labels,data,color,existingChart,tipo){
   const canvas=document.getElementById(canvasId);if(!canvas)return null;
-  if(existingChart)existingChart.destroy();
+  if(existingChart){try{existingChart.destroy();}catch(e){}}
+  // mostra/esconde mensagem de vazio SEM destruir o canvas
+  const parent=canvas.parentElement;
+  let emptyMsg=parent.querySelector('.chart-empty-msg');
   if(!data.length||data.every(v=>v===0)){
-    canvas.parentElement.innerHTML='<p class="empty" style="padding:10px 0;">Nenhum apontamento ainda.</p>';return null;
+    canvas.style.display='none';
+    if(!emptyMsg){
+      emptyMsg=document.createElement('p');
+      emptyMsg.className='chart-empty-msg empty';
+      emptyMsg.style.cssText='padding:10px 0;';
+      emptyMsg.textContent='Nenhum apontamento ainda.';
+      parent.appendChild(emptyMsg);
+    }
+    emptyMsg.style.display='block';
+    return null;
   }
+  // tem dados: garante canvas visível e remove mensagem
+  canvas.style.display='block';
+  if(emptyMsg)emptyMsg.style.display='none';
   return new Chart(canvas,{
     type:tipo||'bar',
     data:{labels,datasets:[{label:'Quadros',data,
@@ -1346,9 +1399,14 @@ function mkChart(canvasId,labels,data,color,existingChart,tipo){
   });
 }
 
+function dataConclusao(a){
+  // data em que o quadro foi aprovado na MF (o "gol"); fallback para fim
+  return (a.mf&&a.mf.fim)?a.mf.fim:(a.fim||'');
+}
+
 function renderGraficos(){
   // conta apenas quadros que saíram aprovados da Montagem Final
-  const apts=S.apontamentos.filter(a=>a.etapa==='concluido');
+  const apts=S.apontamentos.filter(a=>a.etapa==='concluido'&&dataConclusao(a));
 
   // ── DIÁRIO — últimos 14 dias ──
   const hoje=new Date();
@@ -1357,7 +1415,7 @@ function renderGraficos(){
     const d=new Date(hoje);d.setDate(hoje.getDate()-i);
     const ds=d.toISOString().split('T')[0];
     diasLabels.push(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`);
-    diasVals.push(apts.filter(a=>a.fim.startsWith(ds)).length);
+    diasVals.push(apts.filter(a=>dataConclusao(a).startsWith(ds)).length);
   }
   chartDia=mkChart('cTrendDia',diasLabels,diasVals,'#1D9E75',chartDia,'line');
 
@@ -1370,7 +1428,7 @@ function renderGraficos(){
     semanas[ini]=0;
   }
   apts.forEach(a=>{
-    const d=new Date(a.fim+'');
+    const d=new Date(dataConclusao(a)+'');
     const ini=new Date(d);ini.setDate(d.getDate()-d.getDay()+1);
     const k=ini.toISOString().split('T')[0];
     if(k in semanas)semanas[k]++;
@@ -1388,7 +1446,7 @@ function renderGraficos(){
     meses[k]=0;
   }
   apts.forEach(a=>{
-    const k=a.fim.substring(0,7);
+    const k=dataConclusao(a).substring(0,7);
     if(k in meses)meses[k]++;
   });
   const mesKeys=Object.keys(meses).sort();
@@ -1603,7 +1661,8 @@ async function init(){
   else{
     // tenta reconectar em vez de mostrar setup
     setTimeout(()=>init(),3000);
-    document.getElementById('syncTxt').textContent='reconectando...';
+    const dotEl=document.getElementById('dot');
+    if(dotEl)dotEl.style.background='#BA7517';
   }
 }
 

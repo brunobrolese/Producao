@@ -232,7 +232,8 @@ textarea{resize:vertical;}
 <div class="toast" id="toast"></div>
 <script>
 const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
-let _dadosCarregados=false; // proteção: só salva após carregar do Firebase
+let _dadosCarregados=false;
+let _idsExcluidos=new Set(); // proteção: só salva após carregar do Firebase
 let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
 let _semErro=false,_errosSel=[],_obsErro='';
@@ -280,7 +281,11 @@ async function load(){
     const d=await r.json();
     if(d){
       S=d;
-      ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{if(!S[k])S[k]=[];});
+      // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
+      ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
+        if(!S[k]){S[k]=[];}
+        else if(!Array.isArray(S[k])){S[k]=Object.values(S[k]).filter(x=>x!=null);}
+      });
       if(!S.nid)S.nid=1;
     }
     setSync(true);
@@ -316,13 +321,15 @@ async function save(){
       try{servidor=await r.json();}catch(e){}
     }
 
-    // 2. Mescla apontamentos: une servidor + local, sem perder nenhum
-    if(servidor&&servidor.apontamentos&&Array.isArray(servidor.apontamentos)){
+    // 2. Mescla apontamentos: une servidor + local (aceita array OU objeto do Firebase)
+    if(servidor&&servidor.apontamentos){
+      let aptsServidor=servidor.apontamentos;
+      if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
-      S.apontamentos.forEach(a=>localMap[a.id]=a);
-      // adiciona apontamentos do servidor que nao estao no local (de outros colaboradores)
-      servidor.apontamentos.forEach(a=>{
-        if(!localMap[a.id]) localMap[a.id]=a;
+      S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
+      // adiciona apontamentos do servidor que nao estao no local (exceto excluídos)
+      aptsServidor.forEach(a=>{
+        if(a&&a.id!=null&&!localMap[a.id]&&!_idsExcluidos.has(a.id)) localMap[a.id]=a;
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
     }
@@ -331,6 +338,20 @@ async function save(){
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
 
     // 4. Salva o estado mesclado
+    // PROTEÇÃO 3: trava de segurança contra perda de dados
+    // Se o servidor tem apontamentos e o local ficaria com menos da metade
+    // (e não foi exclusão intencional), aborta para não apagar dados
+    if(servidor&&servidor.apontamentos){
+      let nServidor=Array.isArray(servidor.apontamentos)?servidor.apontamentos.length:Object.keys(servidor.apontamentos).length;
+      const nLocal=S.apontamentos.length;
+      const exclusoesIntencionais=_idsExcluidos.size;
+      if(nServidor>5&&nLocal<(nServidor-exclusoesIntencionais)*0.5){
+        console.error('SAVE ABORTADO: tentativa de salvar '+nLocal+' apontamentos quando servidor tem '+nServidor+'. Recarregando dados.');
+        setSync(false);
+        await load();
+        return;
+      }
+    }
     await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
   }catch(e){setSync(false);}
@@ -506,6 +527,7 @@ async function confirmarIniciar(){
 
 /* ── RENDER ── */
 function renderAll(){
+  if(!colab)return;
   renderOps();
   aplicarTemaColab();
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
@@ -526,10 +548,44 @@ function renderFilaEletrica(){
   const setor=getColabSetor();
   if(!divFila)return;
   if(setor!=='eletrica'&&setor!=='geral'){divFila.innerHTML='';return;}
+  divFila.innerHTML='';
+
+  // ── QUADROS REPROVADOS NA MF (precisam retrabalho) ──
+  const reprovados=S.apontamentos.filter(a=>a.etapa==='retrabalho_mf');
+  if(reprovados.length){
+    const tit=document.createElement('div');
+    tit.className='sec-title';
+    tit.style.cssText='color:#A32D2D;border-bottom-color:#A32D2D;margin-top:10px;';
+    tit.textContent='⚠ Reprovados na Montagem Final ('+reprovados.length+')';
+    divFila.appendChild(tit);
+    reprovados.forEach(a=>{
+      const m=S.modelos.find(x=>x.id===a.modeloId);
+      const card=document.createElement('div');
+      card.className='qcard';
+      card.style.cssText='border-color:#A32D2D;background:#fff8f8;';
+      const header=document.createElement('div');
+      header.className='qh';
+      header.innerHTML=`<div>
+        <div style="font-size:14px;font-weight:700;">OP ${a.opNum||'—'}</div>
+        <div style="font-size:12px;color:#888;">${m?m.codigo:a.modeloLabel||'—'}</div>
+        <div style="font-size:12px;color:#A32D2D;margin-top:4px;">Motivo: ${a.mf&&a.mf.obs?a.mf.obs:'(sem observação)'}</div>
+      </div>
+      <span class="badge bbad">✗ Reprovado</span>`;
+      const btn=document.createElement('button');
+      btn.className='btn-start';
+      btn.style.background='#A32D2D';
+      btn.style.marginTop='10px';
+      btn.textContent='🔧 Refazer e reenviar para MF';
+      btn.addEventListener('click',function(){refazerQuadro(a.id);});
+      card.appendChild(header);
+      card.appendChild(btn);
+      divFila.appendChild(card);
+    });
+  }
+
   const chapaConcluidos=S.apontamentos.filter(a=>a.etapa==='eletrica');
   const jaIniciados=new Set(S.apontamentos.filter(a=>a.setor==='eletrica').map(a=>a.opNum+'_'+a.modeloId));
   const disponiveis=chapaConcluidos.filter(a=>!jaIniciados.has(a.opNum+'_'+a.modeloId));
-  divFila.innerHTML='';
   if(!disponiveis.length)return;
   const titulo=document.createElement('div');
   titulo.className='sec-title';
@@ -562,6 +618,16 @@ function renderFilaEletrica(){
   });
 }
 
+async function refazerQuadro(aptId){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  // reabre o quadro reprovado para retrabalho: volta a montagem final ao concluir
+  apt.etapa='montagem_final';
+  apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString(),retrabalho:true};
+  await save();renderAll();renderMF();
+  toast('🔧 Quadro reaberto — reenviado para nova inspeção');
+}
+
 async function iniciarEletrica(opNum,modeloId,modeloLabel){
   if(S.apontamentos.find(a=>a.opNum===opNum&&a.modeloId===modeloId&&a.setor==='eletrica'&&!a.fim)){
     toast('Você já iniciou a montagem elétrica deste quadro.');return;
@@ -575,6 +641,7 @@ async function iniciarEletrica(opNum,modeloId,modeloLabel){
 }
 
 function renderOps(){
+  if(!colab)return; // guard: não renderiza sem colaborador selecionado
   const div=document.getElementById('opsDiv');
   const setor=getColabSetor();
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');

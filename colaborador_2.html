@@ -550,39 +550,6 @@ function renderFilaEletrica(){
   if(setor!=='eletrica'&&setor!=='geral'){divFila.innerHTML='';return;}
   divFila.innerHTML='';
 
-  // ── QUADROS REPROVADOS NA MF (precisam retrabalho) ──
-  const reprovados=S.apontamentos.filter(a=>a.etapa==='retrabalho_mf');
-  if(reprovados.length){
-    const tit=document.createElement('div');
-    tit.className='sec-title';
-    tit.style.cssText='color:#A32D2D;border-bottom-color:#A32D2D;margin-top:10px;';
-    tit.textContent='⚠ Reprovados na Montagem Final ('+reprovados.length+')';
-    divFila.appendChild(tit);
-    reprovados.forEach(a=>{
-      const m=S.modelos.find(x=>x.id===a.modeloId);
-      const card=document.createElement('div');
-      card.className='qcard';
-      card.style.cssText='border-color:#A32D2D;background:#fff8f8;';
-      const header=document.createElement('div');
-      header.className='qh';
-      header.innerHTML=`<div>
-        <div style="font-size:14px;font-weight:700;">OP ${a.opNum||'—'}</div>
-        <div style="font-size:12px;color:#888;">${m?m.codigo:a.modeloLabel||'—'}</div>
-        <div style="font-size:12px;color:#A32D2D;margin-top:4px;">Motivo: ${a.mf&&a.mf.obs?a.mf.obs:'(sem observação)'}</div>
-      </div>
-      <span class="badge bbad">✗ Reprovado</span>`;
-      const btn=document.createElement('button');
-      btn.className='btn-start';
-      btn.style.background='#A32D2D';
-      btn.style.marginTop='10px';
-      btn.textContent='🔧 Refazer e reenviar para MF';
-      btn.addEventListener('click',function(){refazerQuadro(a.id);});
-      card.appendChild(header);
-      card.appendChild(btn);
-      divFila.appendChild(card);
-    });
-  }
-
   const chapaConcluidos=S.apontamentos.filter(a=>a.etapa==='eletrica');
   const jaIniciados=new Set(S.apontamentos.filter(a=>a.setor==='eletrica').map(a=>a.opNum+'_'+a.modeloId));
   const disponiveis=chapaConcluidos.filter(a=>!jaIniciados.has(a.opNum+'_'+a.modeloId));
@@ -616,16 +583,6 @@ function renderFilaEletrica(){
     card.appendChild(btn);
     divFila.appendChild(card);
   });
-}
-
-async function refazerQuadro(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
-  if(!apt)return;
-  // reabre o quadro reprovado para retrabalho: volta a montagem final ao concluir
-  apt.etapa='montagem_final';
-  apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString(),retrabalho:true};
-  await save();renderAll();renderMF();
-  toast('🔧 Quadro reaberto — reenviado para nova inspeção');
 }
 
 async function iniciarEletrica(opNum,modeloId,modeloLabel){
@@ -1144,7 +1101,8 @@ async function finalizarMF(aptId, resultado){
   apt.mf.obs=est.obs;
   apt.mf.resultado=resultado;
   apt.mf.fim=new Date().toISOString();
-  apt.etapa=resultado==='aprovado'?'concluido':'retrabalho_mf';
+  // tanto aprovado quanto reprovado FINALIZAM o quadro (retrabalho é feito na própria MF antes da decisão)
+  apt.etapa='concluido';
   await save();renderAll();renderMF();
   toast(resultado==='aprovado'?'✓ Quadro aprovado na inspeção!':'⚠ Quadro reprovado — registrado para retrabalho');
 }

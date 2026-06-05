@@ -1171,7 +1171,7 @@ function renderLive(){
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
   const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final');
-  const mfPendentes=S.apontamentos.filter(a=>(a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado))||a.etapa==='retrabalho_mf');
+  const mfPendentes=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
 
   // group by setor/etapa
   const grupos={
@@ -1347,8 +1347,8 @@ function renderDashMF(){
   const hoje=td(),mes=hoje.substring(0,7);
   const temFiltro=_filtroData.de||_filtroData.ate;
   // se há filtro de data: conta o período; senão: hoje e mês
-  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(hoje)));
-  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(mes)));
+  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(hoje)));
+  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(mes)));
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
@@ -1442,7 +1442,7 @@ function dataConclusao(a){
 function renderGraficos(){
   // conta apenas quadros aprovados na MF, respeitando o filtro de data
   const temFiltro=_filtroData.de||_filtroData.ate;
-  let apts=S.apontamentos.filter(a=>a.etapa==='concluido'&&dataConclusao(a));
+  let apts=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&dataConclusao(a));
   if(temFiltro)apts=apts.filter(a=>dentroFiltro(dataConclusao(a)));
 
   const hoje=new Date();

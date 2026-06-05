@@ -679,7 +679,11 @@ function renderOps(){
     finHoje.forEach(a=>{
       const temErro=a.erros&&a.erros.length>0;
       const liq=tempoLiquido(a);
-      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span>${liq}min</span></div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
+      const mFin=S.modelos.find(x=>x.id===a.modeloId);
+      const temPrev=mFin&&mFin.tempoPrevisto;
+      const acima=temPrev&&liq>mFin.tempoPrevisto;
+      const corTempo=!temPrev?'#1a1a1a':acima?'#A32D2D':'#1D9E75';
+      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span style="color:${corTempo};font-weight:700;">${liq}min</span>${temPrev?` <span style="font-size:10px;color:#999;">/ ${mFin.tempoPrevisto}min</span>`:''}</div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
     });
   }
   div.innerHTML=html;
@@ -970,10 +974,12 @@ function renderFinPanel(aptId){
   const _apt=S.apontamentos.find(a=>a.id===aptId);
   const _m=_apt?S.modelos.find(x=>x.id===_apt.modeloId):null;
   const _liq=_apt?tempoLiquido(_apt):0;
-  const _atrasado=_m&&_m.tempoPrevisto&&_liq>_m.tempoPrevisto;
-  const _atraso=_atrasado?_liq-_m.tempoPrevisto:0;
+  const _temPrev=_m&&_m.tempoPrevisto;
+  const _acima=_temPrev&&_liq>_m.tempoPrevisto;
+  const _corT=!_temPrev?'#1a1a1a':_acima?'#A32D2D':'#1D9E75';
+  const _bgT=!_temPrev?'#f5f5f5':_acima?'#FCEBEB':'#EAF3DE';
   c.innerHTML=`<div class="fin-panel">
-    ${_atrasado?`<div style="background:#FCEBEB;border-radius:9px;padding:10px 14px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:#A32D2D;">⚠ Quadro finalizado com atraso</div><div style="font-size:12px;color:#A32D2D;margin-top:3px;">Previsto: ${_m.tempoPrevisto}min · Realizado: ${_liq}min · Excedeu: +${_atraso}min</div></div>`:''}
+    ${_temPrev?`<div style="background:${_bgT};border-radius:9px;padding:10px 14px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:${_corT};">⏱ Tempo: ${_liq}min</div><div style="font-size:12px;color:${_corT};margin-top:3px;">Previsto: ${_m.tempoPrevisto}min ${_acima?'· Excedeu em '+(_liq-_m.tempoPrevisto)+'min':'· Dentro do previsto'}</div></div>`:''}
     <h4>Como foi a montagem?</h4>
     <div class="radio-group">
       <div class="radio-opt ${_semErro?'sel':''}" onclick="selSemErro(${aptId})"><div><div class="radio-label">✓ Nenhum erro</div><div class="radio-sub">Montagem concluída corretamente</div></div></div>
@@ -985,7 +991,6 @@ function renderFinPanel(aptId){
       <label>Descreva (opcional)</label>
       <textarea id="obsErroFin-${aptId}" rows="2" placeholder="Ex: disjuntor com defeito...">${_obsErro}</textarea>
     </div>`:''}
-    ${_atrasado?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;"><label style="font-weight:700;color:#A32D2D;font-size:13px;">⚠ Motivo do atraso (obrigatório)</label><textarea id="motivoAtraso-${aptId}" rows="3" placeholder="Explique o motivo do atraso na montagem..." style="margin-top:6px;"></textarea></div>`:''}
     <button class="btn-confirmar-fin" onclick="confirmarFin(${aptId})">Confirmar finalização</button>
     <button class="btn-cancel-fin" onclick="cancelarFin(${aptId})">Cancelar</button>
   </div>`;
@@ -1005,19 +1010,11 @@ async function confirmarFin(aptId){
   const obsErro=el?el.value.trim():'';
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
 
-  // verifica atraso e motivo obrigatorio
-  const m=S.modelos.find(x=>x.id===apt.modeloId);
-  const liq=tempoLiquido(apt);
-  const atrasado=m&&m.tempoPrevisto&&liq>m.tempoPrevisto;
-  const motivoEl=document.getElementById(`motivoAtraso-${aptId}`);
-  const motivo=motivoEl?motivoEl.value.trim():'';
-  if(atrasado&&!motivo){toast('Informe o motivo do atraso antes de finalizar.');return;}
-
   if(estaPausado(apt)){const u=(apt.pausas||[]).slice(-1)[0];if(u&&!u.fim)u.fim=new Date().toISOString();}
   apt.fim=new Date().toISOString();
   apt.erros=_semErro?[]:_errosSel;
   apt.obsErro=_semErro?'':obsErro;
-  apt.motivoAtraso=atrasado?motivo:'';
+
   apt.finalizadoNoPrazo=!atrasado;
   // salva retrabalho se ativo
   const retrab=_retrabAtivo[aptId];

@@ -79,6 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v17</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -413,6 +414,10 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 <script>
 const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
 let _dadosCarregados=false;
+// Gera ID único que nunca colide entre colaboradores/abas (timestamp + aleatório)
+function uid(){
+  return Date.now()*1000 + Math.floor(Math.random()*1000);
+}
 let _idsExcluidos=new Set(); // IDs deletados — o merge não deve re-adicioná-los
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
@@ -536,9 +541,15 @@ async function save(){
       if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
       S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
-      // mantém apontamentos do servidor que não estão no local (exceto os excluídos)
+      // une servidor + local; em CONFLITO mantém a versão MAIS RECENTE (_ts maior)
       aptsServidor.forEach(a=>{
-        if(a&&a.id!=null&&!localMap[a.id]&&!_idsExcluidos.has(a.id)) localMap[a.id]=a;
+        if(!a||a.id==null||_idsExcluidos.has(a.id))return;
+        const local=localMap[a.id];
+        if(!local){localMap[a.id]=a;}
+        else{
+          const tsLocal=local._ts||0, tsServidor=a._ts||0;
+          if(tsServidor>tsLocal) localMap[a.id]=a;
+        }
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
     }
@@ -600,11 +611,25 @@ async function executarReset(){
   exportarBackup(false);
   // 2. Aguarda um momento para o download iniciar
   await new Promise(r=>setTimeout(r,800));
-  // 3. Apaga apenas os apontamentos
+  // 3. Marca TODOS os apontamentos atuais (local + servidor) como excluídos
+  //    para que o merge do save() não os re-adicione
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(r.ok){
+      const d=await r.json();
+      if(d&&d.apontamentos){
+        let apts=d.apontamentos;
+        if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
+        apts.forEach(a=>{if(a&&a.id!=null)_idsExcluidos.add(a.id);});
+      }
+    }
+  }catch(e){}
+  S.apontamentos.forEach(a=>{if(a&&a.id!=null)_idsExcluidos.add(a.id);});
+  // 4. Apaga apenas os apontamentos
   S.apontamentos=[];
-  S.nid=S.nid; // mantém o nid para evitar colisão de IDs futuros
+  // mantém o nid para evitar colisão de IDs futuros
   await save();
-  // 4. Reseta a UI
+  // 5. Reseta a UI
   cancelarReset();
   const msg=document.getElementById('resetMsg');
   if(msg)msg.innerHTML='<span style="color:#1D9E75;">✓ Reset concluído! Backup exportado automaticamente.</span>';
@@ -652,6 +677,12 @@ async function importarBackup(event){
       d.querySelector('#_bkNao').onclick=()=>{document.body.removeChild(d);resolve(false);};
     });
     if(!confirmed)return;
+    // dá timestamp novo aos apontamentos do backup para que prevaleçam em conflitos
+    // (sem apagar dados mais novos que só existam no servidor — proteção contra perda)
+    if(Array.isArray(dados.apontamentos)){
+      const agora=Date.now();
+      dados.apontamentos.forEach(a=>{if(a)a._ts=agora;});
+    }
     S=dados;
     _dadosCarregados=true;
     await save();
@@ -697,6 +728,8 @@ function nav(id,btn){
   if(id==='cfg')renderThemeGrid();
   if(id==='mod'){load().then(renderModelos);}
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
+  if(id==='mes')renderMes();
+}
 
 /* ── APONTAMENTOS LIVRES ── */
 
@@ -835,8 +868,6 @@ function renderApt(){
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
-  if(id==='mes')renderMes();
-}
 
 /* ── MODELOS ── */
 async function addModelo(){
@@ -846,7 +877,7 @@ async function addModelo(){
   if(!cod){msg('modMsg','Informe o código do modelo.','bad');return;}
   if(!S.modelos)S.modelos=[];
   if(S.modelos.find(m=>m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
-  S.modelos.push({id:S.nid++,codigo:cod,descricao:desc,tempoPrevisto:tempo});
+  S.modelos.push({id:uid(),codigo:cod,descricao:desc,tempoPrevisto:tempo});
   document.getElementById('modCod').value='';
   document.getElementById('modDesc').value='';
   document.getElementById('modTempo').value='';
@@ -958,7 +989,7 @@ async function addOP(){
   const obs=document.getElementById('opObs').value.trim();
   if(!num||!modelo){msg('opMsg','Preencha número e modelo.','bad');return;}
   if(S.ops.find(o=>o.num===num)){msg('opMsg','OP já cadastrada.','bad');return;}
-  S.ops.push({id:S.nid++,num,modelo,qtd,prazo,obs,status:'aberta'});
+  S.ops.push({id:uid(),num,modelo,qtd,prazo,obs,status:'aberta'});
   ['opNum','opModelo','opObs','opPrazo'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('opQtd').value='';
   await save();msg('opMsg','OP cadastrada!','ok');renderOPs();
@@ -1138,7 +1169,7 @@ async function addColab(){
   const funcao=document.getElementById('cFuncao').value;
   const setor=document.getElementById('cSetor').value;
   if(!nome)return;
-  S.colaboradores.push({id:S.nid++,nome,funcao,setor:setor||'eletrica'});
+  S.colaboradores.push({id:uid(),nome,funcao,setor:setor||'eletrica'});
   document.getElementById('cNome').value='';
   await save();renderColabs();popularSeletorMF();toast('Colaborador adicionado!');
 }

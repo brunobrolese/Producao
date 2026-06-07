@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v15</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v17</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -234,6 +234,10 @@ textarea{resize:vertical;}
 <script>
 const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
 let _dadosCarregados=false;
+// Gera ID único que nunca colide entre colaboradores/abas (timestamp + aleatório)
+function uid(){
+  return Date.now()*1000 + Math.floor(Math.random()*1000);
+}
 let _idsExcluidos=new Set(); // proteção: só salva após carregar do Firebase
 let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
@@ -328,9 +332,16 @@ async function save(){
       if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
       S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
-      // adiciona apontamentos do servidor que nao estao no local (exceto excluídos)
+      // une servidor + local; em CONFLITO de id, mantém a versão MAIS RECENTE (_ts maior)
+      // isso evita que uma aba antiga reverta dados atualizados por outra pessoa
       aptsServidor.forEach(a=>{
-        if(a&&a.id!=null&&!localMap[a.id]&&!_idsExcluidos.has(a.id)) localMap[a.id]=a;
+        if(!a||a.id==null||_idsExcluidos.has(a.id))return;
+        const local=localMap[a.id];
+        if(!local){localMap[a.id]=a;}
+        else{
+          const tsLocal=local._ts||0, tsServidor=a._ts||0;
+          if(tsServidor>tsLocal) localMap[a.id]=a; // servidor mais novo vence
+        }
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
     }
@@ -498,17 +509,30 @@ async function confirmarIniciar(){
   const opNum=document.getElementById('addOpNum').value.trim();
   const modeloId=document.getElementById('addModelo').value;
   const hora=document.getElementById('addHora').value;
+
+  // VALIDAÇÕES: impedem cadastro de painéis incompletos/inválidos
+  if(!opNum){toast('Informe o número da OP.');return;}
+  if(!modeloId){toast('Selecione o modelo do quadro.');return;}
   const modelo=S.modelos.find(m=>m.id==modeloId);
+  if(!modelo){toast('Modelo inválido. Selecione novamente.');return;}
+
   const hoje=new Date().toISOString().split('T')[0];
-  const inicioISO=new Date(`${hoje}T${hora}:00`).toISOString();
+  let inicioISO;
+  if(hora){
+    const d=new Date(`${hoje}T${hora}:00`);
+    inicioISO=isNaN(d.getTime())?new Date().toISOString():d.toISOString();
+  } else {
+    inicioISO=new Date().toISOString(); // sem hora informada: usa agora
+  }
 
   S.apontamentos.push({
-    id:S.nid++,
+    id:uid(),
     opNum,
     modeloId:parseInt(modeloId),
     modeloLabel:modelo?modelo.codigo:'',
     colabId:colab.id,
     setor:getColabSetor(),
+    _ts:Date.now(),
     inicio:inicioISO,
     fim:null,
     pausas:[],
@@ -591,7 +615,7 @@ async function iniciarEletrica(opNum,modeloId,modeloLabel){
     toast('Você já iniciou a montagem elétrica deste quadro.');return;
   }
   S.apontamentos.push({
-    id:S.nid++,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',
+    id:uid(),opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
     inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
     erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
   });
@@ -835,6 +859,7 @@ async function adicionarObs(aptId){
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
   if(!apt.observacoes)apt.observacoes=[];
   apt.observacoes.push({hora:new Date().toISOString(),texto});
+  apt._ts=Date.now();
   await save();toast('Observação registrada!');renderAll();
 }
 let _tipoPausa=null;
@@ -907,6 +932,7 @@ async function confirmarPausa(aptId){
   if(!apt.pausas)apt.pausas=[];
   const tipo=TIPOS_PAUSA.find(t=>t.id===_tipoPausa);
   apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:_tipoPausa,tipoLabel:tipo?tipo.label:''});
+  apt._ts=Date.now();
   _tipoPausa=null;
   await save();renderAll();toast('Pausado: '+(tipo?tipo.label:'')+'  ⏸');
 }
@@ -921,6 +947,7 @@ async function pausar(aptId){
 async function retomar(aptId){
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
   const p=apt.pausas||[];if(p.length){const u=p[p.length-1];if(u&&!u.fim)u.fim=new Date().toISOString();}
+  apt._ts=Date.now();
   await save();renderAll();toast('Retomado ▶');
 }
 function abrirFinalizar(aptId){
@@ -962,11 +989,34 @@ function toggleErro(id,tipo){
   renderFinPanel(id);
 }
 function cancelarFin(id){finalizando=null;const c=document.getElementById(`fin-${id}`);if(c)c.innerHTML='';}
+async function estadoServidor(aptId){
+  // busca o estado ATUAL de um apontamento no servidor (sem alterar nada)
+  // usado para evitar que uma aba obsoleta sobrescreva dados já avançados por outra pessoa
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(!r.ok)return null;
+    const d=await r.json();
+    if(!d||!d.apontamentos)return null;
+    let apts=d.apontamentos;
+    if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
+    return apts.find(a=>a&&a.id===aptId)||null;
+  }catch(e){return null;}
+}
+
 async function confirmarFin(aptId){
   if(!_semErro&&!_errosSel.length){toast('Selecione "Nenhum erro" ou indique o tipo.');return;}
   const el=document.getElementById(`obsErroFin-${aptId}`);
   const obsErro=el?el.value.trim():'';
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+
+  // PROTEÇÃO: verifica se outra pessoa já avançou este painel
+  const srvApt=await estadoServidor(aptId);
+  if(srvApt&&(srvApt.fim||srvApt.etapa==='montagem_final'||srvApt.etapa==='concluido'||srvApt.etapa==='eletrica')){
+    toast('⚠ Este painel já foi atualizado por outra pessoa. Recarregando...');
+    finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
+    await load();renderAll();
+    return;
+  }
 
   if(estaPausado(apt)){const u=(apt.pausas||[]).slice(-1)[0];if(u&&!u.fim)u.fim=new Date().toISOString();}
   apt.fim=new Date().toISOString();
@@ -987,11 +1037,13 @@ async function confirmarFin(aptId){
   const aptSetor=apt.setor||getColabSetor();
   if(aptSetor==='chapa'){
     apt.etapa='eletrica';
+    apt._ts=Date.now();
     await save();renderAll();
     toast('✓ Chapa finalizada! Liberado para Montagem Elétrica');
   } else {
     apt.etapa='montagem_final';
     apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
+    apt._ts=Date.now();
     await save();renderAll();renderMF();
     const isMfResp2=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
     toast('Enviado para Montagem Final 🔍');
@@ -1091,6 +1143,13 @@ function renderMF(){
 
 async function finalizarMF(aptId, resultado){
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
+  // PROTEÇÃO: se o servidor já tem uma decisão para este painel, não sobrescreve
+  const srvApt=await estadoServidor(aptId);
+  if(srvApt&&srvApt.mf&&srvApt.mf.resultado){
+    toast('⚠ Este painel já foi avaliado por outra pessoa. Recarregando...');
+    await load();renderAll();renderMF();
+    return;
+  }
   const est=_mfEstado[aptId]||{checklist:{},obs:''};
   const checks=Object.values(est.checklist);
   const nok=MF_CHECKLIST.filter(i=>est.checklist[i.id]===false).map(i=>i.label);
@@ -1103,6 +1162,7 @@ async function finalizarMF(aptId, resultado){
   apt.mf.fim=new Date().toISOString();
   // tanto aprovado quanto reprovado FINALIZAM o quadro (retrabalho é feito na própria MF antes da decisão)
   apt.etapa='concluido';
+  apt._ts=Date.now();
   await save();renderAll();renderMF();
   toast(resultado==='aprovado'?'✓ Quadro aprovado na inspeção!':'⚠ Quadro reprovado — registrado para retrabalho');
 }

@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v19</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v23</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -242,6 +242,7 @@ let _idsExcluidos=new Set(); // proteção: só salva após carregar do Firebase
 let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
 let colab=null,timerIv=null,finalizando=null;
 let _semErro=false,_errosSel=[],_obsErro='';
+let _erroProjeto=null,_obsErroProjeto='';
 let _itensFaltando=null,_obsItens='';
 let _retrabAtivo={};  // {aptId: {ativo, setores[], obs}}
 const TIPOS_ERRO=['Erro de cabeamento','Componente incorreto','Falta de componente','Erro de montagem','Dano em componente','Erro de identificação','Outro'];
@@ -517,9 +518,17 @@ async function confirmarIniciar(){
   if(!modelo){toast('Modelo inválido. Selecione novamente.');return;}
 
   // PROTEÇÃO: impede cadastrar uma OP que já está em produção (evita 2 pedidos com a mesma OP)
+  // Uma OP está "ativa" se seu apontamento MAIS RECENTE não está concluído.
+  // (o registro da chapa fica em etapa 'eletrica' para sempre, então olhamos o estado mais recente)
   const opNorm=opNum.toLowerCase();
-  const ativoLocal=S.apontamentos.some(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm&&a.etapa!=='concluido');
-  if(ativoLocal){toast('⚠ Já existe um quadro ativo com a OP '+opNum+'. Não é possível cadastrar duplicado.');return;}
+  const opAtiva=(apts)=>{
+    const doOp=apts.filter(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm);
+    if(!doOp.length)return false;
+    let recente=doOp[0];
+    for(const a of doOp){if((a._ts||0)>(recente._ts||0))recente=a;}
+    return recente.etapa!=='concluido'; // ativa se o mais recente não foi concluído
+  };
+  if(opAtiva(S.apontamentos)){toast('⚠ Já existe um quadro ativo com a OP '+opNum+'. Não é possível cadastrar duplicado.');return;}
   // verifica também no servidor (caso outra pessoa tenha acabado de cadastrar a mesma OP)
   try{
     const r=await fetch(DB_URL+'.json');
@@ -528,8 +537,7 @@ async function confirmarIniciar(){
       if(d&&d.apontamentos){
         let apts=d.apontamentos;
         if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
-        const ativoServidor=apts.some(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm&&a.etapa!=='concluido');
-        if(ativoServidor){
+        if(opAtiva(apts)){
           toast('⚠ A OP '+opNum+' já foi cadastrada por outra pessoa. Recarregando...');
           await load();renderAll();cancelarAdicionar();
           return;
@@ -974,6 +982,7 @@ async function retomar(aptId){
 }
 function abrirFinalizar(aptId){
   finalizando={id:aptId};_semErro=false;_errosSel=[];_obsErro='';
+  _erroProjeto=null;_obsErroProjeto='';
   const c=document.getElementById(`fin-${aptId}`);if(c)renderFinPanel(aptId);
 }
 function renderFinPanel(aptId){
@@ -998,6 +1007,17 @@ function renderFinPanel(aptId){
       <label>Descreva (opcional)</label>
       <textarea id="obsErroFin-${aptId}" rows="2" placeholder="Ex: disjuntor com defeito...">${_obsErro}</textarea>
     </div>`:''}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #eee;">
+      <h4 style="margin-bottom:10px;">Houve erro de projeto?</h4>
+      <div class="radio-group">
+        <div class="radio-opt ${_erroProjeto===false?'sel':''}" onclick="selErroProjeto(${aptId},false)"><div><div class="radio-label">✓ Não</div><div class="radio-sub">Projeto sem problemas</div></div></div>
+        <div class="radio-opt ${_erroProjeto===true?'sel-bad':''}" onclick="selErroProjeto(${aptId},true)"><div><div class="radio-label">⚠ Sim, houve erro de projeto</div><div class="radio-sub">Descreva o erro abaixo</div></div></div>
+      </div>
+      ${_erroProjeto===true?`<div style="margin-top:10px;">
+        <label>Qual erro de projeto?</label>
+        <textarea id="obsErroProjeto-${aptId}" rows="2" placeholder="Ex: furação fora de medida, componente especificado errado...">${_obsErroProjeto}</textarea>
+      </div>`:''}
+    </div>
     <button class="btn-confirmar-fin" onclick="confirmarFin(${aptId})">Confirmar finalização</button>
     <button class="btn-cancel-fin" onclick="cancelarFin(${aptId})">Cancelar</button>
   </div>`;
@@ -1008,6 +1028,14 @@ function toggleErro(id,tipo){
   _semErro=false;
   const el=document.getElementById(`obsErroFin-${id}`);if(el)_obsErro=el.value;
   const i=_errosSel.indexOf(tipo);if(i>=0)_errosSel.splice(i,1);else _errosSel.push(tipo);
+  renderFinPanel(id);
+}
+function selErroProjeto(id,houve){
+  // guarda o que já foi digitado antes de re-renderizar
+  const el=document.getElementById(`obsErroFin-${id}`);if(el)_obsErro=el.value;
+  const elp=document.getElementById(`obsErroProjeto-${id}`);if(elp)_obsErroProjeto=elp.value;
+  _erroProjeto=houve;
+  if(!houve)_obsErroProjeto='';
   renderFinPanel(id);
 }
 function cancelarFin(id){finalizando=null;const c=document.getElementById(`fin-${id}`);if(c)c.innerHTML='';}
@@ -1027,6 +1055,11 @@ async function estadoServidor(aptId){
 
 async function confirmarFin(aptId){
   if(!_semErro&&!_errosSel.length){toast('Selecione "Nenhum erro" ou indique o tipo.');return;}
+  // valida resposta sobre erro de projeto
+  if(_erroProjeto===null){toast('Indique se houve erro de projeto.');return;}
+  const elProj=document.getElementById(`obsErroProjeto-${aptId}`);
+  const obsErroProjeto=elProj?elProj.value.trim():'';
+  if(_erroProjeto===true&&!obsErroProjeto){toast('Descreva qual foi o erro de projeto.');return;}
   const el=document.getElementById(`obsErroFin-${aptId}`);
   const obsErro=el?el.value.trim():'';
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
@@ -1044,6 +1077,8 @@ async function confirmarFin(aptId){
   apt.fim=new Date().toISOString();
   apt.erros=_semErro?[]:_errosSel;
   apt.obsErro=_semErro?'':obsErro;
+  apt.erroProjeto=_erroProjeto===true;
+  apt.obsErroProjeto=_erroProjeto===true?obsErroProjeto:'';
 
   // salva retrabalho se ativo
   const retrab=_retrabAtivo[aptId];
@@ -1091,15 +1126,20 @@ const MF_CHECKLIST=[
   {id:'documentacao',  label:'Documentação',             icon:'📄'},
 ];
 
-let _mfEstado={}; // {aptId: {checklist:{id:true/false}, obs}}
+let _mfEstado={};
+let _mfIniciado=new Set(); // {aptId: {checklist:{id:true/false}, obs}}
 
+function iniciarMontagemFinal(aptId){
+  _mfIniciado.add(aptId);
+  if(!_mfEstado[aptId])_mfEstado[aptId]={checklist:{},obs:''};
+  renderMF();
+}
 function renderMF(){
   const div=document.getElementById('mfLista');
   if(!div)return;
-  // quadros em montagem final deste colaborador
-  // MF responsible sees ALL pending quadros from any collaborator
   const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
   if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
+  // SOMENTE quadros em montagem final aguardando inspeção
   const mfApts=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   const badge=document.getElementById('mfBadge');
   const tabs=document.getElementById('colTabs');
@@ -1108,22 +1148,42 @@ function renderMF(){
   if(!mfApts.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
   div.innerHTML='';
   mfApts.forEach(apt=>{
-    if(!_mfEstado[apt.id])_mfEstado[apt.id]={checklist:{},obs:''};
-    const est=_mfEstado[apt.id];
     const m=S.modelos.find(x=>x.id===apt.modeloId);
     const autor=S.colaboradores.find(x=>x.id===apt.colabId);
+    const iniciado=_mfIniciado.has(apt.id);
     const card=document.createElement('div');
     card.className='mf-card';
     card.id='mf-card-'+apt.id;
+
+    if(!iniciado){
+      // ── CARD FECHADO: só cabeçalho + botão Iniciar Montagem Final ──
+      card.innerHTML=`<div class="mf-header">
+        <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
+          <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
+        <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Aguardando inspeção</span>
+      </div>`;
+      const btn=document.createElement('button');
+      btn.className='btn-start';
+      btn.style.cssText='background:#7c3aed;margin-top:12px;';
+      btn.textContent='🔍 Iniciar Montagem Final';
+      btn.addEventListener('click',function(){iniciarMontagemFinal(apt.id);});
+      card.appendChild(btn);
+      div.appendChild(card);
+      return;
+    }
+
+    // ── CARD ABERTO: checklist + observações + aprovar/reprovar ──
+    if(!_mfEstado[apt.id])_mfEstado[apt.id]={checklist:{},obs:''};
+    const est=_mfEstado[apt.id];
     card.innerHTML=`<div class="mf-header">
       <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
         <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div>
         <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
-      <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Aguardando inspeção</span>
+      <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span>
     </div>
     <div style="font-size:12px;color:#888;margin-bottom:12px;">Verifique cada item antes de aprovar o quadro</div>`;
 
-    // checklist items
     const cl=document.createElement('div');cl.className='checklist';
     MF_CHECKLIST.forEach(item=>{
       const row=document.createElement('div');
@@ -1141,7 +1201,6 @@ function renderMF(){
     });
     card.appendChild(cl);
 
-    // obs
     const obsDiv=document.createElement('div');obsDiv.className='mf-obs';
     obsDiv.innerHTML='<label>Observações (opcional)</label>';
     const ta=document.createElement('textarea');
@@ -1151,7 +1210,6 @@ function renderMF(){
     obsDiv.appendChild(ta);
     card.appendChild(obsDiv);
 
-    // botões aprovar/reprovar
     const btns=document.createElement('div');btns.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;';
     const btnAp=document.createElement('button');btnAp.className='btn-aprovar';btnAp.textContent='✓ Aprovar';
     btnAp.addEventListener('click',function(){finalizarMF(apt.id,'aprovado');});
@@ -1185,6 +1243,7 @@ async function finalizarMF(aptId, resultado){
   // tanto aprovado quanto reprovado FINALIZAM o quadro (retrabalho é feito na própria MF antes da decisão)
   apt.etapa='concluido';
   apt._ts=Date.now();
+  _mfIniciado.delete(aptId);
   await save();renderAll();renderMF();
   toast(resultado==='aprovado'?'✓ Quadro aprovado na inspeção!':'⚠ Quadro reprovado — registrado para retrabalho');
 }
@@ -1252,6 +1311,31 @@ async function init(){
     try{await load();}catch(e){}
     location.reload();
   },60000); // checa a cada 1 minuto se já é hora e se é seguro
+
+  // ── RELOAD AO VOLTAR PARA A ABA ──
+  // Quando o usuário volta para a aba (depois de trocar de aba/minimizar),
+  // recarrega a página automaticamente (como F5) para garantir dados atualizados.
+  // Só recarrega se ficou fora por pelo menos alguns segundos e não está no meio de uma ação.
+  let _saiuEm=0;
+  document.addEventListener('visibilitychange',async()=>{
+    if(document.hidden){
+      _saiuEm=Date.now();
+      return;
+    }
+    // voltou para a aba
+    const foraPor=Date.now()-_saiuEm;
+    if(_saiuEm===0||foraPor<3000)return; // ignorou saídas muito rápidas (<3s)
+    // verifica se é seguro recarregar (não atrapalha quem está no meio de algo)
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const painelAberto=!!finalizando||!!_tipoPausa||document.querySelector('.fin-panel')||document.querySelector('.add-form');
+    if(digitando||painelAberto||finalizando){
+      // não recarrega para não perder o que está sendo feito; só sincroniza
+      try{await load();renderAll();}catch(e){}
+      return;
+    }
+    location.reload();
+  });
 }
 
 init();

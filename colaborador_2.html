@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v17</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v19</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -515,6 +515,28 @@ async function confirmarIniciar(){
   if(!modeloId){toast('Selecione o modelo do quadro.');return;}
   const modelo=S.modelos.find(m=>m.id==modeloId);
   if(!modelo){toast('Modelo inválido. Selecione novamente.');return;}
+
+  // PROTEÇÃO: impede cadastrar uma OP que já está em produção (evita 2 pedidos com a mesma OP)
+  const opNorm=opNum.toLowerCase();
+  const ativoLocal=S.apontamentos.some(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm&&a.etapa!=='concluido');
+  if(ativoLocal){toast('⚠ Já existe um quadro ativo com a OP '+opNum+'. Não é possível cadastrar duplicado.');return;}
+  // verifica também no servidor (caso outra pessoa tenha acabado de cadastrar a mesma OP)
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(r.ok){
+      const d=await r.json();
+      if(d&&d.apontamentos){
+        let apts=d.apontamentos;
+        if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
+        const ativoServidor=apts.some(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm&&a.etapa!=='concluido');
+        if(ativoServidor){
+          toast('⚠ A OP '+opNum+' já foi cadastrada por outra pessoa. Recarregando...');
+          await load();renderAll();cancelarAdicionar();
+          return;
+        }
+      }
+    }
+  }catch(e){}
 
   const hoje=new Date().toISOString().split('T')[0];
   let inicioISO;
@@ -1209,6 +1231,27 @@ async function init(){
       await load();renderAll();
     }
   },12000);
+
+  // ── AUTO-RELOAD A CADA 30 MINUTOS ──
+  // Recarrega a página inteira para evitar que abas abertas o dia todo
+  // acumulem estado velho. Só recarrega quando é SEGURO (ninguém no meio de uma ação).
+  const RELOAD_INTERVAL=30*60*1000; // 30 minutos
+  let _proximoReload=Date.now()+RELOAD_INTERVAL;
+  setInterval(async()=>{
+    if(Date.now()<_proximoReload)return; // ainda não deu 30 min
+    // verifica se é seguro recarregar
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const tempoDigitando=Date.now()-ultimaDigitacao;
+    const painelAberto=!!finalizando||!!_tipoPausa||document.querySelector('.fin-panel')||document.querySelector('.add-form');
+    // só recarrega se NÃO estiver digitando, finalizando, com painel aberto, etc.
+    if(digitando&&tempoDigitando<120000)return; // está digitando agora, espera
+    if(painelAberto)return; // tem um painel/formulário aberto, espera
+    if(finalizando)return; // está finalizando, espera
+    // seguro: sincroniza uma última vez e recarrega
+    try{await load();}catch(e){}
+    location.reload();
+  },60000); // checa a cada 1 minuto se já é hora e se é seguro
 }
 
 init();

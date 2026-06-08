@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v17</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v19</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -713,6 +713,22 @@ function showApp(){
     if(!_dadosCarregados||!S.apontamentos.length)return;
     exportarBackup(true);
   },TRES_HORAS);
+
+  // ── AUTO-RELOAD A CADA 30 MINUTOS ──
+  // Recarrega a página inteira para evitar estado velho acumulado em abas abertas o dia todo.
+  // Só recarrega quando é seguro: nada sendo digitado e sem modal/login aberto.
+  const RELOAD_INTERVAL=30*60*1000;
+  let _proximoReload=Date.now()+RELOAD_INTERVAL;
+  setInterval(async()=>{
+    if(Date.now()<_proximoReload)return;
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT'||ativo.tagName==='SELECT');
+    const modalAberto=document.querySelector('.modal-overlay')||document.querySelector('#loginModal')&&document.getElementById('loginModal')&&document.getElementById('loginModal').style.display!=='none';
+    if(digitando)return; // está digitando/selecionando, espera
+    if(!loginAutenticado)return; // tela de login, não recarrega
+    try{await load();}catch(e){}
+    location.reload();
+  },60000);
 }
 
 function nav(id,btn){

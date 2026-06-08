@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v19</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v23</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -729,6 +729,23 @@ function showApp(){
     try{await load();}catch(e){}
     location.reload();
   },60000);
+
+  // ── RELOAD AO VOLTAR PARA A ABA ──
+  // Quando o supervisor volta para a aba (após trocar de aba/minimizar), recarrega (como F5).
+  let _saiuEm=0;
+  document.addEventListener('visibilitychange',async()=>{
+    if(document.hidden){_saiuEm=Date.now();return;}
+    const foraPor=Date.now()-_saiuEm;
+    if(_saiuEm===0||foraPor<3000)return; // ignora saídas muito rápidas
+    if(!loginAutenticado)return; // tela de login, não recarrega
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT'||ativo.tagName==='SELECT');
+    if(digitando){
+      try{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();}catch(e){}
+      return;
+    }
+    location.reload();
+  });
 }
 
 function nav(id,btn){
@@ -860,6 +877,8 @@ function renderApt(){
     else if(a.itensFaltando===false)itensFalt='<span class="obs-pill" style="color:#3B6D11;background:#EAF3DE;">✓ Completo</span>';
     let obsHtml=obs.length?obs.map(o=>`<span class="obs-pill" title="${o.texto}">${o.texto.substring(0,35)}${o.texto.length>35?'...':''}</span>`).join(''):'—';
     let erroHtml=erros.length?(erros.map(e=>`<span class="obs-pill erro">${e}</span>`).join('')+(a.obsErro?`<div style="font-size:11px;color:#A32D2D;font-style:italic;">${a.obsErro}</div>`:'')):'—';
+    // erro de projeto (destaque roxo)
+    let erroProjHtml=a.erroProjeto?`<span class="obs-pill" style="background:#ede9fe;color:#7c3aed;">📐 Erro de projeto</span>${a.obsErroProjeto?`<div style="font-size:11px;color:#7c3aed;font-style:italic;margin-top:2px;">${a.obsErroProjeto}</div>`:''}`:'—';
     return`<tr>
       <td style="font-size:13px;font-weight:700;">${a.opNum}</td>
       <td style="font-size:12px;">${m?m.codigo:'—'}</td>
@@ -873,6 +892,7 @@ function renderApt(){
       <td>${itensFalt}</td>
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
+      <td>${erroProjHtml}</td>
       <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;" onclick="excluirApontamento(${a.id})">✕</button></td>
     </tr>`;
   }).join('');
@@ -880,7 +900,7 @@ function renderApt(){
   div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''} · ${periodoLabel()}</h3>
     <div style="overflow-x:auto;"><table><thead><tr>
       <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
-      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th></th>
+      <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th>Erro de Projeto</th><th></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
   </div>`;
 }
@@ -1212,6 +1232,12 @@ function renderLivePage(){
 }
 
 /* ── TEMPO REAL ── */
+let _liveExpanded=new Set();
+function toggleLiveCard(id){
+  if(_liveExpanded.has(id))_liveExpanded.delete(id);
+  else _liveExpanded.add(id);
+  renderLive();
+}
 function renderLive(){
   const tipoIcons={chapa:'🔧',eletrica:'⚡',mf:'🔍',geral:'🔀'};
   const tipoColors={chapa:'#b45309',eletrica:'#3550B4',mf:'#7c3aed',geral:'#555'};
@@ -1259,9 +1285,44 @@ function renderLive(){
       const avatar=(c?c.nome:'?').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
       const opLabel=a.opNum||'—';
       const modeloLabel=m?m.codigo:(a.modeloLabel||'—');
+      const expandido=_liveExpanded.has(a.id);
+
+      // monta o bloco de detalhes (visível quando expandido)
+      let detalhes='';
+      if(expandido){
+        const linhas=[];
+        linhas.push(`<div style="font-size:11px;color:#666;"><strong>Início:</strong> ${a.inicio?fmtDH(a.inicio):'—'}</div>`);
+        // pausas
+        const pausas=(a.pausas||[]).filter(p=>p.inicio);
+        if(pausas.length){
+          const pHtml=pausas.map(p=>{
+            const ic=tipoIcons2[p.tipo]||'⏸';
+            const fimP=p.fim?fmtH(p.fim):'em andamento';
+            return `<div style="font-size:11px;color:#888;margin-left:8px;">${ic} ${p.tipoLabel||'Pausa'}: ${fmtH(p.inicio)} → ${fimP}</div>`;
+          }).join('');
+          linhas.push(`<div style="font-size:11px;color:#666;margin-top:4px;"><strong>Pausas (${pausas.length}):</strong></div>${pHtml}`);
+        }
+        // observações
+        const obs=(a.observacoes||[]).filter(o=>o&&o.texto);
+        if(obs.length){
+          const oHtml=obs.map(o=>`<div style="font-size:11px;color:#444;margin-left:8px;">• ${o.texto} <span style="color:#aaa;">(${fmtH(o.hora)})</span></div>`).join('');
+          linhas.push(`<div style="font-size:11px;color:#666;margin-top:4px;"><strong>Observações (${obs.length}):</strong></div>${oHtml}`);
+        }
+        // itens faltando
+        if(a.itensFaltando){
+          linhas.push(`<div style="font-size:11px;color:#BA7517;margin-top:4px;"><strong>⚠ Itens faltando:</strong> ${a.obsItensFaltando||'(sem detalhe)'}</div>`);
+        }
+        // retrabalho marcado
+        if(a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length){
+          linhas.push(`<div style="font-size:11px;color:#A32D2D;margin-top:4px;"><strong>🔧 Retrabalho:</strong> ${a.retrabalho.setores.join(', ')}${a.retrabalho.obs?' — '+a.retrabalho.obs:''}</div>`);
+        }
+        if(!linhas.length)linhas.push('<div style="font-size:11px;color:#aaa;">Sem detalhes adicionais.</div>');
+        detalhes=`<div style="margin-top:8px;padding:10px;background:#fafafa;border-radius:8px;border-left:3px solid ${statusColor};">${linhas.join('')}</div>`;
+      }
 
       const card=document.createElement('div');
-      card.style.cssText='padding:10px 0;border-bottom:1px solid #f0f0f0;';
+      card.style.cssText='padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+      card.onclick=()=>toggleLiveCard(a.id);
       card.innerHTML=`<div style="display:flex;align-items:center;gap:10px;">
         <div style="width:34px;height:34px;border-radius:50%;background:${statusBg};color:${statusColor};font-size:${pausado?'16px':'12px'};font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
           ${pausado?tipoPausaIcon:avatar}
@@ -1271,12 +1332,12 @@ function renderLive(){
             <span style="font-size:13px;font-weight:700;">${c?c.nome:'—'}</span>
             <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${statusBg};color:${statusColor};">${statusTxt}</span>
           </div>
-          <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-top:2px;">OP ${opLabel}</div>
+          <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-top:2px;">OP ${opLabel} <span style="color:#bbb;font-size:11px;">${expandido?'▲':'▼'}</span></div>
           <div style="font-size:11px;color:#888;">${modeloLabel}</div>
           <div style="font-size:11px;color:#888;margin-top:2px;">⏱ ${liqTxt}${pausado?' · pausado às '+fmtH(ultimaPausa.inicio):' trabalhados'}</div>
-          ${a.itensFaltando?`<div style="font-size:11px;color:#BA7517;margin-top:2px;">⚠ Itens faltando</div>`:''}
+          ${a.itensFaltando&&!expandido?`<div style="font-size:11px;color:#BA7517;margin-top:2px;">⚠ Itens faltando</div>`:''}
         </div>
-      </div>`;
+      </div>${detalhes}`;
       div.appendChild(card);
     });
     // remove last border

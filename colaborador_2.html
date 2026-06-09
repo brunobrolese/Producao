@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v23</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v24</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -425,12 +425,40 @@ function getColabSetor(){
   return colab.setor||'eletrica';
 }
 
+function filtrarModelos(){
+  const busca=(document.getElementById('addModeloBusca')||{}).value||'';
+  const lista=document.getElementById('addModeloLista');
+  if(!lista)return;
+  const termo=busca.trim().toLowerCase();
+  const modelos=(S.modelos||[]).filter(m=>{
+    if(!termo)return true;
+    const cod=(m.codigo||'').toLowerCase();
+    const desc=(m.descricao||'').toLowerCase();
+    return cod.includes(termo)||desc.includes(termo);
+  });
+  if(!modelos.length){
+    lista.innerHTML='<div style="padding:10px 12px;font-size:13px;color:#999;">Nenhum modelo encontrado.</div>';
+    lista.style.display='block';
+    return;
+  }
+  lista.innerHTML=modelos.map(m=>
+    `<div class="modelo-opt" onclick="selecionarModelo(${m.id})" style="padding:10px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;">
+      <span style="font-weight:700;">${m.codigo}</span>${m.descricao?` <span style="color:#888;">— ${m.descricao}</span>`:''}
+    </div>`
+  ).join('');
+  lista.style.display='block';
+}
+function selecionarModelo(id){
+  const m=(S.modelos||[]).find(x=>x.id===id);
+  if(!m)return;
+  const hid=document.getElementById('addModelo');if(hid)hid.value=id;
+  const busca=document.getElementById('addModeloBusca');if(busca)busca.value=m.codigo+(m.descricao?' — '+m.descricao:'');
+  const lista=document.getElementById('addModeloLista');if(lista)lista.style.display='none';
+  const sel=document.getElementById('addModeloSel');if(sel)sel.textContent='✓ Modelo selecionado: '+m.codigo;
+}
 function mostrarFormAdicionar(){
   const modelos=S.modelos||[];
   const horaAtual=new Date().toTimeString().substring(0,5);
-  const modelosOpts=modelos.length
-    ? modelos.map(m=>`<option value="${m.id}">${m.codigo}${m.descricao?' — '+m.descricao:''}</option>`).join('')
-    : '<option value="">Nenhum modelo cadastrado pelo supervisor</option>';
 
   document.getElementById('addFormArea').innerHTML=`<div class="add-form">
     <h4>📋 Qual quadro você vai iniciar?</h4>
@@ -441,10 +469,12 @@ function mostrarFormAdicionar(){
     <div style="font-size:11px;color:#888;margin-top:3px;">Digite o número da ordem de produção do seu quadro</div>
 
     <label>Modelo do quadro <span style="color:#A32D2D">*</span></label>
-    <select id="addModelo">
-      <option value="">Selecione o modelo...</option>
-      ${modelosOpts}
-    </select>
+    <input type="hidden" id="addModelo" value=""/>
+    <div style="position:relative;">
+      <input type="text" id="addModeloBusca" placeholder="🔍 Buscar modelo por código ou descrição..." autocomplete="off" oninput="filtrarModelos()" onfocus="filtrarModelos()"/>
+      <div id="addModeloLista" style="display:none;max-height:220px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;margin-top:4px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+    </div>
+    <div id="addModeloSel" style="font-size:12px;color:#1D9E75;margin-top:4px;font-weight:600;"></div>
     ${modelos.length?'':'<div style="font-size:11px;color:#BA7517;margin-top:3px;">⚠ Aguarde o supervisor cadastrar os modelos</div>'}
 
     <label>Horário de início</label>

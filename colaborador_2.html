@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v24</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v25</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1148,12 +1148,21 @@ function startTimer(aptId,apt){
   if(el){const liq=tempoLiquido(apt);el.textContent=`${liq}min trabalhados`;}
 }
 const MF_CHECKLIST=[
-  {id:'cabeamento',    label:'Cabeamento',              icon:'🔌'},
-  {id:'identificacao', label:'Identificação de cabos',  icon:'🏷️'},
-  {id:'torque',        label:'Torque dos bornes',        icon:'🔩'},
-  {id:'limpeza',       label:'Limpeza interna',          icon:'🧹'},
-  {id:'visual',        label:'Inspeção visual geral',    icon:'👁️'},
-  {id:'documentacao',  label:'Documentação',             icon:'📄'},
+  {id:'inspecao_visual', label:'Feita a inspeção visual geral?', icon:'👁️'},
+  {id:'medidas_chicote', label:'Todas as medidas do chicote de força/comando estavam OK?', icon:'📏'},
+  {id:'limpeza_aspirador', label:'Feita a limpeza do painel com aspirador?', icon:'🧹'},
+  {id:'carcaca', label:'Carcaça sem arranhado, defeito de pintura ou furação errada?', icon:'🔲'},
+  {id:'furacoes_pintadas', label:'Todas as furações estão pintadas?', icon:'🎨'},
+  {id:'fixacao', label:'Possui os elementos de fixação em bom estado? (arruela, parafuso e porca)', icon:'🔩'},
+  {id:'erro_ligacao', label:'Sem erro de ligação?', icon:'🔌'},
+  {id:'bitolas', label:'Cabos (bitolas) atendem a carga (corrente) a que são submetidos?', icon:'⚡'},
+  {id:'neutros', label:'Todos os neutros foram reconectados após a bipagem?', icon:'🔗'},
+  {id:'checklists_preenchidos', label:'Todos os checklists estavam corretamente preenchidos?', icon:'📋'},
+  {id:'protecoes_acrilico', label:'Foram colocadas as proteções de acrílico onde necessário?', icon:'🛡️'},
+  {id:'contatos', label:'Verificado se há contato invertido ou mal encaixado?', icon:'🔍'},
+  {id:'duplo_check', label:'Duplo check (CPU, módulo, contatos auxiliares, régua de borne e relés)', icon:'✔️'},
+  {id:'ops_apontadas', label:'OPs foram apontadas?', icon:'📝'},
+  {id:'obs_revisadas', label:'Todas as observações foram revisadas?', icon:'📄'},
 ];
 
 let _mfEstado={};

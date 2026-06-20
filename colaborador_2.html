@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v25</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v26</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -345,6 +345,19 @@ async function save(){
         }
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
+    }
+
+    // 2b. PROTEÇÃO: o colaborador NUNCA edita modelos/colaboradores/ops/config.
+    // Sempre preserva o que está no servidor para não apagar dados do supervisor
+    // (ex.: um modelo recém-cadastrado) com uma cópia local desatualizada.
+    if(servidor){
+      const toArr=(v)=>v===undefined||v===null?undefined:(Array.isArray(v)?v:Object.values(v).filter(x=>x!=null));
+      const mods=toArr(servidor.modelos); if(mods!==undefined)S.modelos=mods;
+      const cols=toArr(servidor.colaboradores); if(cols!==undefined)S.colaboradores=cols;
+      const ops=toArr(servidor.ops); if(ops!==undefined)S.ops=ops;
+      if(servidor.mfResponsaveis!==undefined)S.mfResponsaveis=servidor.mfResponsaveis;
+      if(servidor.mfResponsavel!==undefined)S.mfResponsavel=servidor.mfResponsavel;
+      if(servidor.tema!==undefined)S.tema=servidor.tema;
     }
 
     // 3. Atualiza nid para evitar colisão de IDs

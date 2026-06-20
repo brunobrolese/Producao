@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v25</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v26</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -419,6 +419,9 @@ function uid(){
   return Date.now()*1000 + Math.floor(Math.random()*1000);
 }
 let _idsExcluidos=new Set(); // IDs deletados — o merge não deve re-adicioná-los
+let _modelosExcluidos=new Set(); // modelos removidos intencionalmente
+let _colabsExcluidos=new Set();  // colaboradores removidos intencionalmente
+let _opsExcluidos=new Set();     // OPs removidas intencionalmente
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
 
@@ -552,6 +555,21 @@ async function save(){
         }
       });
       S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
+    }
+
+    // Mescla modelos/colaboradores/ops por UNIÃO (id), respeitando exclusões intencionais.
+    // Evita que uma aba com dados antigos apague itens criados/editados em outra aba.
+    if(servidor){
+      const mergeCol=(localArr,servArr,excluidos)=>{
+        const map={};
+        const sv=!servArr?[]:(Array.isArray(servArr)?servArr:Object.values(servArr).filter(x=>x!=null));
+        sv.forEach(x=>{if(x&&x.id!=null&&!excluidos.has(x.id))map[x.id]=x;});
+        (localArr||[]).forEach(x=>{if(x&&x.id!=null&&!excluidos.has(x.id))map[x.id]=x;}); // local vence em conflito
+        return Object.values(map);
+      };
+      S.modelos=mergeCol(S.modelos,servidor.modelos,_modelosExcluidos);
+      S.colaboradores=mergeCol(S.colaboradores,servidor.colaboradores,_colabsExcluidos);
+      S.ops=mergeCol(S.ops,servidor.ops,_opsExcluidos);
     }
     // garante nid maior que o servidor
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
@@ -968,7 +986,7 @@ function renderModelos(){
       const conf=document.createElement('div');conf.className='confirm-row';
       conf.innerHTML=`⚠️ Remover <strong>${m.codigo}</strong>?`;
       const sim=document.createElement('button');sim.className='btn-sm';sim.textContent='Sim';
-      sim.addEventListener('click',async()=>{S.modelos=S.modelos.filter(x=>x.id!==m.id);await save();renderModelos();});
+      sim.addEventListener('click',async()=>{_modelosExcluidos.add(m.id);S.modelos=S.modelos.filter(x=>x.id!==m.id);await save();renderModelos();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderModelos);
       conf.append(sim,nao);btns.innerHTML='';btns.appendChild(conf);
@@ -1127,7 +1145,7 @@ function renderAponTabela(op){
 }
 
 async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'concluida'}:o);await save();renderOPs();}
-async function remOP(id){S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
+async function remOP(id){_opsExcluidos.add(id);S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
 
 /* ── COLABORADORES ── */
 async function salvarMfResponsaveis(){
@@ -1190,7 +1208,7 @@ function renderColabs(){
       const row=document.createElement('div');row.className='confirm-row';
       row.innerHTML=`⚠️ Remover <strong>${c.nome}</strong>?`;
       const sim=document.createElement('button');sim.className='btn-sm';sim.textContent='Sim';
-      sim.addEventListener('click',async()=>{S.colaboradores=S.colaboradores.filter(x=>x.id!==c.id);await save();renderColabs();});
+      sim.addEventListener('click',async()=>{_colabsExcluidos.add(c.id);S.colaboradores=S.colaboradores.filter(x=>x.id!==c.id);await save();renderColabs();});
       const nao=document.createElement('button');nao.className='btn-cancel';nao.textContent='Não';
       nao.addEventListener('click',renderColabs);
       row.append(sim,nao);t6.innerHTML='';t6.appendChild(row);

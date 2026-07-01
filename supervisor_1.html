@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v28</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v29</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -272,9 +272,11 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
           <div><label>Descrição (opcional)</label><input id="modDesc" placeholder="Ex: Quadro de distribuição 200A"/></div>
         </div>
         <div class="frow">
-          <div><label>Tempo previsto de montagem (minutos)</label><input type="number" id="modTempo" min="1" placeholder="Ex: 800"/></div>
+          <div><label>⚡ Tempo previsto — Elétrica (min)</label><input type="number" id="modTempoEletrica" min="1" placeholder="Ex: 800"/></div>
+          <div><label>🔧 Tempo previsto — Chapa (min)</label><input type="number" id="modTempoChapa" min="1" placeholder="Ex: 120"/></div>
           <div style="display:flex;align-items:flex-end;padding-bottom:1px;">
-            <div style="font-size:12px;color:#888;padding-bottom:8px;">💡 Ex: 800min = ~13h20. Usado para monitorar desempenho em tempo real.</div>
+            <div style="font-size:12px;color:#888;padding-bottom:8px;">💡 Tempos separados por setor. Usados no cálculo de produtividade.</div>
+          </div>
           </div>
         </div>
         <button class="btn" onclick="addModelo()">Cadastrar modelo</button>
@@ -750,7 +752,6 @@ function showApp(){
     if(Date.now()<_proximoReload)return;
     const ativo=document.activeElement;
     const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT'||ativo.tagName==='SELECT');
-    const modalAberto=document.querySelector('.modal-overlay')||document.querySelector('#loginModal')&&document.getElementById('loginModal')&&document.getElementById('loginModal').style.display!=='none';
     if(digitando)return; // está digitando/selecionando, espera
     if(!loginAutenticado)return; // tela de login, não recarrega
     try{await load();}catch(e){}
@@ -937,19 +938,30 @@ function renderApt(){
 async function addModelo(){
   const cod=document.getElementById('modCod').value.trim();
   const desc=document.getElementById('modDesc').value.trim();
-  const tempo=parseInt(document.getElementById('modTempo').value)||0;
+  const tempoEletrica=parseInt(document.getElementById('modTempoEletrica').value)||0;
+  const tempoChapa=parseInt(document.getElementById('modTempoChapa').value)||0;
   if(!cod){msg('modMsg','Informe o código do modelo.','bad');return;}
   if(!S.modelos)S.modelos=[];
   if(S.modelos.find(m=>m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
-  S.modelos.push({id:uid(),codigo:cod,descricao:desc,tempoPrevisto:tempo});
+  S.modelos.push({id:uid(),codigo:cod,descricao:desc,tempoChapa:tempoChapa,tempoEletrica:tempoEletrica,tempoPrevisto:tempoEletrica});
   document.getElementById('modCod').value='';
   document.getElementById('modDesc').value='';
-  document.getElementById('modTempo').value='';
+  document.getElementById('modTempoEletrica').value='';
+  document.getElementById('modTempoChapa').value='';
   await save();msg('modMsg','Modelo cadastrado!','ok');renderModelos();
 }
 
+function tempoModeloSetor(m,setor){
+  // retorna o tempo previsto do modelo para o setor (com fallback p/ dados antigos)
+  if(!m)return 0;
+  if(setor==='chapa')return m.tempoChapa||0;
+  if(setor==='eletrica')return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
+  return 0;
+}
 function renderModelos(){
   if(!S.modelos)S.modelos=[];
+  // migração: modelos antigos só têm tempoPrevisto → vira tempoEletrica
+  S.modelos.forEach(m=>{if(m&&m.tempoEletrica==null&&m.tempoPrevisto!=null)m.tempoEletrica=m.tempoPrevisto;});
   const cnt=document.getElementById('modCount');if(cnt)cnt.textContent=S.modelos.length;
   const div=document.getElementById('mod-lista');if(!div)return;
   if(!S.modelos.length){div.innerHTML='<p class="empty">Nenhum modelo cadastrado.</p>';return;}
@@ -957,11 +969,9 @@ function renderModelos(){
   const wrap=document.createElement('div');
   S.modelos.forEach(m=>{
     const usos=S.apontamentos.filter(a=>a.modeloId===m.id).length;
-    const finalizados=S.apontamentos.filter(a=>a.modeloId===m.id&&a.fim);
-    const noTempo=finalizados.filter(a=>tempoLiquido(a)<=(m.tempoPrevisto||Infinity)).length;
-    const atrasados=finalizados.filter(a=>m.tempoPrevisto&&tempoLiquido(a)>m.tempoPrevisto).length;
-    const h=m.tempoPrevisto?Math.floor(m.tempoPrevisto/60):0;
-    const mn=m.tempoPrevisto?m.tempoPrevisto%60:0;
+    const tChapa=m.tempoChapa||0;
+    const tElet=(m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
+    const fmtT=(t)=>{const h=Math.floor(t/60),mn=t%60;return t?`${t}min`+(h>0||mn>0?` (${h>0?h+'h ':''}${mn>0?mn+'min':''})`:''):'—';};
 
     const card=document.createElement('div');
     card.id='mod-card-'+m.id;
@@ -975,9 +985,9 @@ function renderModelos(){
         <div style="font-size:14px;font-weight:700;">${m.codigo}</div>
         ${m.descricao?`<div style="font-size:12px;color:#888;margin-top:2px;">${m.descricao}</div>`:''}
         <div style="margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;">
-          ${m.tempoPrevisto?`<span style="font-size:12px;"><strong>${m.tempoPrevisto}min</strong> <span style="color:#888;">(${h>0?h+'h ':''}${mn>0?mn+'min':''})</span></span>`:'<span style="font-size:12px;color:#aaa;">Tempo não definido</span>'}
+          <span style="font-size:12px;">⚡ Elétrica: <strong>${fmtT(tElet)}</strong></span>
+          <span style="font-size:12px;">🔧 Chapa: <strong>${fmtT(tChapa)}</strong></span>
           <span style="font-size:12px;color:#888;">${usos} apontamentos</span>
-          ${finalizados.length?'<span style="font-size:12px;color:#3B6D11;">✓ '+noTempo+' no prazo</span>'+(atrasados?'<span style="font-size:12px;color:#A32D2D;">⚠ '+atrasados+' atrasados</span>':''):''}
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;" id="mod-btns-${m.id}"></div>
@@ -1012,10 +1022,9 @@ function renderModelos(){
         <div><label>Código do modelo</label><input id="edit-cod-${m.id}" value="${m.codigo}"/></div>
         <div><label>Descrição</label><input id="edit-desc-${m.id}" value="${m.descricao||''}"/></div>
       </div>
-      <div style="margin-bottom:12px;">
-        <label>Tempo previsto (minutos)</label>
-        <input type="number" id="edit-tempo-${m.id}" value="${m.tempoPrevisto||''}" min="1" placeholder="Ex: 800"/>
-        <div style="font-size:11px;color:#888;margin-top:3px;">Deixe em branco para não definir</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div><label>⚡ Tempo Elétrica (min)</label><input type="number" id="edit-tempo-elet-${m.id}" value="${tElet||''}" min="1" placeholder="Ex: 800"/></div>
+        <div><label>🔧 Tempo Chapa (min)</label><input type="number" id="edit-tempo-chapa-${m.id}" value="${tChapa||''}" min="1" placeholder="Ex: 120"/></div>
       </div>
       <div style="display:flex;gap:8px;">
         <button class="btn" style="margin-top:0;padding:8px 16px;width:auto;" onclick="salvarEdicaoModelo(${m.id})">✓ Salvar</button>
@@ -1036,11 +1045,12 @@ function cancelarEdicaoModelo(id){
 async function salvarEdicaoModelo(id){
   const cod=document.getElementById('edit-cod-'+id).value.trim();
   const desc=document.getElementById('edit-desc-'+id).value.trim();
-  const tempo=parseInt(document.getElementById('edit-tempo-'+id).value)||0;
+  const tempoEletrica=parseInt(document.getElementById('edit-tempo-elet-'+id).value)||0;
+  const tempoChapa=parseInt(document.getElementById('edit-tempo-chapa-'+id).value)||0;
   if(!cod){toast('O código não pode estar vazio.');return;}
   if(S.modelos.find(m=>m.codigo===cod&&m.id!==id)){toast('Já existe outro modelo com este código.');return;}
   const m=S.modelos.find(x=>x.id===id);if(!m)return;
-  m.codigo=cod;m.descricao=desc;m.tempoPrevisto=tempo||0;
+  m.codigo=cod;m.descricao=desc;m.tempoEletrica=tempoEletrica;m.tempoChapa=tempoChapa;m.tempoPrevisto=tempoEletrica;
   await save();toast('Modelo atualizado!');renderModelos();
 }
 
@@ -1702,10 +1712,10 @@ let chartM=null;
 function renderProdutividade(){
   const div=document.getElementById('prod-conteudo');
   if(!div)return;
-  // apontamentos finalizados no período (por data de fim)
-  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim));
+  // apontamentos finalizados no período (por data de fim) — só Chapa e Elétrica
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
   if(!finalizados.length){
-    div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro finalizado no período selecionado.</p>';
+    div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro de Chapa ou Elétrica finalizado no período selecionado.</p>';
     return;
   }
   // agrupa por colaborador e calcula métricas
@@ -1723,9 +1733,9 @@ function renderProdutividade(){
     s.volume++;
     s.somaLiquido+=liq;
     s.somaBruto+=bruto;
-    // eficiência: tempo previsto do modelo vs tempo líquido real
+    // eficiência: tempo previsto do modelo PARA O SETOR do apontamento vs tempo líquido real
     const m=S.modelos.find(x=>x.id===a.modeloId);
-    const prev=m&&m.tempoPrevisto?m.tempoPrevisto:0;
+    const prev=tempoModeloSetor(m,a.setor);
     if(prev>0&&liq>0){s.somaEfic+=(prev/liq)*100;s.nEfic++;}
   });
   const lista=Object.values(stats);

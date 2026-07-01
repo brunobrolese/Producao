@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v28</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v29</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -737,10 +737,11 @@ function renderOps(){
       const temErro=a.erros&&a.erros.length>0;
       const liq=tempoLiquido(a);
       const mFin=S.modelos.find(x=>x.id===a.modeloId);
-      const temPrev=mFin&&mFin.tempoPrevisto;
-      const acima=temPrev&&liq>mFin.tempoPrevisto;
+      const prevFin=tempoPrevistoApt(a,mFin);
+      const temPrev=prevFin>0;
+      const acima=temPrev&&liq>prevFin;
       const corTempo=!temPrev?'#1a1a1a':acima?'#A32D2D':'#1D9E75';
-      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span style="color:${corTempo};font-weight:700;">${liq}min</span>${temPrev?` <span style="font-size:10px;color:#999;">/ ${mFin.tempoPrevisto}min</span>`:''}</div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
+      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span style="color:${corTempo};font-weight:700;">${liq}min</span>${temPrev?` <span style="font-size:10px;color:#999;">/ ${prevFin}min</span>`:''}</div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
     });
   }
   div.innerHTML=html;
@@ -748,20 +749,27 @@ function renderOps(){
   if(finalizando){const p=document.getElementById(`fin-${finalizando.id}`);if(p)renderFinPanel(finalizando.id);}
 }
 
+function tempoPrevistoApt(apt,m){
+  // tempo previsto do modelo conforme o SETOR do apontamento (chapa vs elétrica)
+  if(!m||!apt)return 0;
+  if(apt.setor==='chapa')return m.tempoChapa||0;
+  return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
+}
 function renderProgressBar(apt){
   const m=S.modelos.find(x=>x.id===apt.modeloId);
-  if(!m||!m.tempoPrevisto)return'';
+  const prev=tempoPrevistoApt(apt,m);
+  if(!prev)return'';
   const liq=tempoLiquido(apt);
-  const pct=Math.min(Math.round((liq/m.tempoPrevisto)*100),200);
-  const atrasado=liq>m.tempoPrevisto;
-  const restante=m.tempoPrevisto-liq;
+  const pct=Math.min(Math.round((liq/prev)*100),200);
+  const atrasado=liq>prev;
+  const restante=prev-liq;
   const cor=atrasado?'#A32D2D':'#1D9E75';
   const bg=atrasado?'#FCEBEB':'#EAF3DE';
   const barPct=Math.min(pct,100);
   return`<div style="background:${bg};border-radius:9px;padding:10px 14px;margin-bottom:10px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
       <span style="font-size:13px;font-weight:700;color:${cor};">${atrasado?'⚠ Acima do tempo previsto':'⏱ Dentro do prazo'}</span>
-      <span style="font-size:12px;color:${cor};font-weight:600;">${liq}min / ${m.tempoPrevisto}min</span>
+      <span style="font-size:12px;color:${cor};font-weight:600;">${liq}min / ${prev}min</span>
     </div>
     <div style="height:8px;background:rgba(0,0,0,0.1);border-radius:99px;overflow:hidden;">
       <div style="height:100%;width:${barPct}%;background:${cor};border-radius:99px;transition:width .3s;"></div>
@@ -1075,12 +1083,12 @@ function renderFinPanel(aptId){
   const _apt=S.apontamentos.find(a=>a.id===aptId);
   const _m=_apt?S.modelos.find(x=>x.id===_apt.modeloId):null;
   const _liq=_apt?tempoLiquido(_apt):0;
-  const _temPrev=_m&&_m.tempoPrevisto;
-  const _acima=_temPrev&&_liq>_m.tempoPrevisto;
+  const _temPrev=tempoPrevistoApt(_apt,_m);
+  const _acima=_temPrev>0&&_liq>_temPrev;
   const _corT=!_temPrev?'#1a1a1a':_acima?'#A32D2D':'#1D9E75';
   const _bgT=!_temPrev?'#f5f5f5':_acima?'#FCEBEB':'#EAF3DE';
   c.innerHTML=`<div class="fin-panel">
-    ${_temPrev?`<div style="background:${_bgT};border-radius:9px;padding:10px 14px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:${_corT};">⏱ Tempo: ${_liq}min</div><div style="font-size:12px;color:${_corT};margin-top:3px;">Previsto: ${_m.tempoPrevisto}min ${_acima?'· Excedeu em '+(_liq-_m.tempoPrevisto)+'min':'· Dentro do previsto'}</div></div>`:''}
+    ${_temPrev?`<div style="background:${_bgT};border-radius:9px;padding:10px 14px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:${_corT};">⏱ Tempo: ${_liq}min</div><div style="font-size:12px;color:${_corT};margin-top:3px;">Previsto: ${_temPrev}min ${_acima?'· Excedeu em '+(_liq-_temPrev)+'min':'· Dentro do previsto'}</div></div>`:''}
     <h4>Como foi a montagem?</h4>
     <div class="radio-group">
       <div class="radio-opt ${_semErro?'sel':''}" onclick="selSemErro(${aptId})"><div><div class="radio-label">✓ Nenhum erro</div><div class="radio-sub">Montagem concluída corretamente</div></div></div>

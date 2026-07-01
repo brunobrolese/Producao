@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v26</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v27</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -422,6 +422,7 @@ let _idsExcluidos=new Set(); // IDs deletados — o merge não deve re-adicioná
 let _modelosExcluidos=new Set(); // modelos removidos intencionalmente
 let _colabsExcluidos=new Set();  // colaboradores removidos intencionalmente
 let _opsExcluidos=new Set();     // OPs removidas intencionalmente
+let _horarioColab=null;          // id do colaborador com editor de horários aberto
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
 
@@ -1183,6 +1184,30 @@ function popularSeletorMF(){
   }
 }
 
+async function salvarHorarios(id){
+  const c=S.colaboradores.find(x=>x.id===id);if(!c)return;
+  const val=(campo)=>{const el=document.getElementById(campo);return el&&el.value?el.value:'';};
+  const bloco=(k)=>{
+    const ini=val('h'+k+'-ini-'+id),fim=val('h'+k+'-fim-'+id);
+    return (ini||fim)?{inicio:ini,fim:fim}:null;
+  };
+  c.horarios={cafeManha:bloco('cm'),almoco:bloco('al'),cafeTarde:bloco('ct')};
+  // valida: fim depois do início em cada bloco preenchido
+  for(const [nome,b] of [['Café da manhã',c.horarios.cafeManha],['Almoço',c.horarios.almoco],['Café da tarde',c.horarios.cafeTarde]]){
+    if(b&&b.inicio&&b.fim&&b.fim<=b.inicio){toast('⚠ Em "'+nome+'", o fim deve ser depois do início.');return;}
+  }
+  await save();
+  _horarioColab=null;
+  renderColabs();
+  toast('✓ Horários salvos para '+c.nome);
+}
+async function limparHorarios(id){
+  const c=S.colaboradores.find(x=>x.id===id);if(!c)return;
+  c.horarios=null;
+  await save();
+  renderColabs();
+  toast('Horários removidos de '+c.nome);
+}
 function renderColabs(){
   popularSeletorMF();
   const cnt=document.getElementById('cCount');if(cnt)cnt.textContent=S.colaboradores.length;
@@ -1203,6 +1228,8 @@ function renderColabs(){
     const t4=document.createElement('td');t4.textContent=total+' quadros';
     const t5=document.createElement('td');t5.innerHTML=erros?`<span class="badge bbad">${erros} com erros</span>`:'<span class="badge bok">Sem erros</span>';
     const t6=document.createElement('td');
+    const btnH=document.createElement('button');btnH.className='btn-sm';btnH.textContent='⏰ Horários';btnH.style.marginRight='4px';
+    btnH.addEventListener('click',()=>{_horarioColab=_horarioColab===c.id?null:c.id;renderColabs();});
     const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
     btn.addEventListener('click',()=>{
       const row=document.createElement('div');row.className='confirm-row';
@@ -1213,7 +1240,37 @@ function renderColabs(){
       nao.addEventListener('click',renderColabs);
       row.append(sim,nao);t6.innerHTML='';t6.appendChild(row);
     });
-    t6.appendChild(btn);tr.append(t1,t2,t3,t4,t5,t6);tbody.appendChild(tr);
+    t6.appendChild(btnH);t6.appendChild(btn);tr.append(t1,t2,t3,t4,t5,t6);tbody.appendChild(tr);
+    // linha do editor de horários (aparece quando aberto)
+    if(_horarioColab===c.id){
+      const h=c.horarios||{};
+      const g=(k,campo)=>((h[k]&&h[k][campo])?h[k][campo]:'');
+      const trH=document.createElement('tr');
+      const tdH=document.createElement('td');tdH.colSpan=6;
+      tdH.style.cssText='background:#f8f9fb;padding:14px;';
+      tdH.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:10px;">⏰ Horários de pausa automática — ${c.nome}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:560px;">
+          <div><div style="font-size:12px;font-weight:600;color:#BA7517;margin-bottom:4px;">☕ Café da manhã</div>
+            <label style="font-size:11px;color:#888;">Início</label><input type="time" id="hcm-ini-${c.id}" value="${g('cafeManha','inicio')}" style="width:100%;margin-bottom:6px;"/>
+            <label style="font-size:11px;color:#888;">Fim</label><input type="time" id="hcm-fim-${c.id}" value="${g('cafeManha','fim')}" style="width:100%;"/></div>
+          <div><div style="font-size:12px;font-weight:600;color:#A32D2D;margin-bottom:4px;">🍽️ Almoço</div>
+            <label style="font-size:11px;color:#888;">Início</label><input type="time" id="hal-ini-${c.id}" value="${g('almoco','inicio')}" style="width:100%;margin-bottom:6px;"/>
+            <label style="font-size:11px;color:#888;">Fim</label><input type="time" id="hal-fim-${c.id}" value="${g('almoco','fim')}" style="width:100%;"/></div>
+          <div><div style="font-size:12px;font-weight:600;color:#BA7517;margin-bottom:4px;">☕ Café da tarde</div>
+            <label style="font-size:11px;color:#888;">Início</label><input type="time" id="hct-ini-${c.id}" value="${g('cafeTarde','inicio')}" style="width:100%;margin-bottom:6px;"/>
+            <label style="font-size:11px;color:#888;">Fim</label><input type="time" id="hct-fim-${c.id}" value="${g('cafeTarde','fim')}" style="width:100%;"/></div>
+        </div>
+        <div style="font-size:11px;color:#999;margin-top:8px;">Deixe em branco para não pausar automaticamente. O sistema pausa e retoma sozinho nesses horários.</div>`;
+      const btnsH=document.createElement('div');btnsH.style.cssText='margin-top:12px;display:flex;gap:8px;';
+      const salvar=document.createElement('button');salvar.className='btn-sm';salvar.style.cssText='background:#1D9E75;color:#fff;';salvar.textContent='💾 Salvar horários';
+      salvar.addEventListener('click',()=>salvarHorarios(c.id));
+      const limpar=document.createElement('button');limpar.className='btn-sm';limpar.textContent='🗑 Limpar';
+      limpar.addEventListener('click',()=>limparHorarios(c.id));
+      const cancelar=document.createElement('button');cancelar.className='btn-cancel';cancelar.textContent='Fechar';
+      cancelar.addEventListener('click',()=>{_horarioColab=null;renderColabs();});
+      btnsH.append(salvar,limpar,cancelar);tdH.appendChild(btnsH);
+      trH.appendChild(tdH);tbody.appendChild(trH);
+    }
   });
   tbl.appendChild(tbody);div.innerHTML='';div.appendChild(tbl);
 }

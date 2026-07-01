@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v26</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v27</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -294,6 +294,8 @@ async function load(){
       });
       if(!S.nid)S.nid=1;
     }
+    // mantém a referência do colaborador atual sincronizada (ex.: horários definidos pelo supervisor)
+    if(colab&&S.colaboradores)colab=S.colaboradores.find(c=>c.id===colab.id)||colab;
     setSync(true);
     _dadosCarregados=true;
     aplicarTemaColab();
@@ -1023,6 +1025,46 @@ async function retomar(aptId){
   apt._ts=Date.now();
   await save();renderAll();toast('Retomado ▶');
 }
+
+// ── PAUSA/RETOMADA AUTOMÁTICA (café e almoço) ──
+// Pausa e retoma sozinho os quadros ativos do colaborador nos horários que o supervisor definiu.
+// Se o quadro já estiver pausado manualmente quando chega o horário, não faz nada.
+async function autoPausas(){
+  if(!colab)return;
+  const cfg=colab.horarios;
+  if(!cfg)return;
+  const agora=new Date();
+  const hhmm=agora.toTimeString().slice(0,5); // "HH:MM"
+  const hoje=agora.toISOString().split('T')[0];
+  const pausas=[
+    {key:'cafeManha', tipo:'intervalo', label:'☕ Café da manhã', cfg:cfg.cafeManha},
+    {key:'almoco',    tipo:'almoco',    label:'🍽️ Almoço',        cfg:cfg.almoco},
+    {key:'cafeTarde', tipo:'intervalo', label:'☕ Café da tarde',  cfg:cfg.cafeTarde}
+  ];
+  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim);
+  let mudou=false;
+  for(const apt of ativos){
+    if(!apt.pausas)apt.pausas=[];
+    for(const b of pausas){
+      if(!b.cfg||!b.cfg.inicio||!b.cfg.fim)continue;
+      const dentro=hhmm>=b.cfg.inicio&&hhmm<b.cfg.fim;
+      const breakKey=hoje+'_'+b.key;
+      const jaTem=apt.pausas.some(p=>p&&p._breakKey===breakKey);
+      const pausado=estaPausado(apt);
+      // AUTO-PAUSA: dentro da janela, não pausado, e ainda não pausou por este intervalo hoje
+      if(dentro&&!pausado&&!jaTem){
+        apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
+        apt._ts=Date.now();mudou=true;
+      }
+      // AUTO-RETOMADA: fora da janela, e existe auto-pausa deste intervalo ainda aberta
+      if(!dentro){
+        const aberta=apt.pausas.find(p=>p&&p._breakKey===breakKey&&p.auto&&!p.fim);
+        if(aberta){aberta.fim=new Date().toISOString();apt._ts=Date.now();mudou=true;}
+      }
+    }
+  }
+  if(mudou){await save();renderAll();}
+}
 function abrirFinalizar(aptId){
   finalizando={id:aptId};_semErro=false;_errosSel=[];_obsErro='';
   _erroProjeto=null;_obsErroProjeto='';
@@ -1340,6 +1382,7 @@ async function init(){
     // pausa se estiver digitando E tiver digitado algo nos últimos 2 minutos
     if(colab&&!finalizando&&!(digitando&&tempoDigitando<120000)){
       await load();renderAll();
+      try{await autoPausas();}catch(e){}
     }
   },12000);
 

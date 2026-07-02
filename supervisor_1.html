@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v31</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v32</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -756,6 +756,13 @@ function showApp(){
     exportarBackup(true);
   },TRES_HORAS);
 
+  // ── MOTOR DE PAUSAS AUTOMÁTICAS (todos os colaboradores) ──
+  // O supervisor fica aberto o dia todo e aplica as pausas de café/almoço de TODOS,
+  // mesmo que a tela do colaborador esteja fechada. Roda a cada minuto.
+  setInterval(async()=>{try{await load();await processarPausasTodos();}catch(e){}},60000);
+  // roda uma vez ao abrir também (pega pausas retroativas do que já passou hoje)
+  setTimeout(async()=>{try{await processarPausasTodos();}catch(e){}},3000);
+
   // ── AUTO-RELOAD A CADA 30 MINUTOS ──
   // Recarrega a página inteira para evitar estado velho acumulado em abas abertas o dia todo.
   // Só recarrega quando é seguro: nada sendo digitado e sem modal/login aberto.
@@ -789,6 +796,68 @@ function showApp(){
   });
 }
 
+// Motor de pausas automáticas para o supervisor processar TODOS os colaboradores.
+// Mesmo motor retroativo do colaborador — insere pausas nos horários exatos.
+function aplicarPausasAutoSup(colaborador){
+  if(!colaborador||!colaborador.horarios)return false;
+  const cfg=colaborador.horarios;
+  const defs=[
+    {key:'cafeManha',tipo:'intervalo',label:'☕ Café da manhã',cfg:cfg.cafeManha},
+    {key:'almoco',   tipo:'almoco',   label:'🍽️ Almoço',       cfg:cfg.almoco},
+    {key:'cafeTarde',tipo:'intervalo',label:'☕ Café da tarde', cfg:cfg.cafeTarde}
+  ];
+  const now=new Date();
+  const y=now.getFullYear(),mo=now.getMonth(),d=now.getDate();
+  const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const mkMs=(hhmm)=>{const pr=hhmm.split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
+  const nowMs=now.getTime();
+  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim);
+  let mudou=false;
+  for(const apt of ativos){
+    if(!apt.pausas)apt.pausas=[];
+    const manualAbertaAgora=apt.pausas.some(p=>p&&!p.fim&&!p.auto);
+    const aptStart=apt.inicio?new Date(apt.inicio).getTime():null;
+    if(aptStart==null)continue;
+    for(const b of defs){
+      if(!b.cfg||!b.cfg.inicio||!b.cfg.fim)continue;
+      const bStart=mkMs(b.cfg.inicio),bEnd=mkMs(b.cfg.fim);
+      if(bEnd<=bStart)continue;
+      if(nowMs<bStart)continue;
+      if(aptStart>=bEnd)continue;
+      const breakKey=dataStr+'_'+b.key;
+      const existente=apt.pausas.find(p=>p&&p._breakKey===breakKey);
+      const iniMs=Math.max(bStart,aptStart);
+      const fimMs=(nowMs>=bEnd)?bEnd:null;
+      if(!existente){
+        if(manualAbertaAgora)continue;
+        const sobrepoe=apt.pausas.some(p=>{
+          if(!p||!p.inicio)return false;
+          const ps=new Date(p.inicio).getTime();
+          const pe=p.fim?new Date(p.fim).getTime():nowMs;
+          return iniMs<pe&&(fimMs||nowMs)>ps;
+        });
+        if(sobrepoe)continue;
+        apt.pausas.push({inicio:new Date(iniMs).toISOString(),fim:fimMs?new Date(fimMs).toISOString():null,tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
+        apt._ts=Date.now();mudou=true;
+      }else if(existente.auto&&!existente.fim&&fimMs){
+        existente.fim=new Date(fimMs).toISOString();
+        apt._ts=Date.now();mudou=true;
+      }
+    }
+    apt.pausas.sort((x,z)=>((x&&x.inicio?new Date(x.inicio).getTime():0)-(z&&z.inicio?new Date(z.inicio).getTime():0)));
+  }
+  return mudou;
+}
+async function processarPausasTodos(){
+  if(!_dadosCarregados||!S.colaboradores)return;
+  let mudou=false;
+  S.colaboradores.forEach(c=>{if(aplicarPausasAutoSup(c))mudou=true;});
+  if(mudou){
+    await save();
+    if(currentPage==='dash')renderDash();
+    if(currentPage==='live')renderLivePage();
+  }
+}
 function nav(id,btn){
   currentPage=id;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));

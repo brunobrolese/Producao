@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v33</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v34</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2006,9 +2006,13 @@ function renderProdutividade(){
   };
 
   // ── CARTÕES DE DESTAQUE ──
-  const totalQuadros=finalizados.length;
-  const tempoTotalLiq=lista.reduce((s,x)=>s+x.somaLiquido,0);
-  const tempoMedioGeral=totalQuadros?Math.round(tempoTotalLiq/totalQuadros):0;
+  // Quadros produzidos: Montagem Elétrica (apontamentos de elétrica finalizados)
+  // e Montagem Final (quadros que passaram pela inspeção: aprovados + reprovados). Chapa NÃO conta.
+  const eletApts=finalizados.filter(a=>a.setor==='eletrica');
+  const qElet=eletApts.length;
+  const qMF=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&(a.mf.resultado==='aprovado'||a.mf.resultado==='reprovado')&&a.mf.fim&&dentroFiltro(a.mf.fim)).length;
+  const tempoElet=eletApts.reduce((s,a)=>s+tempoLiquido(a),0);
+  const tempoMedioElet=qElet?Math.round(tempoElet/qElet):0;
   const eficsValidas=lista.filter(s=>s.eficiencia!=null);
   const eficMedia=eficsValidas.length?Math.round(eficsValidas.reduce((s,x)=>s+x.eficiencia,0)/eficsValidas.length):null;
   const destaque=eficsValidas.slice().sort((a,b)=>b.eficiencia-a.eficiencia)[0];
@@ -2016,10 +2020,11 @@ function renderProdutividade(){
     <div style="font-size:24px;font-weight:800;color:${cor};line-height:1;">${valor}</div>
     <div style="font-size:12px;color:#666;margin-top:5px;">${icon} ${label}</div></div>`;
   const cardsHtml=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
-    ${card('📦',totalQuadros,'Quadros produzidos','#3550B4')}
-    ${card('⏱',fmtMin(tempoMedioGeral),'Tempo médio/quadro','#BA7517')}
-    ${card('⚡',eficMedia==null?'—':eficMedia+'%','Eficiência média','#1D9E75')}
-    ${destaque?card('🏆',destaque.nome.split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#7c3aed'):''}
+    ${card('⚡',qElet,'Montagem Elétrica','#3550B4')}
+    ${card('🔍',qMF,'Montagem Final (inspecionados)','#7c3aed')}
+    ${card('⏱',fmtMin(tempoMedioElet),'Tempo médio/quadro (elétrica)','#BA7517')}
+    ${card('📈',eficMedia==null?'—':eficMedia+'%','Eficiência média','#1D9E75')}
+    ${destaque?card('🏆',destaque.nome.split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#1D9E75'):''}
   </div>`;
 
   // ── RANKING COM BARRAS, SEPARADO POR SETOR ──

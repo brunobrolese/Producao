@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v32</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v33</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -444,6 +444,7 @@ let _modelosExcluidos=new Set(); // modelos removidos intencionalmente
 let _colabsExcluidos=new Set();  // colaboradores removidos intencionalmente
 let _opsExcluidos=new Set();     // OPs removidas intencionalmente
 let _horarioColab=null;          // id do colaborador com editor de horários aberto
+let _prodPeriodo=null;           // filtro rápido ativo na produtividade (hoje/semana/mes)
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
 
@@ -1895,103 +1896,177 @@ function exportarRelatorio(){
   a.click();
   toast('📥 Relatório exportado');
 }
-function renderProdutividade(){
-  const div=document.getElementById('prod-conteudo');
-  if(!div)return;
-  // apontamentos finalizados no período (por data de fim) — só Chapa e Elétrica
-  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
-  if(!finalizados.length){
-    div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro de Chapa ou Elétrica finalizado no período selecionado.</p>';
-    return;
+// ── Auxiliares da Produtividade ──
+// Filtros rápidos de período
+function prodFiltroRapido(tipo){
+  const hoje=new Date();
+  const fmt=d=>d.toISOString().split('T')[0];
+  let de='',ate='';
+  if(tipo==='hoje'){de=ate=fmt(hoje);}
+  else if(tipo==='semana'){
+    const dia=hoje.getDay(); // 0=dom
+    const seg=new Date(hoje);seg.setDate(hoje.getDate()-((dia+6)%7)); // segunda desta semana
+    de=fmt(seg);ate=fmt(hoje);
+  }else if(tipo==='mes'){
+    de=fmt(new Date(hoje.getFullYear(),hoje.getMonth(),1));
+    ate=fmt(new Date(hoje.getFullYear(),hoje.getMonth()+1,0));
   }
-  // agrupa por colaborador e calcula métricas
+  _filtroData.de=de;_filtroData.ate=ate;
+  const dEl=document.getElementById('filtroDe'),aEl=document.getElementById('filtroAte');
+  if(dEl)dEl.value=de;if(aEl)aEl.value=ate;
+  _prodPeriodo=tipo;
+  renderProdutividade();
+}
+// calcula métricas por colaborador para um conjunto de apontamentos (usado no período atual e no anterior p/ tendência)
+function calcProdStats(apts){
   const stats={};
-  finalizados.forEach(a=>{
+  apts.forEach(a=>{
     const c=S.colaboradores.find(x=>x.id===a.colabId);
     if(!c)return;
     if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaEfic:0,nEfic:0};
     const s=stats[c.id];
     const liq=tempoLiquido(a);
-    // tempo bruto = líquido + tempo total em pausas
     let pausaMin=0;
     (a.pausas||[]).forEach(p=>{if(p.inicio&&p.fim){const d=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(d>0)pausaMin+=d;}});
-    const bruto=liq+pausaMin;
-    s.volume++;
-    s.somaLiquido+=liq;
-    s.somaBruto+=bruto;
-    // eficiência: tempo previsto do modelo PARA O SETOR do apontamento vs tempo líquido real
+    s.volume++;s.somaLiquido+=liq;s.somaBruto+=liq+pausaMin;
     const m=S.modelos.find(x=>x.id===a.modeloId);
     const prev=tempoModeloSetor(m,a.setor);
     if(prev>0&&liq>0){s.somaEfic+=(prev/liq)*100;s.nEfic++;}
   });
-  const lista=Object.values(stats);
-  if(!lista.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum colaborador com quadros no período.</p>';return;}
-  // calcula métricas finais
-  lista.forEach(s=>{
+  Object.values(stats).forEach(s=>{
     s.eficiencia=s.nEfic?Math.round(s.somaEfic/s.nEfic):null;
     s.aproveitamento=s.somaBruto>0?Math.round((s.somaLiquido/s.somaBruto)*100):null;
     s.tempoMedio=s.volume?Math.round(s.somaLiquido/s.volume):0;
   });
-  const SETOR_LABELS_P={'chapa':'🔧 Chapa','eletrica':'⚡ Elétrica','mf':'🔍 Mont. Final','geral':'🔀 Geral'};
-  const medalha=(i)=>i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="color:#bbb;font-weight:600;">${i+1}º</span>`;
+  return stats;
+}
+// período anterior de mesma duração (para tendência)
+function periodoAnterior(){
+  if(!_filtroData.de||!_filtroData.ate)return null;
+  const de=new Date(_filtroData.de+'T00:00:00'),ate=new Date(_filtroData.ate+'T00:00:00');
+  const dias=Math.round((ate-de)/86400000)+1;
+  const antAte=new Date(de);antAte.setDate(de.getDate()-1);
+  const antDe=new Date(antAte);antDe.setDate(antAte.getDate()-(dias-1));
+  const fmt=d=>d.toISOString().split('T')[0];
+  return {de:fmt(antDe),ate:fmt(antAte)};
+}
+function exportarProdutividade(){
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const stats=calcProdStats(finalizados);
+  const lista=Object.values(stats);
+  if(!lista.length){toast('Nada para exportar no período.');return;}
+  let csv='Colaborador;Setor;Quadros;Eficiencia (%);Aproveitamento (%);Tempo Medio (min)\n';
+  lista.sort((a,b)=>(b.eficiencia||0)-(a.eficiencia||0)).forEach(s=>{
+    csv+=`${s.nome};${s.setor||''};${s.volume};${s.eficiencia==null?'':s.eficiencia};${s.aproveitamento==null?'':s.aproveitamento};${s.tempoMedio}\n`;
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='produtividade_'+(_filtroData.de||'tudo')+'.csv';a.click();
+  toast('📥 Produtividade exportada');
+}
+function renderProdutividade(){
+  const div=document.getElementById('prod-conteudo');
+  if(!div)return;
   const fmtMin=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
+  const SETOR_LABELS_P={'chapa':'🔧 Chapa','eletrica':'⚡ Elétrica','mf':'🔍 Mont. Final','geral':'🔀 Geral'};
 
-  // monta um ranking para uma métrica
-  function ranking(titulo,subtitulo,valorFn,formatFn,corFn,ordem){
-    const validos=lista.filter(s=>valorFn(s)!==null);
-    validos.sort((a,b)=>ordem==='desc'?valorFn(b)-valorFn(a):valorFn(a)-valorFn(b));
-    let linhas=validos.map((s,i)=>{
-      const v=valorFn(s);
-      const cor=corFn?corFn(v):'#1a1a1a';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #f2f2f2;${i<3?'background:#fafbff;':''}">
-        <div style="width:28px;text-align:center;font-size:15px;">${medalha(i)}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;">${s.nome}</div>
-          <div style="font-size:11px;color:#999;">${SETOR_LABELS_P[s.setor||'eletrica']||''}</div>
+  // filtros rápidos (sempre visíveis)
+  const btnF=(t,lbl)=>`<button onclick="prodFiltroRapido('${t}')" style="padding:6px 14px;border-radius:99px;border:1px solid ${_prodPeriodo===t?'#3550B4':'#ddd'};background:${_prodPeriodo===t?'#EEF1FF':'#fff'};color:${_prodPeriodo===t?'#3550B4':'#666'};font-size:12px;font-weight:600;cursor:pointer;">${lbl}</button>`;
+  const filtrosHtml=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
+    <span style="font-size:12px;color:#888;">Período:</span>
+    ${btnF('hoje','Hoje')}${btnF('semana','Esta semana')}${btnF('mes','Este mês')}
+    <span style="font-size:12px;color:#aaa;margin-left:4px;">${periodoLabel()}</span>
+    <button onclick="exportarProdutividade()" style="margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid #1D9E75;background:#fff;color:#1D9E75;font-size:12px;font-weight:600;cursor:pointer;">📥 Exportar CSV</button>
+  </div>`;
+
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  if(!finalizados.length){
+    div.innerHTML=filtrosHtml+'<p class="empty" style="padding:20px 0;">Nenhum quadro de Chapa ou Elétrica finalizado no período selecionado.</p>';
+    return;
+  }
+  const stats=calcProdStats(finalizados);
+  const lista=Object.values(stats);
+
+  // tendência: métricas do período anterior
+  let statsAnt={};
+  const ant=periodoAnterior();
+  if(ant){
+    const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&a.fim.substring(0,10)>=ant.de&&a.fim.substring(0,10)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica'));
+    statsAnt=calcProdStats(aptsAnt);
+  }
+  const tendencia=(id,campo)=>{
+    const at=stats[id]&&stats[id][campo];
+    const an=statsAnt[id]&&statsAnt[id][campo];
+    if(at==null||an==null||an===0)return '';
+    const dif=at-an;
+    if(Math.abs(dif)<1)return '<span style="font-size:11px;color:#999;">→</span>';
+    const cor=dif>0?'#1D9E75':'#A32D2D';
+    const seta=dif>0?'▲':'▼';
+    return `<span style="font-size:11px;color:${cor};font-weight:600;">${seta}${Math.abs(dif)}${campo==='volume'?'':'%'}</span>`;
+  };
+
+  // ── CARTÕES DE DESTAQUE ──
+  const totalQuadros=finalizados.length;
+  const tempoTotalLiq=lista.reduce((s,x)=>s+x.somaLiquido,0);
+  const tempoMedioGeral=totalQuadros?Math.round(tempoTotalLiq/totalQuadros):0;
+  const eficsValidas=lista.filter(s=>s.eficiencia!=null);
+  const eficMedia=eficsValidas.length?Math.round(eficsValidas.reduce((s,x)=>s+x.eficiencia,0)/eficsValidas.length):null;
+  const destaque=eficsValidas.slice().sort((a,b)=>b.eficiencia-a.eficiencia)[0];
+  const card=(icon,valor,label,cor)=>`<div style="flex:1;min-width:150px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px 16px;">
+    <div style="font-size:24px;font-weight:800;color:${cor};line-height:1;">${valor}</div>
+    <div style="font-size:12px;color:#666;margin-top:5px;">${icon} ${label}</div></div>`;
+  const cardsHtml=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+    ${card('📦',totalQuadros,'Quadros produzidos','#3550B4')}
+    ${card('⏱',fmtMin(tempoMedioGeral),'Tempo médio/quadro','#BA7517')}
+    ${card('⚡',eficMedia==null?'—':eficMedia+'%','Eficiência média','#1D9E75')}
+    ${destaque?card('🏆',destaque.nome.split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#7c3aed'):''}
+  </div>`;
+
+  // ── RANKING COM BARRAS, SEPARADO POR SETOR ──
+  function rankingSetor(setorKey,setorLabel){
+    const doSetor=lista.filter(s=>{
+      // agrupa pelo setor dos apontamentos, não do cadastro: refaz por setor
+      return finalizados.some(a=>a.colabId===s.id&&a.setor===setorKey);
+    });
+    // recalcula stats por colaborador SÓ com apontamentos desse setor
+    const aptsSetor=finalizados.filter(a=>a.setor===setorKey);
+    const st=calcProdStats(aptsSetor);
+    const arr=Object.values(st);
+    if(!arr.length)return '';
+    const maxVol=Math.max(...arr.map(s=>s.volume),1);
+    const barra=(pct,cor)=>`<div style="height:6px;background:#eee;border-radius:99px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${Math.min(pct,100)}%;background:${cor};"></div></div>`;
+    const corEfic=v=>v>=100?'#1D9E75':v>=80?'#BA7517':'#A32D2D';
+    const medalha=(i)=>i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="color:#bbb;font-weight:600;font-size:12px;">${i+1}º</span>`;
+    const linhas=arr.sort((a,b)=>(b.eficiencia||0)-(a.eficiencia||0)).map((s,i)=>{
+      const ef=s.eficiencia;
+      return `<div style="padding:9px 10px;border-bottom:1px solid #f2f2f2;${i<3?'background:#fafbff;':''}">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:26px;text-align:center;">${medalha(i)}</div>
+          <div style="flex:1;font-size:13px;font-weight:600;">${s.nome}</div>
+          <div style="font-size:14px;font-weight:700;color:${ef==null?'#bbb':corEfic(ef)};">${ef==null?'—':ef+'%'} ${tendencia(s.id,'eficiencia')}</div>
         </div>
-        <div style="font-size:15px;font-weight:700;color:${cor};">${formatFn(v)}</div>
+        ${ef==null?'':barra(ef,corEfic(ef))}
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#888;">
+          <span>📦 ${s.volume} quadros ${tendencia(s.id,'volume')}</span>
+          <span>⏱ ${fmtMin(s.tempoMedio)}/quadro</span>
+          <span>Aprov. ${s.aproveitamento==null?'—':s.aproveitamento+'%'}</span>
+        </div>
       </div>`;
     }).join('');
-    if(!validos.length)linhas='<div style="padding:12px;font-size:12px;color:#aaa;">Sem dados suficientes.</div>';
-    return `<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;flex:1;min-width:240px;">
-      <div style="font-size:14px;font-weight:700;margin-bottom:2px;">${titulo}</div>
-      <div style="font-size:11px;color:#999;margin-bottom:10px;">${subtitulo}</div>
-      ${linhas}
-    </div>`;
+    return `<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;flex:1;min-width:300px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px;">${setorLabel}</div>${linhas}</div>`;
   }
+  const rankChapa=rankingSetor('chapa','🔧 Ranking — Chapa');
+  const rankElet=rankingSetor('eletrica','⚡ Ranking — Elétrica');
+  const rankingsHtml=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;">${rankElet}${rankChapa}</div>`;
 
-  const rkEfic=ranking('⚡ Eficiência','Previsto vs tempo real (maior = mais rápido)',
-    s=>s.eficiencia,v=>v+'%',
-    v=>v>=100?'#1D9E75':v>=80?'#BA7517':'#A32D2D','desc');
-  const rkVol=ranking('📦 Volume','Quadros finalizados no período',
-    s=>s.volume,v=>v+'',()=>'#3550B4','desc');
-  const rkApr=ranking('⏱ Aproveitamento','% do tempo que foi trabalho (fora pausas)',
-    s=>s.aproveitamento,v=>v+'%',
-    v=>v>=80?'#1D9E75':v>=60?'#BA7517':'#A32D2D','desc');
-
-  // tabela resumo
-  const linhasTab=lista.sort((a,b)=>(b.eficiencia||0)-(a.eficiencia||0)).map(s=>`<tr>
-    <td>${s.nome}</td>
-    <td><span class="badge bgray">${SETOR_LABELS_P[s.setor||'eletrica']||''}</span></td>
-    <td>${s.volume}</td>
-    <td style="color:${s.eficiencia==null?'#bbb':s.eficiencia>=100?'#1D9E75':s.eficiencia>=80?'#BA7517':'#A32D2D'};font-weight:600;">${s.eficiencia==null?'—':s.eficiencia+'%'}</td>
-    <td style="color:${s.aproveitamento==null?'#bbb':s.aproveitamento>=80?'#1D9E75':s.aproveitamento>=60?'#BA7517':'#A32D2D'};font-weight:600;">${s.aproveitamento==null?'—':s.aproveitamento+'%'}</td>
-    <td>${fmtMin(s.tempoMedio)}</td>
-  </tr>`).join('');
-
-  div.innerHTML=`
-    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">${rkEfic}${rkVol}${rkApr}</div>
-    <div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;">
-      <div style="font-size:14px;font-weight:700;margin-bottom:10px;">Resumo por colaborador</div>
-      <table><thead><tr><th>Nome</th><th>Setor</th><th>Quadros</th><th>Eficiência</th><th>Aproveitamento</th><th>Tempo médio</th></tr></thead>
-      <tbody>${linhasTab}</tbody></table>
-    </div>
-    <div style="font-size:11px;color:#999;margin-top:10px;">
-      <strong>Eficiência</strong> = tempo previsto do modelo ÷ tempo real trabalhado. Acima de 100% = mais rápido que o previsto.<br>
-      <strong>Aproveitamento</strong> = tempo trabalhado ÷ tempo total (incluindo pausas). <strong>Tempo médio</strong> = média de tempo real por quadro.<br>
-      Compare colaboradores dentro do mesmo setor — a complexidade varia entre Chapa, Elétrica e Montagem Final.
+  div.innerHTML=filtrosHtml+cardsHtml+rankingsHtml+`
+    <div style="font-size:11px;color:#999;margin-top:4px;">
+      <strong>Eficiência</strong> = tempo previsto ÷ tempo real (acima de 100% = mais rápido). As setas ▲▼ comparam com o período anterior de mesma duração.<br>
+      Rankings separados por setor para comparação justa. <strong>Aprov.</strong> = % do tempo que foi trabalho (fora pausas).
     </div>`;
 }
+
 function renderMes(){
   const mes=document.getElementById('mFiltro').value;
   const meta=parseInt(document.getElementById('mMeta').value)||50;

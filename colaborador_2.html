@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v29</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v31</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -212,6 +212,7 @@ textarea{resize:vertical;}
       </div>
     </div>
     <div id="setorBadge" style="margin-bottom:10px;"></div>
+    <div id="pausasBadge" style="margin-bottom:10px;"></div>
     <div id="addFormArea">
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
@@ -629,6 +630,7 @@ async function confirmarIniciar(){
 function renderAll(){
   if(!colab)return;
   renderOps();
+  renderPausasBadge();
   aplicarTemaColab();
   const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
   meusApts.forEach(a=>bindRetrab(a.id));
@@ -1032,6 +1034,59 @@ async function retomar(aptId){
   const p=apt.pausas||[];if(p.length){const u=p[p.length-1];if(u&&!u.fim)u.fim=new Date().toISOString();}
   apt._ts=Date.now();
   await save();renderAll();toast('Retomado ▶');
+}
+
+function renderPausasBadge(){
+  const div=document.getElementById('pausasBadge');
+  if(!div||!colab)return;
+  const cfg=colab.horarios;
+  const defs=[
+    {key:'cafeManha',icon:'☕',nome:'Café da manhã',cfg:cfg&&cfg.cafeManha},
+    {key:'almoco',icon:'🍽️',nome:'Almoço',cfg:cfg&&cfg.almoco},
+    {key:'cafeTarde',icon:'☕',nome:'Café da tarde',cfg:cfg&&cfg.cafeTarde}
+  ];
+  const configurados=defs.filter(d=>d.cfg&&d.cfg.inicio&&d.cfg.fim);
+  if(!configurados.length){
+    div.innerHTML='<div style="background:#f5f5f5;border:1px dashed #ccc;border-radius:8px;padding:7px 12px;font-size:11px;color:#999;">⏰ Nenhum horário de pausa automática configurado para você</div>';
+    return;
+  }
+  const agora=new Date();
+  const hhmm=agora.toTimeString().slice(0,5);
+  // determina: em pausa agora? próxima pausa?
+  let emPausa=null,proxima=null;
+  for(const d of configurados){
+    if(hhmm>=d.cfg.inicio&&hhmm<d.cfg.fim){emPausa=d;break;}
+  }
+  if(!emPausa){
+    const futuras=configurados.filter(d=>hhmm<d.cfg.inicio).sort((a,b)=>a.cfg.inicio.localeCompare(b.cfg.inicio));
+    proxima=futuras[0]||null;
+  }
+  // pills com todos os horários
+  const pills=configurados.map(d=>{
+    const ativa=emPausa&&emPausa.key===d.key;
+    const prox=proxima&&proxima.key===d.key;
+    const passou=hhmm>=d.cfg.fim;
+    let bg='#eef1ff',cor='#3550B4',bd='#c3ccf5';
+    if(ativa){bg='#FFF3E0';cor='#BA7517';bd='#f0c060;';}
+    else if(passou){bg='#f0f0f0';cor='#aaa';bd='#e0e0e0';}
+    else if(prox){bg='#EAF3DE';cor='#3B6D11';bd='#a8cf7a';}
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:${bg};color:${cor};border:1px solid ${bd};border-radius:99px;padding:3px 9px;font-size:11px;font-weight:600;${passou?'text-decoration:line-through;opacity:.7;':''}">${d.icon} ${d.cfg.inicio}–${d.cfg.fim}${prox?' ◀ próxima':''}${ativa?' ● agora':''}</span>`;
+  }).join(' ');
+
+  let statusLinha='';
+  if(emPausa){
+    statusLinha=`<div style="font-size:12px;font-weight:700;color:#BA7517;margin-top:5px;">${emPausa.icon} Em ${emPausa.nome} — retorno automático às ${emPausa.cfg.fim}</div>`;
+  }else if(proxima){
+    statusLinha=`<div style="font-size:12px;color:#555;margin-top:5px;">Próxima pausa: <strong>${proxima.icon} ${proxima.nome}</strong> às <strong>${proxima.cfg.inicio}</strong></div>`;
+  }else{
+    statusLinha=`<div style="font-size:12px;color:#888;margin-top:5px;">✓ Todas as pausas de hoje já passaram</div>`;
+  }
+
+  div.innerHTML=`<div style="background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:8px 12px;">
+    <div style="font-size:11px;color:#888;margin-bottom:5px;">⏰ Pausas automáticas de hoje</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">${pills}</div>
+    ${statusLinha}
+  </div>`;
 }
 
 // ── PAUSA/RETOMADA AUTOMÁTICA (café e almoço) ──

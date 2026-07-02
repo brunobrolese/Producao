@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v29</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v31</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -135,6 +135,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <button onclick="nav('col',this)">Colaboradores</button>
     <button onclick="nav('mes',this)">Visão Mensal</button>
     <button onclick="nav('prod',this)">📊 Produtividade</button>
+    <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -354,6 +355,17 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       <div id="prod-conteudo"></div>
     </div>
 
+    <!-- RELATÓRIO POR COLABORADOR -->
+    <div id="page-rel" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:14px;">Média de tempo por modelo que cada colaborador montou (respeitando o filtro de data do topo).</div>
+      <div class="frow" style="max-width:360px;margin-bottom:16px;">
+        <div style="flex:1;"><label>Colaborador</label>
+          <select id="relColab" onchange="renderRelatorio()"><option value="">Selecione...</option></select>
+        </div>
+      </div>
+      <div id="rel-conteudo"></div>
+    </div>
+
     <div id="page-cfg" class="page">
       <div class="card">
         <h3>🔗 Banco de dados conectado</h3>
@@ -464,6 +476,7 @@ function aplicarFiltroData(){
   if(currentPage==='apt')renderApt();
   if(currentPage==='mes')renderMes();
   if(currentPage==='prod')renderProdutividade();
+  if(currentPage==='rel')renderRelatorio();
 }
 
 function filtroMesAtual(){
@@ -791,6 +804,7 @@ function nav(id,btn){
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
   if(id==='mes')renderMes();
   if(id==='prod')renderProdutividade();
+  if(id==='rel')popularRelColab();
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -1709,6 +1723,109 @@ function renderGraficos(){
 
 /* ── MENSAL ── */
 let chartM=null;
+let _relColabAtual=null;
+function popularRelColab(){
+  const sel=document.getElementById('relColab');
+  if(!sel)return;
+  const atual=sel.value;
+  sel.innerHTML='<option value="">Selecione...</option>'+
+    S.colaboradores.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('');
+  if(atual)sel.value=atual;
+  if(sel.value)renderRelatorio();
+}
+function renderRelatorio(){
+  const sel=document.getElementById('relColab');
+  const div=document.getElementById('rel-conteudo');
+  if(!div)return;
+  const colabId=sel?parseInt(sel.value):null;
+  _relColabAtual=colabId;
+  if(!colabId){div.innerHTML='<p class="empty" style="padding:20px 0;">Selecione um colaborador para ver o relatório.</p>';return;}
+  const colab=S.colaboradores.find(c=>c.id===colabId);
+  if(!colab){div.innerHTML='';return;}
+  // apontamentos finalizados desse colaborador no período (só chapa e elétrica)
+  const apts=S.apontamentos.filter(a=>a&&a.colabId===colabId&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  if(!apts.length){
+    div.innerHTML=`<p class="empty" style="padding:20px 0;">${colab.nome} não tem quadros de Chapa ou Elétrica finalizados no período selecionado.</p>`;
+    return;
+  }
+  // agrupa por modelo + setor
+  const grupos={};
+  apts.forEach(a=>{
+    const m=S.modelos.find(x=>x.id===a.modeloId);
+    const codModelo=m?m.codigo:(a.modeloLabel||'Modelo removido');
+    const chave=a.modeloId+'_'+a.setor;
+    if(!grupos[chave])grupos[chave]={modelo:codModelo,modeloId:a.modeloId,setor:a.setor,tempos:[],previsto:tempoModeloSetor(m,a.setor)};
+    grupos[chave].tempos.push(tempoLiquido(a));
+  });
+  const linhas=Object.values(grupos).map(g=>{
+    const n=g.tempos.length;
+    const soma=g.tempos.reduce((s,t)=>s+t,0);
+    const media=Math.round(soma/n);
+    const min=Math.min(...g.tempos);
+    const max=Math.max(...g.tempos);
+    const efic=(g.previsto>0&&media>0)?Math.round((g.previsto/media)*100):null;
+    return {...g,n,media,min,max,efic};
+  }).sort((a,b)=>a.modelo.localeCompare(b.modelo)||a.setor.localeCompare(b.setor));
+
+  const SETOR={'chapa':'🔧 Chapa','eletrica':'⚡ Elétrica'};
+  const fmtMin=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
+  const totalQuadros=apts.length;
+
+  const linhasTab=linhas.map(g=>`<tr>
+    <td><strong>${g.modelo}</strong></td>
+    <td><span class="badge bgray">${SETOR[g.setor]||g.setor}</span></td>
+    <td>${g.n}</td>
+    <td style="font-weight:700;">${fmtMin(g.media)}</td>
+    <td style="color:#888;">${fmtMin(g.min)} – ${fmtMin(g.max)}</td>
+    <td>${g.previsto?fmtMin(g.previsto):'—'}</td>
+    <td style="color:${g.efic==null?'#bbb':g.efic>=100?'#1D9E75':g.efic>=80?'#BA7517':'#A32D2D'};font-weight:600;">${g.efic==null?'—':g.efic+'%'}</td>
+  </tr>`).join('');
+
+  div.innerHTML=`
+    <div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:16px;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+        <div style="font-size:16px;font-weight:700;">${colab.nome}</div>
+        <button class="btn-sm" onclick="exportarRelatorio()">📥 Exportar CSV</button>
+      </div>
+      <div style="font-size:12px;color:#888;">${totalQuadros} quadros finalizados no período · ${linhas.length} combinações modelo/setor · ${periodoLabel?periodoLabel():''}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;overflow-x:auto;">
+      <table><thead><tr>
+        <th>Modelo</th><th>Setor</th><th>Qtd</th><th>Tempo médio</th><th>Mín – Máx</th><th>Previsto</th><th>Eficiência</th>
+      </tr></thead><tbody>${linhasTab}</tbody></table>
+    </div>
+    <div style="font-size:11px;color:#999;margin-top:10px;">
+      <strong>Tempo médio</strong> = média do tempo real trabalhado (descontando pausas) nos quadros daquele modelo/setor.
+      <strong>Eficiência</strong> = tempo previsto ÷ tempo médio. Acima de 100% = mais rápido que o previsto.
+    </div>`;
+}
+function exportarRelatorio(){
+  if(!_relColabAtual)return;
+  const colab=S.colaboradores.find(c=>c.id===_relColabAtual);
+  if(!colab)return;
+  const apts=S.apontamentos.filter(a=>a&&a.colabId===_relColabAtual&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const grupos={};
+  apts.forEach(a=>{
+    const m=S.modelos.find(x=>x.id===a.modeloId);
+    const codModelo=m?m.codigo:(a.modeloLabel||'Modelo removido');
+    const chave=a.modeloId+'_'+a.setor;
+    if(!grupos[chave])grupos[chave]={modelo:codModelo,setor:a.setor,tempos:[],previsto:tempoModeloSetor(m,a.setor)};
+    grupos[chave].tempos.push(tempoLiquido(a));
+  });
+  let csv='Colaborador;Modelo;Setor;Qtd;Tempo Medio (min);Minimo (min);Maximo (min);Previsto (min);Eficiencia (%)\n';
+  Object.values(grupos).forEach(g=>{
+    const n=g.tempos.length,soma=g.tempos.reduce((s,t)=>s+t,0),media=Math.round(soma/n);
+    const min=Math.min(...g.tempos),max=Math.max(...g.tempos);
+    const efic=(g.previsto>0&&media>0)?Math.round((g.previsto/media)*100):'';
+    csv+=`${colab.nome};${g.modelo};${g.setor==='chapa'?'Chapa':'Eletrica'};${n};${media};${min};${max};${g.previsto||''};${efic}\n`;
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='relatorio_'+colab.nome.replace(/\s+/g,'_')+'.csv';
+  a.click();
+  toast('📥 Relatório exportado');
+}
 function renderProdutividade(){
   const div=document.getElementById('prod-conteudo');
   if(!div)return;

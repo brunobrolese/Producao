@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v35</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v37</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1460,42 +1460,39 @@ function renderMF(){
     obsDiv.appendChild(ta);
     card.appendChild(obsDiv);
 
-    const btns=document.createElement('div');btns.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;';
-    const btnAp=document.createElement('button');btnAp.className='btn-aprovar';btnAp.textContent='✓ Aprovar';
-    btnAp.addEventListener('click',function(){finalizarMF(apt.id,'aprovado');});
-    const btnRe=document.createElement('button');btnRe.className='btn-reprovar';btnRe.textContent='✗ Reprovar';
-    btnRe.addEventListener('click',function(){finalizarMF(apt.id,'reprovado');});
-    btns.append(btnAp,btnRe);
+    const btns=document.createElement('div');btns.style.cssText='margin-top:12px;';
+    const btnAp=document.createElement('button');btnAp.className='btn-aprovar';btnAp.textContent='✓ Finalizar inspeção';
+    btnAp.style.width='100%';
+    btnAp.addEventListener('click',function(){finalizarMF(apt.id);});
+    btns.append(btnAp);
     card.appendChild(btns);
     div.appendChild(card);
   });
 }
 
-async function finalizarMF(aptId, resultado){
+async function finalizarMF(aptId){
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
   // PROTEÇÃO: se o servidor já tem uma decisão para este painel, não sobrescreve
   const srvApt=await estadoServidor(aptId);
   if(srvApt&&srvApt.mf&&srvApt.mf.resultado){
-    toast('⚠ Este painel já foi avaliado por outra pessoa. Recarregando...');
+    toast('⚠ Este painel já foi finalizado por outra pessoa. Recarregando...');
     await load();renderAll();renderMF();
     return;
   }
   const est=_mfEstado[aptId]||{checklist:{},obs:''};
-  const checks=Object.values(est.checklist);
+  // itens marcados como NOK ficam REGISTRADOS no checklist (o responsável corrige e aprova mesmo assim)
   const nok=MF_CHECKLIST.filter(i=>est.checklist[i.id]===false).map(i=>i.label);
-  if(resultado==='aprovado'&&nok.length){toast('Corrija os itens NOK antes de aprovar.');return;}
-  if(resultado==='reprovado'&&!est.obs.trim()){toast('Descreva o motivo da reprovação nas observações.');return;}
   if(!apt.mf)apt.mf={};
   apt.mf.checklist=est.checklist;
   apt.mf.obs=est.obs;
-  apt.mf.resultado=resultado;
+  apt.mf.itensCorrigidos=nok;           // guarda o que estava NOK e foi corrigido na própria MF
+  apt.mf.resultado='aprovado';          // sempre aprovado — o retrabalho é feito na própria MF
   apt.mf.fim=new Date().toISOString();
-  // tanto aprovado quanto reprovado FINALIZAM o quadro (retrabalho é feito na própria MF antes da decisão)
   apt.etapa='concluido';
   apt._ts=Date.now();
   _mfIniciado.delete(aptId);
   await save();renderAll();renderMF();
-  toast(resultado==='aprovado'?'✓ Quadro aprovado na inspeção!':'⚠ Quadro reprovado — registrado para retrabalho');
+  toast(nok.length?('✓ Finalizado! '+nok.length+' item(ns) corrigido(s) na inspeção'):'✓ Quadro aprovado na inspeção!');
 }
 
 function switchTab(tab){

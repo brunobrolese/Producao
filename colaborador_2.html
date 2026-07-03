@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v34</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v35</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -213,6 +213,7 @@ textarea{resize:vertical;}
     </div>
     <div id="setorBadge" style="margin-bottom:10px;"></div>
     <div id="pausasBadge" style="margin-bottom:10px;"></div>
+    <div id="semChapaArea" style="margin-bottom:10px;"></div>
     <div id="addFormArea">
       <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
     </div>
@@ -601,6 +602,9 @@ async function confirmarIniciar(){
     inicioISO=new Date().toISOString(); // sem hora informada: usa agora
   }
 
+  // encerra o registro "sem chapa" (se estiver contando) — o tempo parado para aqui
+  encerrarSemChapa();
+
   S.apontamentos.push({
     id:uid(),
     opNum,
@@ -631,8 +635,9 @@ function renderAll(){
   if(!colab)return;
   renderOps();
   renderPausasBadge();
+  renderSemChapa();
   aplicarTemaColab();
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
+  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
   meusApts.forEach(a=>bindRetrab(a.id));
   // show MF tab only for the designated MF responsible
   const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
@@ -703,9 +708,9 @@ function renderOps(){
   if(!colab)return; // guard: não renderiza sem colaborador selecionado
   const div=document.getElementById('opsDiv');
   const setor=getColabSetor();
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final');
+  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
   const hoje=new Date().toISOString().split('T')[0];
-  const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido');
+  const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido'&&a.tipoRegistro!=='sem_chapa');
   const addArea=document.getElementById('addFormArea');
   if(addArea)addArea.style.display=setor==='eletrica'?'none':'block';
   renderFilaEletrica();
@@ -1036,6 +1041,69 @@ async function retomar(aptId){
   await save();renderAll();toast('Retomado ▶');
 }
 
+let semChapaTimerIv=null;
+function semChapaAtivo(){
+  if(!colab)return null;
+  return S.apontamentos.find(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colab.id&&!a.fim)||null;
+}
+function semChapaMinutosMes(colabId,mesStr){
+  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&a.inicio.substring(0,7)===mesStr)
+    .reduce((tot,a)=>{
+      const ini=new Date(a.inicio).getTime();
+      const fim=a.fim?new Date(a.fim).getTime():Date.now();
+      const min=Math.round((fim-ini)/60000);
+      return tot+(min>0?min:0);
+    },0);
+}
+async function alternarSemChapa(){
+  if(!colab)return;
+  const ativo=semChapaAtivo();
+  if(ativo){
+    ativo.fim=new Date().toISOString();ativo._ts=Date.now();
+    await save();renderAll();toast('⏹ Registro "sem chapa" encerrado');
+  }else{
+    S.apontamentos.push({id:uid(),colabId:colab.id,setor:'chapa',tipoRegistro:'sem_chapa',inicio:new Date().toISOString(),fim:null,_ts:Date.now()});
+    await save();renderAll();toast('⏱ Contando tempo sem chapa...');
+  }
+}
+function encerrarSemChapa(){
+  const ativo=semChapaAtivo();
+  if(ativo){ativo.fim=new Date().toISOString();ativo._ts=Date.now();return true;}
+  return false;
+}
+function renderSemChapa(){
+  const div=document.getElementById('semChapaArea');
+  if(!div||!colab){if(div)div.innerHTML='';return;}
+  if(semChapaTimerIv){clearInterval(semChapaTimerIv);semChapaTimerIv=null;}
+  if(getColabSetor()!=='chapa'){div.innerHTML='';return;}
+  const ativo=semChapaAtivo();
+  const mesAtual=new Date().toISOString().substring(0,7);
+  const totalMes=semChapaMinutosMes(colab.id,mesAtual);
+  const fmtT=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
+  if(ativo){
+    const calc=()=>Math.round((Date.now()-new Date(ativo.inicio).getTime())/60000);
+    div.innerHTML=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#A32D2D;">⏱ SEM CHAPA — contando</div>
+          <div style="font-size:22px;font-weight:800;color:#A32D2D;" id="semChapaCronometro">${fmtT(calc())}</div>
+        </div>
+        <button onclick="alternarSemChapa()" style="background:#A32D2D;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">⏹ Encerrar</button>
+      </div>
+      <div style="font-size:11px;color:#A32D2D;margin-top:6px;">Encerra sozinho quando você iniciar um painel. Total do mês: ${fmtT(totalMes)}</div>
+    </div>`;
+    semChapaTimerIv=setInterval(()=>{
+      const el=document.getElementById('semChapaCronometro');
+      if(!el){clearInterval(semChapaTimerIv);semChapaTimerIv=null;return;}
+      el.textContent=fmtT(calc());
+    },1000);
+  }else{
+    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:10px 14px;">
+      <div style="font-size:12px;color:#666;">Parado esperando material? Registre o tempo.<div style="font-size:11px;color:#999;">Total sem chapa no mês: <strong>${fmtT(totalMes)}</strong></div></div>
+      <button onclick="alternarSemChapa()" style="background:#BA7517;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;">⏱ SEM CHAPA</button>
+    </div>`;
+  }
+}
 function renderPausasBadge(){
   const div=document.getElementById('pausasBadge');
   if(!div||!colab)return;
@@ -1109,7 +1177,7 @@ function aplicarPausasAuto(colaborador){
   const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const mkMs=(hhmm)=>{const pr=hhmm.split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
   const nowMs=now.getTime();
-  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim);
+  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim&&a.tipoRegistro!=='sem_chapa');
   let mudou=false;
   for(const apt of ativos){
     if(!apt.pausas)apt.pausas=[];
@@ -1325,7 +1393,7 @@ function renderMF(){
   const mfApts=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   const badge=document.getElementById('mfBadge');
   const tabs=document.getElementById('colTabs');
-  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final').length?'flex':'none';
+  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
   if(badge){badge.textContent=mfApts.length;badge.style.display=mfApts.length?'inline':'none';}
   if(!mfApts.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
   div.innerHTML='';

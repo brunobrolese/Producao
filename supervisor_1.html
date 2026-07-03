@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v34</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v35</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -812,7 +812,7 @@ function aplicarPausasAutoSup(colaborador){
   const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const mkMs=(hhmm)=>{const pr=hhmm.split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
   const nowMs=now.getTime();
-  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim);
+  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim&&a.tipoRegistro!=='sem_chapa');
   let mudou=false;
   for(const apt of ativos){
     if(!apt.pausas)apt.pausas=[];
@@ -1421,7 +1421,7 @@ function renderLive(){
   const tipoColors={chapa:'#b45309',eletrica:'#3550B4',mf:'#7c3aed',geral:'#555'};
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-  const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final');
+  const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
   const mfPendentes=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
 
   // group by setor/etapa
@@ -1561,10 +1561,10 @@ function renderDashSetor(setor){
   const temFiltro=_filtroData.de||_filtroData.ate;
   const cor=setor==='chapa'?'#db2777':'#EA580C';
   // aplica filtro de data ao conjunto base
-  const apts=S.apontamentos.filter(a=>a.setor===setor&&a.fim&&(temFiltro?dentroFiltro(a.fim):true));
+  const apts=S.apontamentos.filter(a=>a.setor===setor&&a.fim&&a.tipoRegistro!=='sem_chapa'&&(temFiltro?dentroFiltro(a.fim):true));
   const aptH=apts.filter(a=>temFiltro||a.fim.startsWith(hoje));
   const aptM=apts.filter(a=>temFiltro||a.fim.startsWith(mes));
-  const emAnd=S.apontamentos.filter(a=>a.setor===setor&&!a.fim).length;
+  const emAnd=S.apontamentos.filter(a=>a.setor===setor&&!a.fim&&a.tipoRegistro!=='sem_chapa').length;
   const comErro=apts.filter(a=>a.erros&&a.erros.length>0).length;
   const retrabalhos=apts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length;
   const tempos=apts.filter(a=>tempoLiquido(a)>0).map(a=>tempoLiquido(a));
@@ -1813,7 +1813,7 @@ function renderRelatorio(){
   const colab=S.colaboradores.find(c=>c.id===colabId);
   if(!colab){div.innerHTML='';return;}
   // apontamentos finalizados desse colaborador no período (só chapa e elétrica)
-  const apts=S.apontamentos.filter(a=>a&&a.colabId===colabId&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const apts=S.apontamentos.filter(a=>a&&a.colabId===colabId&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
   if(!apts.length){
     div.innerHTML=`<p class="empty" style="padding:20px 0;">${colab.nome} não tem quadros de Chapa ou Elétrica finalizados no período selecionado.</p>`;
     return;
@@ -1873,7 +1873,7 @@ function exportarRelatorio(){
   if(!_relColabAtual)return;
   const colab=S.colaboradores.find(c=>c.id===_relColabAtual);
   if(!colab)return;
-  const apts=S.apontamentos.filter(a=>a&&a.colabId===_relColabAtual&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const apts=S.apontamentos.filter(a=>a&&a.colabId===_relColabAtual&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
   const grupos={};
   apts.forEach(a=>{
     const m=S.modelos.find(x=>x.id===a.modeloId);
@@ -1951,7 +1951,7 @@ function periodoAnterior(){
   return {de:fmt(antDe),ate:fmt(antAte)};
 }
 function exportarProdutividade(){
-  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
   const stats=calcProdStats(finalizados);
   const lista=Object.values(stats);
   if(!lista.length){toast('Nada para exportar no período.');return;}
@@ -1963,6 +1963,16 @@ function exportarProdutividade(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='produtividade_'+(_filtroData.de||'tudo')+'.csv';a.click();
   toast('📥 Produtividade exportada');
+}
+// minutos "sem chapa" de um colaborador num mês (YYYY-MM)
+function semChapaMinutosMesSup(colabId,mesStr){
+  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&a.inicio.substring(0,7)===mesStr)
+    .reduce((tot,a)=>{
+      const ini=new Date(a.inicio).getTime();
+      const fim=a.fim?new Date(a.fim).getTime():Date.now();
+      const min=Math.round((fim-ini)/60000);
+      return tot+(min>0?min:0);
+    },0);
 }
 function renderProdutividade(){
   const div=document.getElementById('prod-conteudo');
@@ -1979,7 +1989,7 @@ function renderProdutividade(){
     <button onclick="exportarProdutividade()" style="margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid #1D9E75;background:#fff;color:#1D9E75;font-size:12px;font-weight:600;cursor:pointer;">📥 Exportar CSV</button>
   </div>`;
 
-  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
   if(!finalizados.length){
     div.innerHTML=filtrosHtml+'<p class="empty" style="padding:20px 0;">Nenhum quadro de Chapa ou Elétrica finalizado no período selecionado.</p>';
     return;
@@ -1991,7 +2001,7 @@ function renderProdutividade(){
   let statsAnt={};
   const ant=periodoAnterior();
   if(ant){
-    const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&a.fim.substring(0,10)>=ant.de&&a.fim.substring(0,10)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica'));
+    const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&a.fim.substring(0,10)>=ant.de&&a.fim.substring(0,10)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
     statsAnt=calcProdStats(aptsAnt);
   }
   const tendencia=(id,campo)=>{
@@ -2065,7 +2075,27 @@ function renderProdutividade(){
   const rankElet=rankingSetor('eletrica','⚡ Ranking — Elétrica');
   const rankingsHtml=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;">${rankElet}${rankChapa}</div>`;
 
-  div.innerHTML=filtrosHtml+cardsHtml+rankingsHtml+`
+  // ── TEMPO SEM CHAPA (mês atual) ──
+  const mesAtual=new Date().toISOString().substring(0,7);
+  const mesLabel=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const chapeiros=S.colaboradores.filter(c=>c.setor==='chapa');
+  const semChapaLinhas=chapeiros.map(c=>({nome:c.nome,min:semChapaMinutosMesSup(c.id,mesAtual)}))
+    .filter(x=>x.min>0)
+    .sort((a,b)=>b.min-a.min);
+  let semChapaHtml='';
+  if(semChapaLinhas.length){
+    const linhas=semChapaLinhas.map(x=>`<div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #f2f2f2;">
+      <span style="font-size:13px;font-weight:600;">${x.nome}</span>
+      <span style="font-size:14px;font-weight:700;color:#A32D2D;">${fmtMin(x.min)}</span>
+    </div>`).join('');
+    semChapaHtml=`<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:16px;">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px;">⏸ Tempo parado sem chapa</div>
+      <div style="font-size:11px;color:#999;margin-bottom:10px;">Tempo que os montadores da chapa ficaram parados esperando material — ${mesLabel}</div>
+      ${linhas}
+    </div>`;
+  }
+
+  div.innerHTML=filtrosHtml+cardsHtml+rankingsHtml+semChapaHtml+`
     <div style="font-size:11px;color:#999;margin-top:4px;">
       <strong>Eficiência</strong> = tempo previsto ÷ tempo real (acima de 100% = mais rápido). As setas ▲▼ comparam com o período anterior de mesma duração.<br>
       Rankings separados por setor para comparação justa. <strong>Aprov.</strong> = % do tempo que foi trabalho (fora pausas).

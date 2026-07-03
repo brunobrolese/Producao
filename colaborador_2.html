@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v37</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v38</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1379,9 +1379,19 @@ const MF_CHECKLIST=[
 let _mfEstado={};
 let _mfIniciado=new Set(); // {aptId: {checklist:{id:true/false}, obs}}
 
-function iniciarMontagemFinal(aptId){
+async function iniciarMontagemFinal(aptId){
   _mfIniciado.add(aptId);
   if(!_mfEstado[aptId])_mfEstado[aptId]={checklist:{},obs:''};
+  // grava o horário de início da INSPEÇÃO (persistido, só se ainda não houver)
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(apt){
+    if(!apt.mf)apt.mf={};
+    if(!apt.mf.inicioInspecao){
+      apt.mf.inicioInspecao=new Date().toISOString();
+      apt._ts=Date.now();
+      await save();
+    }
+  }
   renderMF();
 }
 function renderMF(){
@@ -1400,7 +1410,7 @@ function renderMF(){
   mfApts.forEach(apt=>{
     const m=S.modelos.find(x=>x.id===apt.modeloId);
     const autor=S.colaboradores.find(x=>x.id===apt.colabId);
-    const iniciado=_mfIniciado.has(apt.id);
+    const iniciado=_mfIniciado.has(apt.id)||(apt.mf&&apt.mf.inicioInspecao&&!apt.mf.fim);
     const card=document.createElement('div');
     card.className='mf-card';
     card.id='mf-card-'+apt.id;
@@ -1432,6 +1442,7 @@ function renderMF(){
         <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
       <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span>
     </div>
+    ${apt.mf&&apt.mf.inicioInspecao?`<div style="font-size:12px;color:#7c3aed;font-weight:600;margin-bottom:8px;">⏱ Em inspeção há ${Math.max(0,Math.round((Date.now()-new Date(apt.mf.inicioInspecao))/60000))}min (desde ${new Date(apt.mf.inicioInspecao).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})})</div>`:''}
     <div style="font-size:12px;color:#888;margin-bottom:12px;">Verifique cada item antes de aprovar o quadro</div>`;
 
     const cl=document.createElement('div');cl.className='checklist';

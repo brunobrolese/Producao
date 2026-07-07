@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v38</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v40</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -517,6 +517,8 @@ function periodoLabel(){
 }
 
 function tempoLiquido(apt){
+  // se houver tempo definido manualmente pelo supervisor, ele tem prioridade
+  if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
   if(!apt.inicio)return 0;
   const pausas=(apt.pausas||[]).filter(p=>p.inicio);
   let total=0;
@@ -945,6 +947,204 @@ window.excluirApontamento=async function(id){
   setTimeout(()=>{if(_pendingExcluir===id){_pendingExcluir=null;}},5000);
 };
 
+// ── EDIÇÃO DE TEMPO DE APONTAMENTO ──
+function isoParaInputLocal(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d))return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function inputLocalParaISO(val){
+  if(!val)return null;
+  const d=new Date(val);
+  return isNaN(d)?null:d.toISOString();
+}
+// ── EDITOR DE OBSERVAÇÕES (supervisor pode corrigir o que o colaborador escreveu) ──
+let _obsEditState=null;
+const SETOR_ETAPA_LBL={chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Montagem Final',geral:'🔀 Geral'};
+function abrirEditarObs(aptId){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  _obsEditState={
+    aptId,
+    observacoes:(apt.observacoes||[]).map(o=>({hora:o.hora,texto:o.texto||''})),
+    obsItensFaltando:apt.obsItensFaltando||'',
+    obsErro:apt.obsErro||'',
+    obsErroProjeto:apt.obsErroProjeto||'',
+    retrabObs:(apt.retrabalho&&apt.retrabalho.obs)||''
+  };
+  const antigo=document.getElementById('editObsOverlay');if(antigo)antigo.remove();
+  const ov=document.createElement('div');
+  ov.id='editObsOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.addEventListener('click',e=>{if(e.target===ov)fecharEditarObs();});
+  ov.innerHTML='<div id="editObsBox" style="background:#fff;border-radius:14px;padding:20px;max-width:520px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2);"></div>';
+  document.body.appendChild(ov);
+  renderEditarObsBody();
+}
+function escHtmlObs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function renderEditarObsBody(){
+  const box=document.getElementById('editObsBox');
+  if(!box||!_obsEditState)return;
+  const apt=S.apontamentos.find(a=>a.id===_obsEditState.aptId);
+  if(!apt){fecharEditarObs();return;}
+  const c=S.colaboradores.find(x=>x.id===apt.colabId);
+  const m=S.modelos.find(x=>x.id===apt.modeloId);
+  const st=_obsEditState;
+  const fmtHora=(iso)=>{if(!iso)return'';const d=new Date(iso);return isNaN(d)?'':d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
+  // lista de observações gerais
+  let obsGerais='';
+  if(st.observacoes.length){
+    obsGerais=st.observacoes.map((o,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">
+      <div style="flex:1;">
+        <div style="font-size:10px;color:#aaa;margin-bottom:2px;">${fmtHora(o.hora)||'sem horário'}</div>
+        <textarea id="obsG-${i}" style="width:100%;min-height:46px;font-size:13px;">${escHtmlObs(o.texto)}</textarea>
+      </div>
+      <button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;margin-top:16px;" onclick="removerObsGeral(${i})" title="Remover">✕</button>
+    </div>`).join('');
+  }else{
+    obsGerais='<div style="font-size:12px;color:#aaa;padding:6px 0;">Nenhuma observação geral neste apontamento.</div>';
+  }
+  // observações específicas (só mostra as que aplicam)
+  const espec=[];
+  if(apt.itensFaltando||st.obsItensFaltando)espec.push(['obsItensFaltando','⚠ Itens faltando',st.obsItensFaltando]);
+  if((apt.erros&&apt.erros.length)||st.obsErro)espec.push(['obsErro','⚠ Observação de erro',st.obsErro]);
+  if(apt.erroProjeto||st.obsErroProjeto)espec.push(['obsErroProjeto','📐 Erro de projeto',st.obsErroProjeto]);
+  if((apt.retrabalho&&apt.retrabalho.setores&&apt.retrabalho.setores.length)||st.retrabObs)espec.push(['retrabObs','🔄 Retrabalho',st.retrabObs]);
+  let especHtml='';
+  if(espec.length){
+    especHtml='<div style="border-top:1px solid #eee;padding-top:14px;margin-top:14px;"><div style="font-weight:700;font-size:13px;margin-bottom:10px;">Observações específicas</div>'+
+    espec.map(([id,lbl,val])=>`<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:600;">${lbl}</label>
+      <textarea id="espec-${id}" style="width:100%;min-height:44px;font-size:13px;">${escHtmlObs(val)}</textarea></div>`).join('')+'</div>';
+  }
+  box.innerHTML=`<div style="font-size:16px;font-weight:800;margin-bottom:4px;">💬 Editar observações</div>
+    <div style="font-size:12px;color:#888;margin-bottom:4px;">OP ${apt.opNum||'—'} · ${m?m.codigo:apt.modeloLabel||'—'} · ${c?c.nome:'—'}</div>
+    <div style="font-size:12px;margin-bottom:16px;"><span class="badge bgray">${SETOR_ETAPA_LBL[apt.setor||'geral']||apt.setor||'—'}</span></div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px;">Observações gerais</div>
+    ${obsGerais}
+    <button class="btn-sm" style="color:#3550B4;border-color:#3550B4;margin-top:2px;" onclick="adicionarObsGeral()">+ Adicionar observação</button>
+    ${especHtml}
+    <div style="display:flex;gap:8px;margin-top:18px;">
+      <button class="btn" style="margin-top:0;flex:1;" onclick="salvarEditarObs()">✓ Salvar</button>
+      <button class="btn-cancel" onclick="fecharEditarObs()">Cancelar</button>
+    </div>`;
+}
+function sincronizarObsDoDom(){
+  if(!_obsEditState)return;
+  _obsEditState.observacoes.forEach((o,i)=>{
+    const el=document.getElementById('obsG-'+i);
+    if(el)o.texto=el.value;
+  });
+  ['obsItensFaltando','obsErro','obsErroProjeto','retrabObs'].forEach(k=>{
+    const el=document.getElementById('espec-'+k);
+    if(el)_obsEditState[k]=el.value;
+  });
+}
+function adicionarObsGeral(){
+  sincronizarObsDoDom();
+  _obsEditState.observacoes.push({hora:new Date().toISOString(),texto:''});
+  renderEditarObsBody();
+}
+function removerObsGeral(i){
+  sincronizarObsDoDom();
+  _obsEditState.observacoes.splice(i,1);
+  renderEditarObsBody();
+}
+async function salvarEditarObs(){
+  if(!_obsEditState)return;
+  sincronizarObsDoDom();
+  const apt=S.apontamentos.find(a=>a.id===_obsEditState.aptId);
+  if(!apt){fecharEditarObs();return;}
+  // observações gerais: remove as vazias
+  apt.observacoes=_obsEditState.observacoes.filter(o=>(o.texto||'').trim()).map(o=>({hora:o.hora||new Date().toISOString(),texto:o.texto.trim()}));
+  // específicas (só grava as que existem no estado)
+  if('obsItensFaltando' in _obsEditState)apt.obsItensFaltando=_obsEditState.obsItensFaltando.trim();
+  if('obsErro' in _obsEditState)apt.obsErro=_obsEditState.obsErro.trim();
+  if('obsErroProjeto' in _obsEditState)apt.obsErroProjeto=_obsEditState.obsErroProjeto.trim();
+  if(apt.retrabalho&&'retrabObs' in _obsEditState)apt.retrabalho.obs=_obsEditState.retrabObs.trim();
+  apt._ts=Date.now();
+  await save();
+  fecharEditarObs();
+  renderApt();
+  toast('✓ Observações atualizadas');
+}
+function fecharEditarObs(){
+  const ov=document.getElementById('editObsOverlay');if(ov)ov.remove();
+  _obsEditState=null;
+}
+function abrirEditarTempo(aptId){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  const c=S.colaboradores.find(x=>x.id===apt.colabId);
+  const m=S.modelos.find(x=>x.id===apt.modeloId);
+  const liqCalc=(function(){ // tempo calculado por início/fim (ignora manual)
+    const bak=apt.tempoManual;apt.tempoManual=null;const v=tempoLiquido(apt);apt.tempoManual=bak;return v;
+  })();
+  const temPausas=(apt.pausas||[]).filter(p=>p.fim).length;
+  // remove overlay anterior se houver
+  const antigo=document.getElementById('editTempoOverlay');if(antigo)antigo.remove();
+  const ov=document.createElement('div');
+  ov.id='editTempoOverlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;';
+  ov.addEventListener('click',e=>{if(e.target===ov)fecharEditarTempo();});
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;padding:20px;max-width:440px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.2);">
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px;">✏ Editar tempo do apontamento</div>
+    <div style="font-size:12px;color:#888;margin-bottom:16px;">OP ${apt.opNum||'—'} · ${m?m.codigo:apt.modeloLabel||'—'} · ${c?c.nome:'—'}</div>
+
+    <div style="font-weight:700;font-size:13px;margin-bottom:8px;">Opção 1 — Corrigir início e fim</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px;">
+      <div><label style="font-size:12px;">Início</label><input type="datetime-local" id="editIni" value="${isoParaInputLocal(apt.inicio)}"/></div>
+      <div><label style="font-size:12px;">Fim</label><input type="datetime-local" id="editFim" value="${isoParaInputLocal(apt.fim)}"/></div>
+    </div>
+    <div style="font-size:11px;color:#888;margin-bottom:16px;">Tempo calculado por início/fim${temPausas?' (menos '+temPausas+' pausa(s))':''}: <strong>${liqCalc}min</strong></div>
+
+    <div style="border-top:1px solid #eee;padding-top:14px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:8px;">Opção 2 — Definir o tempo total manualmente</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="number" id="editTempoManual" min="0" placeholder="Ex: 150" value="${(apt.tempoManual!=null&&apt.tempoManual!=='')?apt.tempoManual:''}" style="max-width:140px;"/>
+        <span style="font-size:12px;color:#888;">minutos</span>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:6px;">Se preenchido, <strong>tem prioridade</strong> sobre o início/fim. Deixe em branco para usar o cálculo automático.</div>
+    </div>
+
+    <div id="editTempoMsg" style="font-size:12px;color:#A32D2D;min-height:16px;margin-top:10px;"></div>
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      <button class="btn" style="margin-top:0;flex:1;" onclick="salvarEditarTempo(${apt.id})">✓ Salvar</button>
+      <button class="btn-cancel" onclick="fecharEditarTempo()">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+function fecharEditarTempo(){const ov=document.getElementById('editTempoOverlay');if(ov)ov.remove();}
+async function salvarEditarTempo(aptId){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  const msg=document.getElementById('editTempoMsg');
+  const iniVal=(document.getElementById('editIni')||{}).value||'';
+  const fimVal=(document.getElementById('editFim')||{}).value||'';
+  const manualVal=(document.getElementById('editTempoManual')||{}).value;
+  const iniISO=inputLocalParaISO(iniVal);
+  const fimISO=inputLocalParaISO(fimVal);
+  // validações de início/fim
+  if(!iniISO){if(msg)msg.textContent='Informe o horário de início.';return;}
+  if(fimISO&&new Date(fimISO)<=new Date(iniISO)){if(msg)msg.textContent='O fim precisa ser depois do início.';return;}
+  // manual: se preenchido, valida número
+  let manual=null;
+  if(manualVal!==''&&manualVal!=null){
+    const n=Number(manualVal);
+    if(isNaN(n)||n<0){if(msg)msg.textContent='Tempo manual inválido.';return;}
+    manual=Math.round(n);
+  }
+  apt.inicio=iniISO;
+  apt.fim=fimISO||apt.fim; // se limpar o fim, mantém o que tinha (evita "desfinalizar" sem querer)
+  if(manual!=null)apt.tempoManual=manual; else delete apt.tempoManual;
+  apt._ts=Date.now();
+  await save();
+  fecharEditarTempo();
+  renderApt();
+  toast('✓ Tempo do apontamento atualizado');
+}
 function renderApt(){
   if(!S.modelos)S.modelos=[];
   const noFiltro=a=>!(_filtroData.de||_filtroData.ate)||dentroFiltro(a.fim||a.inicio);
@@ -1045,7 +1245,7 @@ function renderApt(){
       <td style="font-size:12px;">${c?c.nome:'—'}</td>
       <td style="font-size:12px;">${fmtDH(a.inicio)}</td>
       <td style="font-size:12px;">${a.fim?fmtDH(a.fim):statusBadge}</td>
-      <td style="font-size:13px;font-weight:700;color:${corTempo};">${liq?liq+'min':'—'}</td>
+      <td style="font-size:13px;font-weight:700;color:${corTempo};">${liq?liq+'min':'—'}${(a.tempoManual!=null&&a.tempoManual!=='')?' <span title="Tempo ajustado manualmente" style="color:#3550B4;font-size:11px;">✎</span>':''}</td>
       <td style="font-size:12px;">${temPrevisto?m.tempoPrevisto+'min':'—'}</td>
       <td style="font-size:12px;">${pausas||'—'}</td>
       <td>${retrabHtml}</td>
@@ -1053,7 +1253,7 @@ function renderApt(){
       <td>${obsHtml}</td>
       <td>${erroHtml}</td>
       <td>${erroProjHtml}</td>
-      <td><button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;" onclick="excluirApontamento(${a.id})">✕</button></td>
+      <td style="white-space:nowrap;"><button class="btn-sm" style="color:#3550B4;border-color:#3550B4;" onclick="abrirEditarTempo(${a.id})" title="Editar tempo">✏</button> <button class="btn-sm" style="color:#7c3aed;border-color:#7c3aed;" onclick="abrirEditarObs(${a.id})" title="Editar observações">💬</button> <button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;" onclick="excluirApontamento(${a.id})">✕</button></td>
     </tr>`;
   }).join('');
 

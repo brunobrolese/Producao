@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v38</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v40</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -257,6 +257,7 @@ function toast(t){const el=document.getElementById('toast');el.textContent=t;el.
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
 
 function tempoLiquido(apt){
+  if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
   if(!apt.inicio)return 0;
   const pausas=(apt.pausas||[]).filter(p=>p.inicio);
   let total=0;

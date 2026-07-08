@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v40</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v44</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -136,6 +136,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <button onclick="nav('mes',this)">Visão Mensal</button>
     <button onclick="nav('prod',this)">📊 Produtividade</button>
     <button onclick="nav('rel',this)">📄 Relatório</button>
+    <button onclick="nav('obs',this)">📝 Observações</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -366,6 +367,12 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       <div id="rel-conteudo"></div>
     </div>
 
+    <!-- OBSERVAÇÕES -->
+    <div id="page-obs" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:14px;">Todas as observações que os colaboradores registraram, separadas por área (use o filtro de data no topo).</div>
+      <div id="obs-conteudo"></div>
+    </div>
+
     <div id="page-cfg" class="page">
       <div class="card">
         <h3>🔗 Banco de dados conectado</h3>
@@ -485,6 +492,7 @@ function aplicarFiltroData(){
   if(currentPage==='mes')renderMes();
   if(currentPage==='prod')renderProdutividade();
   if(currentPage==='rel')renderRelatorio();
+  if(currentPage==='obs')renderObservacoes();
 }
 
 function filtroMesAtual(){
@@ -921,6 +929,7 @@ function nav(id,btn){
   if(id==='mes')renderMes();
   if(id==='prod')renderProdutividade();
   if(id==='rel')popularRelColab();
+  if(id==='obs')renderObservacoes();
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -2220,6 +2229,175 @@ function semChapaMinutosMesSup(colabId,mesStr){
       const min=Math.round((fim-ini)/60000);
       return tot+(min>0?min:0);
     },0);
+}
+// ── TELA DE OBSERVAÇÕES (todas as obs dos colaboradores, por área) ──
+let _obsArea='todas';
+let _obsAgrup='area'; // 'area' | 'erro'
+const OBS_AREA_LBL={chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Montagem Final',geral:'🔀 Geral'};
+// categorias de erro para classificação automática
+const CATEGORIAS_ERRO=[
+  {key:'projeto', label:'📐 Erro de projeto', cor:'#A32D2D'},
+  {key:'material', label:'📦 Falta de material', cor:'#BA7517'},
+  {key:'planilha', label:'📋 Erro de planilha (cabo curto, medida errada)', cor:'#7c3aed'},
+  {key:'ligacao', label:'🔌 Erro de ligação', cor:'#2C7A7B'},
+  {key:'outros', label:'🔀 Outros / não classificado', cor:'#888'}
+];
+const CAT_ERRO_LBL={}; CATEGORIAS_ERRO.forEach(c=>CAT_ERRO_LBL[c.key]=c);
+const _KW_ERRO={
+  planilha:['planilha','planilha de corte','lista de corte','corte de fio','corte de cabo','cabo curto','cabo longo','fio curto','fio longo','veio curto','veio longo','ficou curto','ficou longo','muito curto','muito longo','curto demais','longo demais','cabo grande','cabo pequeno','fio grande','fio pequeno','cabo sobrando','cabo faltando','sobrou cabo','sobrou fio','sobrou muito','sobrando','sobra de cabo','sobra de fio','sobra de','sobrou de mais','sobrou demais','faltou cabo','faltou fio','corte errado','cortado errado','cabo errado','fio errado','comprimento','comprimento errado','tamanho errado','medida','medida errada','medida do cabo','medida do chicote','medida do fio','bitola errada','bitola incorreta','secao errada','seção errada','dimens','regua de corte','régua de corte'],
+  ligacao:['ligac','ligaç','ligado errado','ligou errado','ligou','ligou invertido','ligado invertido','ligacao invertida','ligação invertida','invert','inversao','inversão','cabeament','conex','conexao errada','conexão errada','borne','borne errado','borne trocado','terminal','conector','polaridade','polo trocado','fase trocada','fase invertida','sequencia de fase','sequência de fase','neutro trocado','fio trocado','cabo trocado','trocou o fio','trocou o cabo','mal ligado','lugar errado','ponto errado','jumper','aterrament','fio terra','cabo terra','ponto de terra','aperto','reaperto','torque','prensa cabo','prensa-cabo','identificac','identificaç','anilha errada','anilha trocada','anilhamento'],
+  material:['falta','faltou','faltando','em falta','sem material','sem componente','sem peca','sem peça','peca faltando','peça faltando','nao tem','não tem','nao veio','não veio','nao chegou','não chegou','acabou o','estoque','almoxarifado','aguardando material','pendente material','requisic','requisiç','material errado','componente errado','componente incorreto','componente em falta','peca errada','peça errada','danificad','dano em','quebrad','avariad','com defeito','defeituoso','disjuntor faltando','contator faltando','borne faltando','trilho faltando'],
+  projeto:['projeto','desenho','esquematico','esquemático','esquema eletrico','esquema elétrico','esquema de montagem','diagrama','unifilar','multifilar','planta','layout','disposic','disposiç','furacao errada','furação errada','furo errado','cota errada','cotas','revisao do projeto','revisão do projeto','detalhamento','nao bate com o projeto','não bate com o projeto','diferente do projeto','fora do projeto','erro no projeto','erro de projeto']
+};
+function classificarErro(o){
+  if(o.tipo==='Erro de projeto')return 'projeto';
+  if(o.tipo==='Itens faltando')return 'material';
+  const base=((o.texto||'')+' '+((o.tags||[]).join(' '))).toLowerCase();
+  for(const cat of ['planilha','ligacao','material','projeto']){
+    if(_KW_ERRO[cat].some(k=>base.includes(k)))return cat;
+  }
+  const tags=((o.tags||[]).join(' ')).toLowerCase();
+  if(tags.includes('cabeamento')||tags.includes('montagem'))return 'ligacao';
+  if(tags.includes('componente')||tags.includes('falta')||tags.includes('dano'))return 'material';
+  return 'outros';
+}
+function obsFiltroArea(a){_obsArea=a;renderObservacoes();}
+function obsAgruparPor(g){_obsAgrup=g;renderObservacoes();}
+function coletarObservacoes(){
+  const arr=[];
+  const ok=(d)=>!d||dentroFiltro(d); // filtra pela data da PRÓPRIA observação
+  (S.apontamentos||[]).forEach(apt=>{
+    if(!apt||apt.tipoRegistro==='sem_chapa')return;
+    const m=S.modelos.find(x=>x.id===apt.modeloId)||{};
+    const base={aptId:apt.id,opNum:apt.opNum||'',modeloLabel:m.codigo||apt.modeloLabel||'',colab:(S.colaboradores.find(c=>c.id===apt.colabId)||{}).nome||'—'};
+    const area=apt.setor||'geral';
+    // observações gerais: usam a data em que FORAM registradas (o.hora)
+    (apt.observacoes||[]).forEach(o=>{
+      if(!o||!(o.texto||'').trim())return;
+      const hora=o.hora||apt.inicio||apt.fim;
+      if(ok(hora))arr.push({...base,setor:area,hora,tipo:'Geral',texto:o.texto.trim()});
+    });
+    // itens faltando: informado ao INICIAR o quadro → data de início
+    if((apt.obsItensFaltando||'').trim()){const h=apt.inicio||apt.fim;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Itens faltando',texto:apt.obsItensFaltando.trim()});}
+    // erros: informados ao FINALIZAR → data de fim
+    if((apt.erros&&apt.erros.length)||(apt.obsErro||'').trim()){
+      const h=apt.fim||apt.inicio;
+      if(ok(h)){const txtErro=(apt.obsErro||'').trim()||(apt.erros||[]).join(', ');arr.push({...base,setor:area,hora:h,tipo:'Erro',texto:txtErro,tags:apt.erros||[]});}
+    }
+    if((apt.obsErroProjeto||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Erro de projeto',texto:apt.obsErroProjeto.trim()});}
+    if(apt.retrabalho&&(apt.retrabalho.obs||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Retrabalho',texto:apt.retrabalho.obs.trim()});}
+    // Montagem Final: a inspeção acontece sobre o apontamento da elétrica, mas é uma ÁREA à parte
+    if(apt.mf){
+      const h=apt.mf.fim||apt.fim||apt.inicio;
+      if((apt.mf.obs||'').trim()&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Inspeção',texto:apt.mf.obs.trim()});
+      if(apt.mf.itensCorrigidos&&apt.mf.itensCorrigidos.length&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Itens corrigidos',texto:apt.mf.itensCorrigidos.join(', ')});
+    }
+  });
+  return arr;
+}
+function renderObservacoes(){
+  const div=document.getElementById('obs-conteudo');
+  if(!div)return;
+  const buscaEl=document.getElementById('obsBusca');
+  const busca=buscaEl?buscaEl.value.trim().toLowerCase():'';
+  let todas=coletarObservacoes();
+  if(busca)todas=todas.filter(o=>o.texto.toLowerCase().includes(busca)||o.opNum.toLowerCase().includes(busca)||o.colab.toLowerCase().includes(busca));
+
+  const fmtHora=(iso)=>{if(!iso)return'';const d=new Date(iso);return isNaN(d)?'':d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});};
+  const tipoCor={'Geral':'#3550B4','Itens faltando':'#BA7517','Erro':'#A32D2D','Erro de projeto':'#A32D2D','Retrabalho':'#7c3aed','Inspeção':'#1D9E75','Itens corrigidos':'#BA7517'};
+
+  // alternador de agrupamento
+  const tgl=(g,lbl)=>`<button onclick="obsAgruparPor('${g}')" style="padding:6px 16px;border-radius:8px;border:1px solid ${_obsAgrup===g?'#3550B4':'#ddd'};background:${_obsAgrup===g?'#3550B4':'#fff'};color:${_obsAgrup===g?'#fff':'#666'};font-size:12px;font-weight:700;cursor:pointer;">${lbl}</button>`;
+  const topo=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+    <span style="font-size:12px;color:#888;">Agrupar por:</span>${tgl('area','Área')}${tgl('erro','Tipo de erro')}
+    <span style="font-size:12px;color:#aaa;margin-left:4px;">${periodoLabel()}</span>
+    <button onclick="exportarObservacoes()" style="margin-left:auto;padding:6px 14px;border-radius:8px;border:1px solid #1D9E75;background:#fff;color:#1D9E75;font-size:12px;font-weight:600;cursor:pointer;">📥 Exportar CSV</button>
+  </div>
+  <div style="margin-bottom:16px;"><input id="obsBusca" placeholder="🔍 Buscar por texto, OP ou colaborador..." value="${busca.replace(/"/g,'&quot;')}" oninput="renderObservacoes()" style="width:100%;max-width:420px;"/></div>`;
+
+  // renderiza a lista de uma observação
+  const linhaObs=(o,mostrarCat)=>`<div style="padding:10px 0;border-bottom:1px solid #f2f2f2;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:#666;">
+          <strong>OP ${escHtmlObs(o.opNum)||'—'}</strong> · ${escHtmlObs(o.modeloLabel)||'—'} · ${escHtmlObs(o.colab)}
+          <span style="color:#aaa;">· ${fmtHora(o.hora)}</span>
+          ${mostrarCat?`<span class="badge bgray" style="margin-left:4px;">${OBS_AREA_LBL[o.setor]||o.setor}</span>`:`<span class="badge" style="background:${tipoCor[o.tipo]||'#888'}22;color:${tipoCor[o.tipo]||'#888'};margin-left:4px;">${o.tipo}</span>`}
+        </div>
+        <button class="btn-sm" style="color:#7c3aed;border-color:#7c3aed;" onclick="abrirEditarObs(${o.aptId})" title="Editar">💬</button>
+      </div>
+      <div style="font-size:13px;margin-top:5px;white-space:pre-wrap;">${escHtmlObs(o.texto)}</div>
+    </div>`;
+
+  let filtros='',corpo='';
+
+  if(_obsAgrup==='area'){
+    // ── AGRUPAR POR ÁREA ──
+    const areas=['chapa','eletrica','mf'];
+    const contagem={};areas.forEach(a=>contagem[a]=todas.filter(o=>o.setor===a).length);
+    const outras=todas.filter(o=>!areas.includes(o.setor)).length;
+    const btnA=(a,lbl,n)=>`<button onclick="obsFiltroArea('${a}')" style="padding:6px 14px;border-radius:99px;border:1px solid ${_obsArea===a?'#3550B4':'#ddd'};background:${_obsArea===a?'#EEF1FF':'#fff'};color:${_obsArea===a?'#3550B4':'#666'};font-size:12px;font-weight:600;cursor:pointer;">${lbl}${n!=null?' ('+n+')':''}</button>`;
+    filtros=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      ${btnA('todas','Todas',todas.length)}${btnA('chapa','🔧 Chapa',contagem.chapa)}${btnA('eletrica','⚡ Elétrica',contagem.eletrica)}${btnA('mf','🔍 Mont. Final',contagem.mf)}</div>`;
+    function secaoArea(areaKey){
+      const itens=todas.filter(o=>o.setor===areaKey).sort((a,b)=>new Date(b.hora||0)-new Date(a.hora||0));
+      const inner=itens.length?itens.map(o=>linhaObs(o,false)).join(''):'<div style="font-size:12px;color:#aaa;">Nenhuma observação no período.</div>';
+      return `<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px;">${OBS_AREA_LBL[areaKey]} <span style="font-size:12px;color:#aaa;font-weight:400;">(${itens.length})</span></div>${inner}</div>`;
+    }
+    if(!todas.length)corpo='<p class="empty" style="padding:20px 0;">Nenhuma observação encontrada no período'+(busca?' para esta busca':'')+'.</p>';
+    else{
+      const mostrar=_obsArea==='todas'?areas:[_obsArea];
+      corpo=mostrar.map(secaoArea).join('');
+      if(_obsArea==='todas'&&outras>0)corpo+=secaoArea('geral');
+    }
+  }else{
+    // ── AGRUPAR POR TIPO DE ERRO (classificação automática) ──
+    // classifica cada observação
+    todas.forEach(o=>{o._cat=classificarErro(o);});
+    const cont={};CATEGORIAS_ERRO.forEach(c=>cont[c.key]=todas.filter(o=>o._cat===c.key).length);
+    const totalClass=todas.length||1;
+    // resumo Pareto (barras) ordenado por quantidade, exceto 'outros' sempre por último
+    const ordenadas=CATEGORIAS_ERRO.slice().filter(c=>c.key!=='outros').sort((a,b)=>cont[b.key]-cont[a.key]).concat(CAT_ERRO_LBL.outros);
+    const pareto=`<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px;">Resumo por tipo de erro</div>
+      ${ordenadas.map(c=>{const n=cont[c.key];const pct=Math.round((n/totalClass)*100);
+        return `<div style="margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;"><span style="font-weight:600;">${c.label}</span><span style="color:#666;">${n} (${pct}%)</span></div>
+          <div style="height:8px;background:#eee;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${c.cor};"></div></div>
+        </div>`;}).join('')}
+      <div style="font-size:11px;color:#999;margin-top:8px;">Classificação automática por palavras-chave e origem do erro. Revise a categoria "Outros" e ajuste o texto pelo 💬 se precisar.</div>
+    </div>`;
+    function secaoCat(c){
+      const itens=todas.filter(o=>o._cat===c.key).sort((a,b)=>new Date(b.hora||0)-new Date(a.hora||0));
+      if(!itens.length)return '';
+      return `<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px;border-left:4px solid ${c.cor};">
+        <div style="font-size:15px;font-weight:700;margin-bottom:8px;color:${c.cor};">${c.label} <span style="font-size:12px;color:#aaa;font-weight:400;">(${itens.length})</span></div>
+        ${itens.map(o=>linhaObs(o,true)).join('')}</div>`;
+    }
+    if(!todas.length)corpo='<p class="empty" style="padding:20px 0;">Nenhuma observação encontrada no período'+(busca?' para esta busca':'')+'.</p>';
+    else corpo=pareto+ordenadas.map(secaoCat).join('');
+  }
+
+  div.innerHTML=topo+filtros+corpo;
+  const nb=document.getElementById('obsBusca');
+  if(nb&&busca){nb.focus();const v=nb.value;nb.value='';nb.value=v;}
+}
+function exportarObservacoes(){
+  let todas=coletarObservacoes();
+  if(_obsArea!=='todas')todas=todas.filter(o=>o.setor===_obsArea);
+  if(!todas.length){toast('Nada para exportar no período.');return;}
+  todas.sort((a,b)=>new Date(b.hora||0)-new Date(a.hora||0));
+  const esc=(s)=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+  let csv='Area;Categoria de erro;Data;OP;Modelo;Colaborador;Tipo;Observacao\n';
+  todas.forEach(o=>{
+    const d=o.hora?new Date(o.hora).toLocaleString('pt-BR'):'';
+    const cat=CAT_ERRO_LBL[classificarErro(o)];
+    csv+=[OBS_AREA_LBL[o.setor]||o.setor,(cat?cat.label.replace(/^[^ ]+ /,''):''),d,o.opNum,o.modeloLabel,o.colab,o.tipo,o.texto].map(esc).join(';')+'\n';
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='observacoes_'+(_filtroData.de||'tudo')+'.csv';a.click();
+  toast('📥 Observações exportadas');
 }
 function renderProdutividade(){
   const div=document.getElementById('prod-conteudo');

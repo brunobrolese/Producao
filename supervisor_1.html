@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v44</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v45</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2250,6 +2250,7 @@ const _KW_ERRO={
   projeto:['projeto','desenho','esquematico','esquemático','esquema eletrico','esquema elétrico','esquema de montagem','diagrama','unifilar','multifilar','planta','layout','disposic','disposiç','furacao errada','furação errada','furo errado','cota errada','cotas','revisao do projeto','revisão do projeto','detalhamento','nao bate com o projeto','não bate com o projeto','diferente do projeto','fora do projeto','erro no projeto','erro de projeto']
 };
 function classificarErro(o){
+  if(o.categoriaManual)return o.categoriaManual; // classificação manual do supervisor tem prioridade
   if(o.tipo==='Erro de projeto')return 'projeto';
   if(o.tipo==='Itens faltando')return 'material';
   const base=((o.texto||'')+' '+((o.tags||[]).join(' '))).toLowerCase();
@@ -2263,6 +2264,26 @@ function classificarErro(o){
 }
 function obsFiltroArea(a){_obsArea=a;renderObservacoes();}
 function obsAgruparPor(g){_obsAgrup=g;renderObservacoes();}
+async function classificarManual(aptId,origem,obsIdx,categoria){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  const val=(categoria==='auto'||!categoria)?null:categoria;
+  if(origem==='geral'){
+    if(apt.observacoes&&apt.observacoes[obsIdx]){
+      if(val)apt.observacoes[obsIdx].categoria=val; else delete apt.observacoes[obsIdx].categoria;
+    }
+  }else if(origem==='erro'){
+    if(val)apt.categoriaErro=val; else delete apt.categoriaErro;
+  }else if(origem==='retrabalho'){
+    if(apt.retrabalho){if(val)apt.retrabalho.categoria=val; else delete apt.retrabalho.categoria;}
+  }else if(origem==='mf'){
+    if(apt.mf){if(val)apt.mf.categoria=val; else delete apt.mf.categoria;}
+  }else return;
+  apt._ts=Date.now();
+  await save();
+  renderObservacoes();
+  toast(val?'✓ Reclassificado':'↩ Voltou para automático');
+}
 function coletarObservacoes(){
   const arr=[];
   const ok=(d)=>!d||dentroFiltro(d); // filtra pela data da PRÓPRIA observação
@@ -2272,24 +2293,24 @@ function coletarObservacoes(){
     const base={aptId:apt.id,opNum:apt.opNum||'',modeloLabel:m.codigo||apt.modeloLabel||'',colab:(S.colaboradores.find(c=>c.id===apt.colabId)||{}).nome||'—'};
     const area=apt.setor||'geral';
     // observações gerais: usam a data em que FORAM registradas (o.hora)
-    (apt.observacoes||[]).forEach(o=>{
+    (apt.observacoes||[]).forEach((o,idx)=>{
       if(!o||!(o.texto||'').trim())return;
       const hora=o.hora||apt.inicio||apt.fim;
-      if(ok(hora))arr.push({...base,setor:area,hora,tipo:'Geral',texto:o.texto.trim()});
+      if(ok(hora))arr.push({...base,setor:area,hora,tipo:'Geral',texto:o.texto.trim(),origem:'geral',obsIdx:idx,categoriaManual:o.categoria||null});
     });
     // itens faltando: informado ao INICIAR o quadro → data de início
     if((apt.obsItensFaltando||'').trim()){const h=apt.inicio||apt.fim;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Itens faltando',texto:apt.obsItensFaltando.trim()});}
     // erros: informados ao FINALIZAR → data de fim
     if((apt.erros&&apt.erros.length)||(apt.obsErro||'').trim()){
       const h=apt.fim||apt.inicio;
-      if(ok(h)){const txtErro=(apt.obsErro||'').trim()||(apt.erros||[]).join(', ');arr.push({...base,setor:area,hora:h,tipo:'Erro',texto:txtErro,tags:apt.erros||[]});}
+      if(ok(h)){const txtErro=(apt.obsErro||'').trim()||(apt.erros||[]).join(', ');arr.push({...base,setor:area,hora:h,tipo:'Erro',texto:txtErro,tags:apt.erros||[],origem:'erro',categoriaManual:apt.categoriaErro||null});}
     }
     if((apt.obsErroProjeto||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Erro de projeto',texto:apt.obsErroProjeto.trim()});}
-    if(apt.retrabalho&&(apt.retrabalho.obs||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Retrabalho',texto:apt.retrabalho.obs.trim()});}
+    if(apt.retrabalho&&(apt.retrabalho.obs||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Retrabalho',texto:apt.retrabalho.obs.trim(),origem:'retrabalho',categoriaManual:apt.retrabalho.categoria||null});}
     // Montagem Final: a inspeção acontece sobre o apontamento da elétrica, mas é uma ÁREA à parte
     if(apt.mf){
       const h=apt.mf.fim||apt.fim||apt.inicio;
-      if((apt.mf.obs||'').trim()&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Inspeção',texto:apt.mf.obs.trim()});
+      if((apt.mf.obs||'').trim()&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Inspeção',texto:apt.mf.obs.trim(),origem:'mf',categoriaManual:apt.mf.categoria||null});
       if(apt.mf.itensCorrigidos&&apt.mf.itensCorrigidos.length&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Itens corrigidos',texto:apt.mf.itensCorrigidos.join(', ')});
     }
   });
@@ -2326,6 +2347,14 @@ function renderObservacoes(){
         <button class="btn-sm" style="color:#7c3aed;border-color:#7c3aed;" onclick="abrirEditarObs(${o.aptId})" title="Editar">💬</button>
       </div>
       <div style="font-size:13px;margin-top:5px;white-space:pre-wrap;">${escHtmlObs(o.texto)}</div>
+      ${mostrarCat&&o.origem?`<div style="margin-top:7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:#888;">🏷️ Classificar como:</span>
+        <select onchange="classificarManual(${o.aptId},'${o.origem}',${o.obsIdx==null?'null':o.obsIdx},this.value)" style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid #ccc;">
+          <option value="auto"${!o.categoriaManual?' selected':''}>Automático</option>
+          ${CATEGORIAS_ERRO.filter(c=>c.key!=='outros').map(c=>`<option value="${c.key}"${o.categoriaManual===c.key?' selected':''}>${c.label.replace(/^[^ ]+ /,'')}</option>`).join('')}
+        </select>
+        ${o.categoriaManual?'<span style="font-size:10px;color:#7c3aed;font-weight:600;">✎ classificado manualmente</span>':''}
+      </div>`:''}
     </div>`;
 
   let filtros='',corpo='';

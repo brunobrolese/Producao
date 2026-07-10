@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v45</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v49</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -527,29 +527,41 @@ function periodoLabel(){
 function tempoLiquido(apt){
   // se houver tempo definido manualmente pelo supervisor, ele tem prioridade
   if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
-  if(!apt.inicio)return 0;
-  const pausas=(apt.pausas||[]).filter(p=>p.inicio);
-  let total=0;
-  let periodoInicio=new Date(apt.inicio);
-  for(const p of pausas){
-    const pIni=new Date(p.inicio);
-    const trabalhado=Math.round((pIni-periodoInicio)/60000);
-    if(trabalhado>0)total+=trabalhado;
-    if(p.fim){periodoInicio=new Date(p.fim);}
-    else{return Math.max(0,total);}
+  if(!apt||!apt.inicio)return 0;
+  const ini=new Date(apt.inicio).getTime();
+  if(isNaN(ini))return 0;
+  const fimMs=apt.fim?new Date(apt.fim).getTime():Date.now();
+  if(isNaN(fimMs)||fimMs<=ini)return 0;
+  // Normaliza as pausas: descarta invalidas, RECORTA ao intervalo do apontamento,
+  // ORDENA por inicio e FUNDE sobreposicoes. Assim pausas fora da janela (ex.: apos o
+  // supervisor corrigir inicio/fim) ou fora de ordem nao distorcem o tempo.
+  const ps=[];
+  (apt.pausas||[]).forEach(p=>{
+    if(!p||!p.inicio)return;
+    let s=new Date(p.inicio).getTime();
+    if(isNaN(s))return;
+    let e=p.fim?new Date(p.fim).getTime():fimMs; // pausa aberta corre ate o fim (ou agora)
+    if(isNaN(e))e=fimMs;
+    s=Math.max(s,ini);
+    e=Math.min(e,fimMs);
+    if(e>s)ps.push([s,e]);
+  });
+  ps.sort((a,b)=>a[0]-b[0]);
+  let pausado=0,curS=null,curE=null;
+  for(const par of ps){
+    const s=par[0],e=par[1];
+    if(curS===null){curS=s;curE=e;}
+    else if(s<=curE){if(e>curE)curE=e;}
+    else{pausado+=curE-curS;curS=s;curE=e;}
   }
-  const fim=apt.fim?new Date(apt.fim):new Date();
-  const restante=Math.round((fim-periodoInicio)/60000);
-  if(restante>0)total+=restante;
-  return Math.max(0,total);
+  if(curS!==null)pausado+=curE-curS;
+  return Math.max(0,Math.round((fimMs-ini-pausado)/60000));
 }
 
 function estaPausado(apt){
   if(!apt||apt.fim)return false;
-  const pausas=apt.pausas||[];
-  if(!pausas.length)return false;
-  const u=pausas[pausas.length-1];
-  return u.inicio&&!u.fim;
+  const p=apt.pausas||[];
+  return p.some(x=>x&&x.inicio&&!x.fim);
 }
 
 async function load(){
@@ -814,8 +826,12 @@ function showApp(){
   });
 }
 
-// Motor de pausas automáticas para o supervisor processar TODOS os colaboradores.
-// Mesmo motor retroativo do colaborador — insere pausas nos horários exatos.
+// Motor de pausas automáticas — RETROATIVO, e desenhado para dois princípios:
+//  (1) REDE DE SEGURANÇA: se o operador esqueceu de pausar, o sistema desconta a
+//      parte da janela de pausa em que ele não estava pausado.
+//  (2) FLEXIBILIDADE: se o operador RETOMOU manualmente dentro da janela, ele
+//      escolheu trabalhar — dali em diante o sistema não pausa de novo.
+// Preenche apenas as LACUNAS (partes não cobertas) da janela, nunca sobrepõe.
 function aplicarPausasAutoSup(colaborador){
   if(!colaborador||!colaborador.horarios)return false;
   const cfg=colaborador.horarios;
@@ -827,41 +843,75 @@ function aplicarPausasAutoSup(colaborador){
   const now=new Date();
   const y=now.getFullYear(),mo=now.getMonth(),d=now.getDate();
   const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  const mkMs=(hhmm)=>{const pr=hhmm.split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
+  const mkMs=(hhmm)=>{const pr=String(hhmm).split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
   const nowMs=now.getTime();
   const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim&&a.tipoRegistro!=='sem_chapa');
   let mudou=false;
   for(const apt of ativos){
     if(!apt.pausas)apt.pausas=[];
-    const manualAbertaAgora=apt.pausas.some(p=>p&&!p.fim&&!p.auto);
     const aptStart=apt.inicio?new Date(apt.inicio).getTime():null;
-    if(aptStart==null)continue;
+    if(aptStart==null||isNaN(aptStart))continue;
     for(const b of defs){
       if(!b.cfg||!b.cfg.inicio||!b.cfg.fim)continue;
       const bStart=mkMs(b.cfg.inicio),bEnd=mkMs(b.cfg.fim);
-      if(bEnd<=bStart)continue;
-      if(nowMs<bStart)continue;
-      if(aptStart>=bEnd)continue;
+      if(!(bEnd>bStart))continue;   // configuração inválida
+      if(nowMs<=bStart)continue;    // a janela ainda não começou
+      if(aptStart>=bEnd)continue;   // o painel só começou depois da pausa
       const breakKey=dataStr+'_'+b.key;
-      const existente=apt.pausas.find(p=>p&&p._breakKey===breakKey);
-      const iniMs=Math.max(bStart,aptStart);
-      const fimMs=(nowMs>=bEnd)?bEnd:null;
-      if(!existente){
-        if(manualAbertaAgora)continue;
-        const sobrepoe=apt.pausas.some(p=>{
-          if(!p||!p.inicio)return false;
-          const ps=new Date(p.inicio).getTime();
-          const pe=p.fim?new Date(p.fim).getTime():nowMs;
-          return iniMs<pe&&(fimMs||nowMs)>ps;
-        });
-        if(sobrepoe)continue;
-        apt.pausas.push({inicio:new Date(iniMs).toISOString(),fim:fimMs?new Date(fimMs).toISOString():null,tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
-        apt._ts=Date.now();mudou=true;
-      }else if(existente.auto&&!existente.fim&&fimMs){
-        existente.fim=new Date(fimMs).toISOString();
+
+      // (a) fecha no horário certo uma pausa automática deste intervalo que ficou aberta
+      if(nowMs>=bEnd){
+        const abertaAuto=apt.pausas.find(p=>p&&p.auto&&p._breakKey===breakKey&&!p.fim);
+        if(abertaAuto){abertaAuto.fim=new Date(bEnd).toISOString();apt._ts=Date.now();mudou=true;}
+      }
+
+      const janIni=Math.max(bStart,aptStart);
+      const limite=Math.min(bEnd,nowMs);   // nunca cria pausa no futuro
+      if(limite<=janIni)continue;
+
+      // (b) o operador RETOMOU manualmente dentro da janela? então dali em diante ele
+      //     optou por trabalhar: só preenchemos até esse instante.
+      let retomada=null;
+      apt.pausas.forEach(p=>{
+        if(!p||!p.fim)return;
+        const f=new Date(p.fim).getTime();
+        if(!isNaN(f)&&f>bStart&&f<bEnd){if(retomada===null||f>retomada)retomada=f;}
+      });
+      const fimPreenchivel=(retomada!==null)?Math.min(retomada,limite):limite;
+      if(fimPreenchivel<=janIni)continue;
+
+      // (c) cobertura atual das pausas existentes, recortada à região preenchível
+      const cob=[];
+      apt.pausas.forEach(p=>{
+        if(!p||!p.inicio)return;
+        let s=new Date(p.inicio).getTime();
+        if(isNaN(s))return;
+        let e=p.fim?new Date(p.fim).getTime():nowMs;
+        if(isNaN(e))e=nowMs;
+        s=Math.max(s,janIni);e=Math.min(e,fimPreenchivel);
+        if(e>s)cob.push([s,e]);
+      });
+      cob.sort((x,z)=>x[0]-z[0]);
+
+      // (d) lacunas = região preenchível − cobertura → cria pausa automática em cada lacuna
+      const lacunas=[];
+      let cursor=janIni;
+      for(const par of cob){
+        if(par[0]>cursor)lacunas.push([cursor,par[0]]);
+        if(par[1]>cursor)cursor=par[1];
+      }
+      if(cursor<fimPreenchivel)lacunas.push([cursor,fimPreenchivel]);
+
+      for(const g of lacunas){
+        const s=g[0],e=g[1];
+        if(e-s<60000)continue; // ignora lacunas menores que 1 minuto
+        // se ainda estamos dentro da janela e ninguém retomou, a pausa fica ABERTA (ao vivo)
+        const aberta=(retomada===null&&nowMs<bEnd&&e>=limite);
+        apt.pausas.push({inicio:new Date(s).toISOString(),fim:aberta?null:new Date(e).toISOString(),tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
         apt._ts=Date.now();mudou=true;
       }
     }
+    // ordena as pausas por início (o cálculo de tempo depende disso)
     apt.pausas.sort((x,z)=>((x&&x.inicio?new Date(x.inicio).getTime():0)-(z&&z.inicio?new Date(z.inicio).getTime():0)));
   }
   return mudou;
@@ -1576,7 +1626,7 @@ function renderColabs(){
   tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Setor</th><th>Quadros finalizados</th><th>Erros</th><th></th></tr></thead>';
   const tbody=document.createElement('tbody');
   S.colaboradores.forEach(c=>{
-    const apts=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim);
+    const apts=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim&&a.tipoRegistro!=='sem_chapa'&&a.opNum);
     const total=apts.length;
     const erros=apts.filter(a=>a.erros&&a.erros.length>0).length;
     const tr=document.createElement('tr');
@@ -1647,8 +1697,8 @@ async function addColab(){
 function renderLivePage(){
   const hoje=td(),mes=hoje.substring(0,7);
   const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
-  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&!estaPausado(a)).length;
-  const pausados=S.apontamentos.filter(a=>estaPausado(a)).length;
+  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&a.tipoRegistro!=='sem_chapa'&&!estaPausado(a)).length;
+  const pausados=S.apontamentos.filter(a=>a.tipoRegistro!=='sem_chapa'&&estaPausado(a)).length;
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const pct=Math.round((aptM.length/meta)*100);
@@ -2177,6 +2227,7 @@ function prodFiltroRapido(tipo){
 function calcProdStats(apts){
   const stats={};
   apts.forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa')return; // registros de tempo parado nunca entram na produtividade
     const c=S.colaboradores.find(x=>x.id===a.colabId);
     if(!c)return;
     if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaEfic:0,nEfic:0};
@@ -2264,6 +2315,31 @@ function classificarErro(o){
 }
 function obsFiltroArea(a){_obsArea=a;renderObservacoes();}
 function obsAgruparPor(g){_obsAgrup=g;renderObservacoes();}
+async function excluirObservacao(aptId,origem,obsIdx){
+  const apt=S.apontamentos.find(a=>a.id===aptId);
+  if(!apt)return;
+  const rotulos={geral:'esta observação',erro:'a observação de erro',projeto:'a observação de erro de projeto',itens:'a observação de itens faltando',retrabalho:'a observação de retrabalho',mf:'a observação da inspeção'};
+  if(!confirm('Apagar '+(rotulos[origem]||'esta observação')+'? Esta ação não pode ser desfeita.'))return;
+  if(origem==='geral'){
+    if(apt.observacoes&&apt.observacoes[obsIdx]!==undefined)apt.observacoes.splice(obsIdx,1);
+  }else if(origem==='erro'){
+    apt.obsErro='';apt.erros=[];delete apt.categoriaErro;
+  }else if(origem==='projeto'){
+    apt.obsErroProjeto='';apt.erroProjeto=false;
+  }else if(origem==='itens'){
+    apt.obsItensFaltando='';apt.itensFaltando=false;
+  }else if(origem==='retrabalho'){
+    if(apt.retrabalho){apt.retrabalho.obs='';delete apt.retrabalho.categoria;}
+  }else if(origem==='mf'){
+    if(apt.mf){apt.mf.obs='';delete apt.mf.categoria;}
+  }else if(origem==='corrigidos'){
+    if(apt.mf)apt.mf.itensCorrigidos=[];
+  }else return;
+  apt._ts=Date.now();
+  await save();
+  renderObservacoes();
+  toast('🗑 Observação apagada');
+}
 async function classificarManual(aptId,origem,obsIdx,categoria){
   const apt=S.apontamentos.find(a=>a.id===aptId);
   if(!apt)return;
@@ -2299,19 +2375,19 @@ function coletarObservacoes(){
       if(ok(hora))arr.push({...base,setor:area,hora,tipo:'Geral',texto:o.texto.trim(),origem:'geral',obsIdx:idx,categoriaManual:o.categoria||null});
     });
     // itens faltando: informado ao INICIAR o quadro → data de início
-    if((apt.obsItensFaltando||'').trim()){const h=apt.inicio||apt.fim;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Itens faltando',texto:apt.obsItensFaltando.trim()});}
+    if((apt.obsItensFaltando||'').trim()){const h=apt.inicio||apt.fim;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Itens faltando',texto:apt.obsItensFaltando.trim(),origem:'itens'});}
     // erros: informados ao FINALIZAR → data de fim
     if((apt.erros&&apt.erros.length)||(apt.obsErro||'').trim()){
       const h=apt.fim||apt.inicio;
       if(ok(h)){const txtErro=(apt.obsErro||'').trim()||(apt.erros||[]).join(', ');arr.push({...base,setor:area,hora:h,tipo:'Erro',texto:txtErro,tags:apt.erros||[],origem:'erro',categoriaManual:apt.categoriaErro||null});}
     }
-    if((apt.obsErroProjeto||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Erro de projeto',texto:apt.obsErroProjeto.trim()});}
+    if((apt.obsErroProjeto||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Erro de projeto',texto:apt.obsErroProjeto.trim(),origem:'projeto'});}
     if(apt.retrabalho&&(apt.retrabalho.obs||'').trim()){const h=apt.fim||apt.inicio;if(ok(h))arr.push({...base,setor:area,hora:h,tipo:'Retrabalho',texto:apt.retrabalho.obs.trim(),origem:'retrabalho',categoriaManual:apt.retrabalho.categoria||null});}
     // Montagem Final: a inspeção acontece sobre o apontamento da elétrica, mas é uma ÁREA à parte
     if(apt.mf){
       const h=apt.mf.fim||apt.fim||apt.inicio;
       if((apt.mf.obs||'').trim()&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Inspeção',texto:apt.mf.obs.trim(),origem:'mf',categoriaManual:apt.mf.categoria||null});
-      if(apt.mf.itensCorrigidos&&apt.mf.itensCorrigidos.length&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Itens corrigidos',texto:apt.mf.itensCorrigidos.join(', ')});
+      if(apt.mf.itensCorrigidos&&apt.mf.itensCorrigidos.length&&ok(h))arr.push({...base,setor:'mf',hora:h,tipo:'Itens corrigidos',texto:apt.mf.itensCorrigidos.join(', '),origem:'corrigidos'});
     }
   });
   return arr;
@@ -2344,7 +2420,10 @@ function renderObservacoes(){
           <span style="color:#aaa;">· ${fmtHora(o.hora)}</span>
           ${mostrarCat?`<span class="badge bgray" style="margin-left:4px;">${OBS_AREA_LBL[o.setor]||o.setor}</span>`:`<span class="badge" style="background:${tipoCor[o.tipo]||'#888'}22;color:${tipoCor[o.tipo]||'#888'};margin-left:4px;">${o.tipo}</span>`}
         </div>
-        <button class="btn-sm" style="color:#7c3aed;border-color:#7c3aed;" onclick="abrirEditarObs(${o.aptId})" title="Editar">💬</button>
+        <div style="display:flex;gap:5px;flex-shrink:0;">
+          <button class="btn-sm" style="color:#7c3aed;border-color:#7c3aed;" onclick="abrirEditarObs(${o.aptId})" title="Editar">💬</button>
+          ${o.origem?`<button class="btn-sm" style="color:#A32D2D;border-color:#A32D2D;" onclick="excluirObservacao(${o.aptId},'${o.origem}',${o.obsIdx==null?'null':o.obsIdx})" title="Apagar observação">🗑</button>`:''}
+        </div>
       </div>
       <div style="font-size:13px;margin-top:5px;white-space:pre-wrap;">${escHtmlObs(o.texto)}</div>
       ${mostrarCat&&o.origem?`<div style="margin-top:7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">

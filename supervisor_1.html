@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v49</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v50</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -137,6 +137,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <button onclick="nav('prod',this)">📊 Produtividade</button>
     <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('obs',this)">📝 Observações</button>
+    <button onclick="nav('ana',this)">🔎 Análise de Erros</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -365,6 +366,17 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
         </div>
       </div>
       <div id="rel-conteudo"></div>
+    </div>
+
+    <!-- ANÁLISE DE ERROS -->
+    <div id="page-ana" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:14px;">Análise mensal dos erros por categoria, com plano de ação para corrigi-los.</div>
+      <div class="frow" style="max-width:280px;margin-bottom:16px;">
+        <div style="flex:1;"><label>Mês</label>
+          <select id="anaMes" onchange="anaTrocarMes()"></select>
+        </div>
+      </div>
+      <div id="ana-conteudo"></div>
     </div>
 
     <!-- OBSERVAÇÕES -->
@@ -980,6 +992,7 @@ function nav(id,btn){
   if(id==='prod')renderProdutividade();
   if(id==='rel')popularRelColab();
   if(id==='obs')renderObservacoes();
+  if(id==='ana')popularAnaMeses();
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -2360,9 +2373,9 @@ async function classificarManual(aptId,origem,obsIdx,categoria){
   renderObservacoes();
   toast(val?'✓ Reclassificado':'↩ Voltou para automático');
 }
-function coletarObservacoes(){
+function coletarObservacoes(filtroFn){
   const arr=[];
-  const ok=(d)=>!d||dentroFiltro(d); // filtra pela data da PRÓPRIA observação
+  const ok=(d)=>!d||(filtroFn?filtroFn(d):dentroFiltro(d)); // filtra pela data da PRÓPRIA observação
   (S.apontamentos||[]).forEach(apt=>{
     if(!apt||apt.tipoRegistro==='sem_chapa')return;
     const m=S.modelos.find(x=>x.id===apt.modeloId)||{};
@@ -2391,6 +2404,215 @@ function coletarObservacoes(){
     }
   });
   return arr;
+}
+// ── ANÁLISE DE ERROS (mensal, com plano de ação) ──
+let _anaMes=null;
+// sugestões de ação por categoria — ponto de partida, não substituem a análise de causa raiz com a equipe
+const SUGESTOES_ACAO={
+  projeto:['Revisar o desenho antes de liberar a OP para produção','Checklist de conferência projeto × lista de material','Reunião de alinhamento com a engenharia sobre os erros recorrentes','Registrar o erro no controle de revisão do projeto'],
+  material:['Conferir kit completo antes de iniciar o quadro','Alinhar prazo de reposição com o almoxarifado','Criar estoque mínimo dos itens que mais faltam','Antecipar a separação do material no dia anterior'],
+  planilha:['Conferir a planilha de corte contra o projeto antes de cortar','Validar as medidas do primeiro chicote antes de cortar o lote','Corrigir a planilha padrão do modelo','Treinar o responsável pelo corte nas medidas críticas'],
+  ligacao:['Duplo check da ligação antes de fechar o painel','Revisar a identificação/anilhamento dos cabos','Treinamento no esquema elétrico do modelo','Padronizar o torque e o reaperto dos bornes']
+};
+function anaChave(mes,cat){return mes+'_'+cat;}
+function anaGetAcao(mes,cat){
+  if(!S.planoAcoes)S.planoAcoes={};
+  return S.planoAcoes[anaChave(mes,cat)]||{causa:'',acao:'',responsavel:'',prazo:'',status:'aberto'};
+}
+async function anaSalvarAcao(cat){
+  if(!_anaMes)return;
+  if(!S.planoAcoes)S.planoAcoes={};
+  const g=(id)=>{const el=document.getElementById(id+'-'+cat);return el?el.value.trim():'';};
+  const dados={causa:g('anaCausa'),acao:g('anaAcao'),responsavel:g('anaResp'),prazo:g('anaPrazo'),status:g('anaStatus')||'aberto'};
+  const vazio=!dados.causa&&!dados.acao&&!dados.responsavel&&!dados.prazo;
+  if(vazio)delete S.planoAcoes[anaChave(_anaMes,cat)];
+  else S.planoAcoes[anaChave(_anaMes,cat)]=dados;
+  await save();
+  renderAnalise();
+  toast('✓ Plano de ação salvo');
+}
+function anaTrocarMes(){
+  const sel=document.getElementById('anaMes');
+  _anaMes=sel?sel.value:null;
+  renderAnalise();
+}
+function anaMesesDisponiveis(){
+  const meses=new Set();
+  coletarObservacoes(()=>true).forEach(o=>{if(o.hora)meses.add(String(o.hora).substring(0,7));});
+  const hoje=new Date().toISOString().substring(0,7);
+  meses.add(hoje);
+  return Array.from(meses).sort().reverse();
+}
+function popularAnaMeses(){
+  const sel=document.getElementById('anaMes');
+  if(!sel)return;
+  const meses=anaMesesDisponiveis();
+  const nomeMes=(m)=>{const[a,b]=m.split('-');const nomes=['','janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];return nomes[parseInt(b)]+'/'+a;};
+  sel.innerHTML=meses.map(m=>`<option value="${m}">${nomeMes(m)}</option>`).join('');
+  if(!_anaMes||!meses.includes(_anaMes))_anaMes=meses[0];
+  sel.value=_anaMes;
+  renderAnalise();
+}
+function anaErrosDoMes(mes){
+  if(!mes)return [];
+  const doMes=coletarObservacoes((d)=>String(d||'').substring(0,7)===mes);
+  doMes.forEach(o=>{o._cat=classificarErro(o);});
+  return doMes;
+}
+function renderAnalise(){
+  const div=document.getElementById('ana-conteudo');
+  if(!div)return;
+  if(!_anaMes){div.innerHTML='<p class="empty" style="padding:20px 0;">Selecione um mês.</p>';return;}
+  const todas=anaErrosDoMes(_anaMes);
+  const erros=todas.filter(o=>o._cat!=='outros');
+  const naoClass=todas.filter(o=>o._cat==='outros');
+
+  // mês anterior (tendência)
+  const [ay,am]=_anaMes.split('-').map(Number);
+  const dAnt=new Date(ay,am-2,1);
+  const mesAnt=dAnt.getFullYear()+'-'+String(dAnt.getMonth()+1).padStart(2,'0');
+  const errosAnt=anaErrosDoMes(mesAnt).filter(o=>o._cat!=='outros');
+
+  if(!erros.length){
+    div.innerHTML=`<p class="empty" style="padding:20px 0;">Nenhum erro classificado neste mês.</p>
+      ${naoClass.length?`<div style="font-size:12px;color:#888;">Há ${naoClass.length} observação(ões) não classificada(s). Revise na aba 📝 Observações.</div>`:''}`;
+    return;
+  }
+  const cats=CATEGORIAS_ERRO.filter(c=>c.key!=='outros');
+  const cont={};cats.forEach(c=>cont[c.key]=erros.filter(o=>o._cat===c.key).length);
+  const contAnt={};cats.forEach(c=>contAnt[c.key]=errosAnt.filter(o=>o._cat===c.key).length);
+  const total=erros.length;
+  const ordenadas=cats.slice().sort((a,b)=>cont[b.key]-cont[a.key]);
+  const top=ordenadas[0];
+
+  // áreas
+  const areas=['chapa','eletrica','mf'];
+  const contArea={};areas.forEach(a=>contArea[a]=erros.filter(o=>o.setor===a).length);
+  const areaTop=areas.slice().sort((a,b)=>contArea[b]-contArea[a])[0];
+
+  // tendência total
+  const difTotal=total-errosAnt.length;
+  const setaTot=errosAnt.length===0?'':(difTotal>0?`<span style="color:#A32D2D;">▲${difTotal}</span>`:(difTotal<0?`<span style="color:#1D9E75;">▼${Math.abs(difTotal)}</span>`:'<span style="color:#999;">→</span>'));
+
+  const card=(icon,valor,label,cor)=>`<div style="flex:1;min-width:150px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px 16px;">
+    <div style="font-size:24px;font-weight:800;color:${cor};line-height:1;">${valor}</div>
+    <div style="font-size:12px;color:#666;margin-top:5px;">${icon} ${label}</div></div>`;
+  const cards=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+    ${card('⚠️',total+' '+setaTot,'Erros no mês','#A32D2D')}
+    ${card(top.label.split(' ')[0],cont[top.key],'Categoria mais frequente',top.cor)}
+    ${card('📍',contArea[areaTop]||0,'Erros em '+(OBS_AREA_LBL[areaTop]||'').replace(/^[^ ]+ /,''),'#3550B4')}
+    ${naoClass.length?card('❓',naoClass.length,'Não classificados','#888'):''}
+  </div>`;
+
+  // ── PARETO com % acumulado ──
+  let acum=0;
+  const pareto=`<div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Pareto — onde concentrar o esforço</div>
+    <div style="font-size:11px;color:#999;margin-bottom:12px;">Categorias ordenadas por frequência. A coluna "acum." mostra quanto do total você resolve atacando de cima para baixo.</div>
+    ${ordenadas.map(c=>{
+      const n=cont[c.key];const pct=total?Math.round((n/total)*100):0;acum+=pct;
+      const dif=n-(contAnt[c.key]||0);
+      const seta=(contAnt[c.key]||0)===0?'':(dif>0?`<span style="color:#A32D2D;font-size:11px;">▲${dif}</span>`:(dif<0?`<span style="color:#1D9E75;font-size:11px;">▼${Math.abs(dif)}</span>`:'<span style="color:#999;font-size:11px;">→</span>'));
+      return `<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;gap:8px;">
+          <span style="font-weight:600;">${c.label}</span>
+          <span style="color:#666;white-space:nowrap;">${n} · ${pct}% ${seta} <span style="color:#bbb;">| acum. ${Math.min(acum,100)}%</span></span>
+        </div>
+        <div style="height:9px;background:#eee;border-radius:99px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${c.cor};"></div></div>
+      </div>`;}).join('')}
+  </div>`;
+
+  // ── QUEBRA POR ÁREA E MODELO ──
+  const porModelo={};
+  erros.forEach(o=>{const k=o.modeloLabel||'—';porModelo[k]=(porModelo[k]||0)+1;});
+  const topModelos=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const porOp={};
+  erros.forEach(o=>{if(o.opNum){porOp[o.opNum]=(porOp[o.opNum]||0)+1;}});
+  const opsRecorrentes=Object.entries(porOp).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  const quebra=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
+    <div style="flex:1;min-width:220px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px;">Erros por área</div>
+      ${areas.map(a=>{const n=contArea[a]||0;const pct=total?Math.round((n/total)*100):0;
+        return `<div style="margin-bottom:8px;"><div style="display:flex;justify-content:space-between;font-size:12px;"><span>${OBS_AREA_LBL[a]}</span><span style="color:#666;">${n} (${pct}%)</span></div>
+        <div style="height:6px;background:#eee;border-radius:99px;margin-top:3px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:#3550B4;"></div></div></div>`;}).join('')}
+    </div>
+    <div style="flex:1;min-width:220px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px;">Modelos com mais erros</div>
+      ${topModelos.length?topModelos.map(([m,n])=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid #f5f5f5;"><span>${escHtmlObs(m)}</span><strong>${n}</strong></div>`).join(''):'<div style="font-size:12px;color:#aaa;">Sem dados.</div>'}
+      ${opsRecorrentes.length?`<div style="font-size:12px;font-weight:700;margin-top:12px;margin-bottom:6px;">OPs com erro repetido</div>`+opsRecorrentes.map(([op,n])=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;"><span>OP ${escHtmlObs(op)}</span><strong style="color:#A32D2D;">${n}×</strong></div>`).join(''):''}
+    </div>
+  </div>`;
+
+  // ── PLANO DE AÇÃO por categoria ──
+  const statusCor={aberto:'#A32D2D','em_andamento':'#BA7517',concluido:'#1D9E75'};
+  const statusLbl={aberto:'Aberto','em_andamento':'Em andamento',concluido:'Concluído'};
+  const planos=ordenadas.filter(c=>cont[c.key]>0).map(c=>{
+    const a=anaGetAcao(_anaMes,c.key);
+    const exemplos=erros.filter(o=>o._cat===c.key).slice(0,3);
+    const sug=SUGESTOES_ACAO[c.key]||[];
+    return `<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${c.cor};border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+        <div style="font-size:15px;font-weight:700;color:${c.cor};">${c.label} <span style="color:#aaa;font-weight:400;font-size:12px;">(${cont[c.key]} erros)</span></div>
+        <span class="badge" style="background:${statusCor[a.status]||'#888'}22;color:${statusCor[a.status]||'#888'};">${statusLbl[a.status]||'Aberto'}</span>
+      </div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;">Exemplos: ${exemplos.map(e=>'“'+escHtmlObs(e.texto.substring(0,60))+(e.texto.length>60?'…':'')+'”').join(' · ')||'—'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <div><label style="font-size:11px;">Causa raiz (por que aconteceu?)</label><textarea id="anaCausa-${c.key}" style="width:100%;min-height:48px;font-size:12px;">${escHtmlObs(a.causa)}</textarea></div>
+        <div><label style="font-size:11px;">Ação corretiva</label><textarea id="anaAcao-${c.key}" style="width:100%;min-height:48px;font-size:12px;">${escHtmlObs(a.acao)}</textarea></div>
+      </div>
+      ${sug.length?`<div style="font-size:11px;color:#666;margin-bottom:8px;">💡 Sugestões: ${sug.map(s=>`<button onclick="anaUsarSugestao('${c.key}',this)" data-sug="${escHtmlObs(s)}" style="border:1px solid #ddd;background:#fafafa;border-radius:99px;padding:2px 8px;font-size:11px;cursor:pointer;margin:2px;">${escHtmlObs(s)}</button>`).join('')}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:end;">
+        <div><label style="font-size:11px;">Responsável</label><input id="anaResp-${c.key}" value="${escHtmlObs(a.responsavel)}" style="font-size:12px;"/></div>
+        <div><label style="font-size:11px;">Prazo</label><input type="date" id="anaPrazo-${c.key}" value="${a.prazo||''}" style="font-size:12px;"/></div>
+        <div><label style="font-size:11px;">Status</label>
+          <select id="anaStatus-${c.key}" style="font-size:12px;">
+            <option value="aberto"${a.status==='aberto'?' selected':''}>Aberto</option>
+            <option value="em_andamento"${a.status==='em_andamento'?' selected':''}>Em andamento</option>
+            <option value="concluido"${a.status==='concluido'?' selected':''}>Concluído</option>
+          </select></div>
+        <button class="btn" style="margin-top:0;padding:8px 14px;width:auto;" onclick="anaSalvarAcao('${c.key}')">✓ Salvar</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  div.innerHTML=cards+pareto+quebra+
+    `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:16px;font-weight:800;">🛠 Plano de ação</div>
+      <button onclick="exportarAnalise()" style="padding:6px 14px;border-radius:8px;border:1px solid #1D9E75;background:#fff;color:#1D9E75;font-size:12px;font-weight:600;cursor:pointer;">📥 Exportar CSV</button>
+    </div>`+planos+
+    `<div style="font-size:11px;color:#999;margin-top:6px;">As sugestões são apenas um ponto de partida. A causa raiz real deve sair da conversa com quem executa — use os exemplos acima como base na próxima GD.</div>`;
+}
+function anaUsarSugestao(cat,btn){
+  const el=document.getElementById('anaAcao-'+cat);
+  if(!el||!btn)return;
+  const texto=btn.getAttribute('data-sug')||btn.textContent;
+  el.value=el.value.trim()?el.value.trim()+'\n'+texto:texto;
+  el.focus();
+}
+function exportarAnalise(){
+  if(!_anaMes)return;
+  const erros=anaErrosDoMes(_anaMes).filter(o=>o._cat!=='outros');
+  if(!erros.length){toast('Nada para exportar neste mês.');return;}
+  const esc=(s)=>'"'+String(s==null?'':s).replace(/"/g,'""')+'"';
+  let csv='ERROS DO MES '+_anaMes+'\n';
+  csv+='Categoria;Area;Data;OP;Modelo;Colaborador;Tipo;Observacao\n';
+  erros.sort((a,b)=>new Date(b.hora||0)-new Date(a.hora||0)).forEach(o=>{
+    const cat=CAT_ERRO_LBL[o._cat];
+    csv+=[cat?cat.label.replace(/^[^ ]+ /,''):'',OBS_AREA_LBL[o.setor]||o.setor,o.hora?new Date(o.hora).toLocaleString('pt-BR'):'',o.opNum,o.modeloLabel,o.colab,o.tipo,o.texto].map(esc).join(';')+'\n';
+  });
+  csv+='\nPLANO DE ACAO\n';
+  csv+='Categoria;Qtd;Causa raiz;Acao corretiva;Responsavel;Prazo;Status\n';
+  CATEGORIAS_ERRO.filter(c=>c.key!=='outros').forEach(c=>{
+    const n=erros.filter(o=>o._cat===c.key).length;
+    if(!n)return;
+    const a=anaGetAcao(_anaMes,c.key);
+    csv+=[c.label.replace(/^[^ ]+ /,''),n,a.causa,a.acao,a.responsavel,a.prazo,a.status].map(esc).join(';')+'\n';
+  });
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='analise_erros_'+_anaMes+'.csv';a.click();
+  toast('📥 Análise exportada');
 }
 function renderObservacoes(){
   const div=document.getElementById('obs-conteudo');

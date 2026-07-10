@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v45</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v49</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -257,30 +257,43 @@ function toast(t){const el=document.getElementById('toast');el.textContent=t;el.
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
 
 function tempoLiquido(apt){
+  // se houver tempo definido manualmente pelo supervisor, ele tem prioridade
   if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
-  if(!apt.inicio)return 0;
-  const pausas=(apt.pausas||[]).filter(p=>p.inicio);
-  let total=0;
-  let periodoInicio=new Date(apt.inicio);
-  for(const p of pausas){
-    const pIni=new Date(p.inicio);
-    const trabalhado=Math.round((pIni-periodoInicio)/60000);
-    if(trabalhado>0)total+=trabalhado;
-    if(p.fim){periodoInicio=new Date(p.fim);}
-    else{return Math.max(0,total);}
+  if(!apt||!apt.inicio)return 0;
+  const ini=new Date(apt.inicio).getTime();
+  if(isNaN(ini))return 0;
+  const fimMs=apt.fim?new Date(apt.fim).getTime():Date.now();
+  if(isNaN(fimMs)||fimMs<=ini)return 0;
+  // Normaliza as pausas: descarta invalidas, RECORTA ao intervalo do apontamento,
+  // ORDENA por inicio e FUNDE sobreposicoes. Assim pausas fora da janela (ex.: apos o
+  // supervisor corrigir inicio/fim) ou fora de ordem nao distorcem o tempo.
+  const ps=[];
+  (apt.pausas||[]).forEach(p=>{
+    if(!p||!p.inicio)return;
+    let s=new Date(p.inicio).getTime();
+    if(isNaN(s))return;
+    let e=p.fim?new Date(p.fim).getTime():fimMs; // pausa aberta corre ate o fim (ou agora)
+    if(isNaN(e))e=fimMs;
+    s=Math.max(s,ini);
+    e=Math.min(e,fimMs);
+    if(e>s)ps.push([s,e]);
+  });
+  ps.sort((a,b)=>a[0]-b[0]);
+  let pausado=0,curS=null,curE=null;
+  for(const par of ps){
+    const s=par[0],e=par[1];
+    if(curS===null){curS=s;curE=e;}
+    else if(s<=curE){if(e>curE)curE=e;}
+    else{pausado+=curE-curS;curS=s;curE=e;}
   }
-  const fim=apt.fim?new Date(apt.fim):new Date();
-  const restante=Math.round((fim-periodoInicio)/60000);
-  if(restante>0)total+=restante;
-  return Math.max(0,total);
+  if(curS!==null)pausado+=curE-curS;
+  return Math.max(0,Math.round((fimMs-ini-pausado)/60000));
 }
 
 function estaPausado(apt){
   if(!apt||apt.fim)return false;
   const p=apt.pausas||[];
-  if(!p.length)return false;
-  const u=p[p.length-1];
-  return u.inicio&&!u.fim;
+  return p.some(x=>x&&x.inicio&&!x.fim);
 }
 
 async function load(){
@@ -658,9 +671,19 @@ function renderFilaEletrica(){
   if(setor!=='eletrica'&&setor!=='geral'){divFila.innerHTML='';return;}
   divFila.innerHTML='';
 
-  const chapaConcluidos=S.apontamentos.filter(a=>a.etapa==='eletrica');
-  const jaIniciados=new Set(S.apontamentos.filter(a=>a.setor==='eletrica').map(a=>a.opNum+'_'+a.modeloId));
-  const disponiveis=chapaConcluidos.filter(a=>!jaIniciados.has(a.opNum+'_'+a.modeloId));
+  const normOp=(s)=>String(s||'').trim().toLowerCase();
+  const chapaConcluidos=S.apontamentos.filter(a=>a&&a.etapa==='eletrica'&&a.tipoRegistro!=='sem_chapa');
+  // OPs que JÁ têm montagem elétrica registrada (por OP, tolerante a espaços/maiúsculas)
+  const opsComEletrica=new Set(S.apontamentos.filter(a=>a&&a.opNum&&a.tipoRegistro!=='sem_chapa'&&a.setor==='eletrica').map(a=>normOp(a.opNum)));
+  // OPs que já AVANÇARAM além da elétrica (chegaram na montagem final ou concluíram)
+  const opsAvancadas=new Set(S.apontamentos.filter(a=>a&&a.opNum&&(a.etapa==='montagem_final'||a.etapa==='concluido')).map(a=>normOp(a.opNum)));
+  const disponiveis=chapaConcluidos.filter(a=>{
+    if(a.eletricaIniciada)return false;                 // marcado no próprio apontamento (dados novos)
+    const op=normOp(a.opNum);
+    if(opsComEletrica.has(op))return false;             // já existe apontamento de elétrica p/ esta OP
+    if(opsAvancadas.has(op))return false;               // já passou da elétrica (MF/concluído)
+    return true;
+  });
   if(!disponiveis.length)return;
   const titulo=document.createElement('div');
   titulo.className='sec-title';
@@ -686,22 +709,29 @@ function renderFilaEletrica(){
     btn.style.background='#3550B4';
     btn.style.marginTop='10px';
     btn.textContent='⚡ Iniciar Montagem Elétrica';
-    btn.addEventListener('click',function(){iniciarEletrica(a.opNum,a.modeloId,a.modeloLabel||'');});
+    btn.addEventListener('click',function(){iniciarEletrica(a.opNum,a.modeloId,a.modeloLabel||'',a.id);});
     card.appendChild(header);
     card.appendChild(btn);
     divFila.appendChild(card);
   });
 }
 
-async function iniciarEletrica(opNum,modeloId,modeloLabel){
-  if(S.apontamentos.find(a=>a.opNum===opNum&&a.modeloId===modeloId&&a.setor==='eletrica'&&!a.fim)){
+async function iniciarEletrica(opNum,modeloId,modeloLabel,chapaAptId){
+  const normOp=(s)=>String(s||'').trim().toLowerCase();
+  // já existe montagem elétrica em aberto para esta OP?
+  if(S.apontamentos.find(a=>a&&a.setor==='eletrica'&&!a.fim&&normOp(a.opNum)===normOp(opNum))){
     toast('Você já iniciou a montagem elétrica deste quadro.');return;
   }
+  const novoId=uid();
   S.apontamentos.push({
-    id:uid(),opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
+    id:novoId,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
     inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
     erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
   });
+  // MARCA o apontamento da chapa: assim a fila não depende de casar opNum+modeloId
+  const chapaApt=S.apontamentos.find(a=>a&&a.id===chapaAptId)
+    ||S.apontamentos.find(a=>a&&a.etapa==='eletrica'&&normOp(a.opNum)===normOp(opNum));
+  if(chapaApt){chapaApt.eletricaIniciada=true;chapaApt.eletricaAptId=novoId;chapaApt._ts=Date.now();}
   await save();renderAll();toast('⚡ Montagem elétrica iniciada!');
 }
 
@@ -1037,7 +1067,9 @@ async function pausar(aptId){
 }
 async function retomar(aptId){
   const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
-  const p=apt.pausas||[];if(p.length){const u=p[p.length-1];if(u&&!u.fim)u.fim=new Date().toISOString();}
+  const p=apt.pausas||[];
+  // fecha a última pausa que estiver ABERTA (manual ou automática)
+  for(let i=p.length-1;i>=0;i--){if(p[i]&&p[i].inicio&&!p[i].fim){p[i].fim=new Date().toISOString();break;}}
   apt._ts=Date.now();
   await save();renderAll();toast('Retomado ▶');
 }
@@ -1161,10 +1193,12 @@ function renderPausasBadge(){
 // ── PAUSA/RETOMADA AUTOMÁTICA (café e almoço) ──
 // Pausa e retoma sozinho os quadros ativos do colaborador nos horários que o supervisor definiu.
 // Se o quadro já estiver pausado manualmente quando chega o horário, não faz nada.
-// Motor de pausas automáticas — RETROATIVO e reutilizável.
-// Insere as pausas nos horários EXATOS configurados, mesmo que a tela não estivesse
-// aberta na hora (calcula com base no horário da pausa, não no "agora").
-// Retorna true se alterou algo. NÃO salva nem renderiza (quem chama decide).
+// Motor de pausas automáticas — RETROATIVO, e desenhado para dois princípios:
+//  (1) REDE DE SEGURANÇA: se o operador esqueceu de pausar, o sistema desconta a
+//      parte da janela de pausa em que ele não estava pausado.
+//  (2) FLEXIBILIDADE: se o operador RETOMOU manualmente dentro da janela, ele
+//      escolheu trabalhar — dali em diante o sistema não pausa de novo.
+// Preenche apenas as LACUNAS (partes não cobertas) da janela, nunca sobrepõe.
 function aplicarPausasAuto(colaborador){
   if(!colaborador||!colaborador.horarios)return false;
   const cfg=colaborador.horarios;
@@ -1176,43 +1210,75 @@ function aplicarPausasAuto(colaborador){
   const now=new Date();
   const y=now.getFullYear(),mo=now.getMonth(),d=now.getDate();
   const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  const mkMs=(hhmm)=>{const pr=hhmm.split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
+  const mkMs=(hhmm)=>{const pr=String(hhmm).split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
   const nowMs=now.getTime();
   const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim&&a.tipoRegistro!=='sem_chapa');
   let mudou=false;
   for(const apt of ativos){
     if(!apt.pausas)apt.pausas=[];
-    const manualAbertaAgora=apt.pausas.some(p=>p&&!p.fim&&!p.auto);
     const aptStart=apt.inicio?new Date(apt.inicio).getTime():null;
-    if(aptStart==null)continue;
+    if(aptStart==null||isNaN(aptStart))continue;
     for(const b of defs){
       if(!b.cfg||!b.cfg.inicio||!b.cfg.fim)continue;
       const bStart=mkMs(b.cfg.inicio),bEnd=mkMs(b.cfg.fim);
-      if(bEnd<=bStart)continue;      // config inválida
-      if(nowMs<bStart)continue;      // ainda não chegou a hora da pausa
-      if(aptStart>=bEnd)continue;    // o quadro só começou depois da pausa acabar
+      if(!(bEnd>bStart))continue;   // configuração inválida
+      if(nowMs<=bStart)continue;    // a janela ainda não começou
+      if(aptStart>=bEnd)continue;   // o painel só começou depois da pausa
       const breakKey=dataStr+'_'+b.key;
-      const existente=apt.pausas.find(p=>p&&p._breakKey===breakKey);
-      const iniMs=Math.max(bStart,aptStart);
-      const fimMs=(nowMs>=bEnd)?bEnd:null; // se a janela já acabou, fecha no horário certo
-      if(!existente){
-        if(manualAbertaAgora)continue; // pausado manualmente → não cria auto (regra definida)
-        // evita sobrepor uma pausa que já exista naquele intervalo
-        const sobrepoe=apt.pausas.some(p=>{
-          if(!p||!p.inicio)return false;
-          const ps=new Date(p.inicio).getTime();
-          const pe=p.fim?new Date(p.fim).getTime():nowMs;
-          return iniMs<pe&&(fimMs||nowMs)>ps;
-        });
-        if(sobrepoe)continue;
-        apt.pausas.push({inicio:new Date(iniMs).toISOString(),fim:fimMs?new Date(fimMs).toISOString():null,tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
-        apt._ts=Date.now();mudou=true;
-      }else if(existente.auto&&!existente.fim&&fimMs){
-        existente.fim=new Date(fimMs).toISOString();
+
+      // (a) fecha no horário certo uma pausa automática deste intervalo que ficou aberta
+      if(nowMs>=bEnd){
+        const abertaAuto=apt.pausas.find(p=>p&&p.auto&&p._breakKey===breakKey&&!p.fim);
+        if(abertaAuto){abertaAuto.fim=new Date(bEnd).toISOString();apt._ts=Date.now();mudou=true;}
+      }
+
+      const janIni=Math.max(bStart,aptStart);
+      const limite=Math.min(bEnd,nowMs);   // nunca cria pausa no futuro
+      if(limite<=janIni)continue;
+
+      // (b) o operador RETOMOU manualmente dentro da janela? então dali em diante ele
+      //     optou por trabalhar: só preenchemos até esse instante.
+      let retomada=null;
+      apt.pausas.forEach(p=>{
+        if(!p||!p.fim)return;
+        const f=new Date(p.fim).getTime();
+        if(!isNaN(f)&&f>bStart&&f<bEnd){if(retomada===null||f>retomada)retomada=f;}
+      });
+      const fimPreenchivel=(retomada!==null)?Math.min(retomada,limite):limite;
+      if(fimPreenchivel<=janIni)continue;
+
+      // (c) cobertura atual das pausas existentes, recortada à região preenchível
+      const cob=[];
+      apt.pausas.forEach(p=>{
+        if(!p||!p.inicio)return;
+        let s=new Date(p.inicio).getTime();
+        if(isNaN(s))return;
+        let e=p.fim?new Date(p.fim).getTime():nowMs;
+        if(isNaN(e))e=nowMs;
+        s=Math.max(s,janIni);e=Math.min(e,fimPreenchivel);
+        if(e>s)cob.push([s,e]);
+      });
+      cob.sort((x,z)=>x[0]-z[0]);
+
+      // (d) lacunas = região preenchível − cobertura → cria pausa automática em cada lacuna
+      const lacunas=[];
+      let cursor=janIni;
+      for(const par of cob){
+        if(par[0]>cursor)lacunas.push([cursor,par[0]]);
+        if(par[1]>cursor)cursor=par[1];
+      }
+      if(cursor<fimPreenchivel)lacunas.push([cursor,fimPreenchivel]);
+
+      for(const g of lacunas){
+        const s=g[0],e=g[1];
+        if(e-s<60000)continue; // ignora lacunas menores que 1 minuto
+        // se ainda estamos dentro da janela e ninguém retomou, a pausa fica ABERTA (ao vivo)
+        const aberta=(retomada===null&&nowMs<bEnd&&e>=limite);
+        apt.pausas.push({inicio:new Date(s).toISOString(),fim:aberta?null:new Date(e).toISOString(),tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
         apt._ts=Date.now();mudou=true;
       }
     }
-    // ordena as pausas por início para o cálculo de tempo ficar correto
+    // ordena as pausas por início (o cálculo de tempo depende disso)
     apt.pausas.sort((x,z)=>((x&&x.inicio?new Date(x.inicio).getTime():0)-(z&&z.inicio?new Date(z.inicio).getTime():0)));
   }
   return mudou;

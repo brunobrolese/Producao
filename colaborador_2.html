@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v49</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v50</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -376,6 +376,7 @@ async function save(){
       if(servidor.mfResponsaveis!==undefined)S.mfResponsaveis=servidor.mfResponsaveis;
       if(servidor.mfResponsavel!==undefined)S.mfResponsavel=servidor.mfResponsavel;
       if(servidor.tema!==undefined)S.tema=servidor.tema;
+      if(servidor.planoAcoes!==undefined)S.planoAcoes=servidor.planoAcoes; // plano de ação é do supervisor
     }
 
     // 3. Atualiza nid para evitar colisão de IDs

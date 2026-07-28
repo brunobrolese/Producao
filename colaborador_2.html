@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v50</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v51</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1284,9 +1284,37 @@ function aplicarPausasAuto(colaborador){
   }
   return mudou;
 }
+// ── FECHA PAUSAS MANUAIS ESQUECIDAS EM ABERTO ──
+// Se o colaborador aperta pausar e esquece de voltar, a pausa fecha sozinha
+// após a duração padrão do tipo: intervalo/café = 15min, almoço = 60min.
+// Atividade interna e fim do dia têm duração variável e NÃO são limitadas.
+const PAUSA_MAX_MIN={intervalo:15,almoco:60};
+function fecharPausasEsquecidas(){
+  let mudou=false;
+  const nowMs=Date.now();
+  (S.apontamentos||[]).forEach(apt=>{
+    if(!apt||apt.fim||apt.tipoRegistro==='sem_chapa')return;
+    (apt.pausas||[]).forEach(p=>{
+      if(!p||!p.inicio||p.fim||p.auto)return;       // só pausas MANUAIS que estão ABERTAS
+      const max=PAUSA_MAX_MIN[p.tipo];
+      if(!max)return;                                // tipo sem limite (atividade, fim do dia)
+      const ini=new Date(p.inicio).getTime();
+      if(isNaN(ini))return;
+      const limite=ini+max*60000;
+      if(nowMs>=limite){                             // passou da duração padrão → fecha no limite
+        p.fim=new Date(limite).toISOString();
+        p.autoFechada=true;                          // marca que o sistema fechou (não o operador)
+        apt._ts=Date.now();
+        mudou=true;
+      }
+    });
+  });
+  return mudou;
+}
 async function autoPausas(){
   if(!colab)return;
-  const mudou=aplicarPausasAuto(colab);
+  let mudou=aplicarPausasAuto(colab);
+  if(fecharPausasEsquecidas())mudou=true;
   if(mudou){await save();renderAll();}
 }
 function abrirFinalizar(aptId){

@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v51</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v54</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -256,6 +256,13 @@ function durMin(a,b){if(!a||!b)return 0;return Math.round((new Date(b)-new Date(
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2400);}
 function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
 
+function dataLocalStr(x){
+  if(!x)return '';
+  const d=(x instanceof Date)?x:new Date(x);
+  if(isNaN(d))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function mesLocalStr(x){return dataLocalStr(x).substring(0,7);}
 function tempoLiquido(apt){
   // se houver tempo definido manualmente pelo supervisor, ele tem prioridade
   if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
@@ -304,14 +311,16 @@ async function load(){
     if(d){
       S=d;
       // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
+      // Firebase pode retornar objeto {0:..,1:..} OU array com buracos null (item deletado por índice).
+      // Normaliza para array e SEMPRE remove entradas nulas/inválidas, protegendo todas as telas.
       ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
-        if(!S[k]){S[k]=[];}
-        else if(!Array.isArray(S[k])){S[k]=Object.values(S[k]).filter(x=>x!=null);}
+        const base=Array.isArray(S[k])?S[k]:(S[k]&&typeof S[k]==='object'?Object.values(S[k]):[]);
+        S[k]=base.filter(x=>x!=null&&typeof x==='object');
       });
       if(!S.nid)S.nid=1;
     }
     // mantém a referência do colaborador atual sincronizada (ex.: horários definidos pelo supervisor)
-    if(colab&&S.colaboradores)colab=S.colaboradores.find(c=>c.id===colab.id)||colab;
+    if(colab&&S.colaboradores)colab=S.colaboradores.find(c=>c&&c.id===colab.id)||colab;
     setSync(true);
     _dadosCarregados=true;
     aplicarTemaColab();
@@ -350,7 +359,7 @@ async function save(){
       let aptsServidor=servidor.apontamentos;
       if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
-      S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
+      S.apontamentos.forEach(a=>{if(!a)return;if(a&&a.id!=null)localMap[a.id]=a;});
       // une servidor + local; em CONFLITO de id, mantém a versão MAIS RECENTE (_ts maior)
       // isso evita que uma aba antiga reverta dados atualizados por outra pessoa
       aptsServidor.forEach(a=>{
@@ -418,7 +427,7 @@ function showSelect(){
   g.innerHTML=S.colaboradores.map(c=>`<div class="colab-btn" onclick="selColab(${c.id})"><div class="c-avatar">${ini(c.nome)}</div><div class="c-nome">${c.nome}</div><div class="c-func">${c.funcao}</div></div>`).join('');
 }
 function selColab(id){
-  colab=S.colaboradores.find(c=>c.id===id);if(!colab)return;
+  colab=S.colaboradores.find(c=>c&&c.id===id);if(!colab)return;
   document.getElementById('selectScreen').style.display='none';
   document.getElementById('mainScreen').style.display='block';
   document.getElementById('uAvatar').textContent=ini(colab.nome);
@@ -438,7 +447,7 @@ function trocar(){colab=null;finalizando=null;showSelect();}
 async function refresh(){
   document.getElementById('syncTxt').textContent='atualizando...';
   await load();
-  if(colab)colab=S.colaboradores.find(c=>c.id===colab.id)||colab;
+  if(colab)colab=S.colaboradores.find(c=>c&&c.id===colab.id)||colab;
   renderAll();toast('Atualizado!');
 }
 
@@ -532,7 +541,7 @@ function abrirConfirmacao(){
   if(!opNum){toast('Digite o número da OP.');return;}
   if(!modeloId){toast('Selecione o modelo do quadro.');return;}
   if(!hora){toast('Informe o horário de início.');return;}
-  const modelo=S.modelos.find(m=>m.id==modeloId);
+  const modelo=S.modelos.find(m=>m&&m.id==modeloId);
   const modeloLabel=modelo?`${modelo.codigo}${modelo.descricao?' — '+modelo.descricao:''}`:'';
 
 
@@ -576,7 +585,7 @@ async function confirmarIniciar(){
   // VALIDAÇÕES: impedem cadastro de painéis incompletos/inválidos
   if(!opNum){toast('Informe o número da OP.');return;}
   if(!modeloId){toast('Selecione o modelo do quadro.');return;}
-  const modelo=S.modelos.find(m=>m.id==modeloId);
+  const modelo=S.modelos.find(m=>m&&m.id==modeloId);
   if(!modelo){toast('Modelo inválido. Selecione novamente.');return;}
 
   // PROTEÇÃO: impede cadastrar uma OP que já está em produção (evita 2 pedidos com a mesma OP)
@@ -608,7 +617,7 @@ async function confirmarIniciar(){
     }
   }catch(e){}
 
-  const hoje=new Date().toISOString().split('T')[0];
+  const hoje=dataLocalStr(new Date());
   let inicioISO;
   if(hora){
     const d=new Date(`${hoje}T${hora}:00`);
@@ -652,11 +661,11 @@ function renderAll(){
   renderPausasBadge();
   renderSemChapa();
   aplicarTemaColab();
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
+  const meusApts=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
   meusApts.forEach(a=>bindRetrab(a.id));
   // show MF tab only for the designated MF responsible
   const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
-  const mfPendentes=isMfResp?S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length:0;
+  const mfPendentes=isMfResp?S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length:0;
   const tabs=document.getElementById('colTabs');
   if(tabs)tabs.style.display=(isMfResp||meusApts.length)?'flex':'none';
   const tabMf=document.getElementById('tab-mf');
@@ -693,7 +702,7 @@ function renderFilaEletrica(){
   divFila.appendChild(titulo);
   disponiveis.forEach(a=>{
     const m=S.modelos.find(x=>x.id===a.modeloId);
-    const autor=S.colaboradores.find(c=>c.id===a.colabId);
+    const autor=S.colaboradores.find(c=>c&&c.id===a.colabId);
     const card=document.createElement('div');
     card.className='qcard';
     card.style.cssText='border-color:#3550B4;background:#EEF1FF;';
@@ -740,9 +749,9 @@ function renderOps(){
   if(!colab)return; // guard: não renderiza sem colaborador selecionado
   const div=document.getElementById('opsDiv');
   const setor=getColabSetor();
-  const meusApts=S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
-  const hoje=new Date().toISOString().split('T')[0];
-  const finHoje=S.apontamentos.filter(a=>a.colabId===colab.id&&a.fim&&a.fim.startsWith(hoje)&&a.etapa==='concluido'&&a.tipoRegistro!=='sem_chapa');
+  const meusApts=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
+  const hoje=dataLocalStr(new Date());
+  const finHoje=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&a.fim&&dataLocalStr(a.fim)===hoje&&a.etapa==='concluido'&&a.tipoRegistro!=='sem_chapa');
   const addArea=document.getElementById('addFormArea');
   if(addArea)addArea.style.display=setor==='eletrica'?'none':'block';
   renderFilaEletrica();
@@ -762,7 +771,7 @@ function renderOps(){
     meusApts.forEach(a=>{html+=renderQuadro(a);});
   }
   // show quadros waiting in MF queue
-  const mfMeus=S.apontamentos.filter(a=>a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const mfMeus=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   if(mfMeus.length){
     html+='<div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Aguardando Montagem Final ('+mfMeus.length+')</div>';
     mfMeus.forEach(a=>{
@@ -820,10 +829,10 @@ function renderProgressBar(apt){
 }
 
 function renderQuadro(apt){
-  const outros=S.apontamentos.filter(a=>a.modeloId===apt.modeloId&&a.opNum===apt.opNum&&a.colabId!==colab.id&&!a.fim);
-  const outrosHtml=outros.length?`<div class="outros">Também trabalhando: ${outros.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);return c?c.nome.split(' ')[0]:'?';}).join(', ')}</div>`:'';
+  const outros=S.apontamentos.filter(a=>a&&a.modeloId===apt.modeloId&&a.opNum===apt.opNum&&a.colabId!==colab.id&&!a.fim);
+  const outrosHtml=outros.length?`<div class="outros">Também trabalhando: ${outros.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);return c?(c.nome||'').split(' ')[0]:'?';}).join(', ')}</div>`:'';
 
-  const modeloCompleto=S.modelos.find(m=>m.id===apt.modeloId);
+  const modeloCompleto=S.modelos.find(m=>m&&m.id===apt.modeloId);
   const modeloDesc=modeloCompleto&&modeloCompleto.descricao?`<div class="modelo-desc">${modeloCompleto.descricao}</div>`:'';
 
   if(estaPausado(apt)){
@@ -978,7 +987,7 @@ function bindRetrab(aptId){
 async function adicionarObs(aptId){
   const el=document.getElementById(`obs-${aptId}`);if(!el)return;
   const texto=el.value.trim();if(!texto){toast('Digite uma observação.');return;}
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt)return;
   if(!apt.observacoes)apt.observacoes=[];
   apt.observacoes.push({hora:new Date().toISOString(),texto});
   apt._ts=Date.now();
@@ -1050,7 +1059,7 @@ function cancelarSeletorPausa(aptId){
 
 async function confirmarPausa(aptId){
   if(!_tipoPausa){toast('Selecione o motivo da pausa.');return;}
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
   if(!apt.pausas)apt.pausas=[];
   const tipo=TIPOS_PAUSA.find(t=>t.id===_tipoPausa);
   apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:_tipoPausa,tipoLabel:tipo?tipo.label:''});
@@ -1061,13 +1070,13 @@ async function confirmarPausa(aptId){
 
 async function pausar(aptId){
   // mantido para compatibilidade
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
   if(!apt.pausas)apt.pausas=[];
   apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:'intervalo',tipoLabel:'Intervalo'});
   await save();renderAll();toast('Pausado ⏸');
 }
 async function retomar(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
   const p=apt.pausas||[];
   // fecha a última pausa que estiver ABERTA (manual ou automática)
   for(let i=p.length-1;i>=0;i--){if(p[i]&&p[i].inicio&&!p[i].fim){p[i].fim=new Date().toISOString();break;}}
@@ -1081,7 +1090,7 @@ function semChapaAtivo(){
   return S.apontamentos.find(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colab.id&&!a.fim)||null;
 }
 function semChapaMinutosMes(colabId,mesStr){
-  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&a.inicio.substring(0,7)===mesStr)
+  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&mesLocalStr(a.inicio)===mesStr)
     .reduce((tot,a)=>{
       const ini=new Date(a.inicio).getTime();
       const fim=a.fim?new Date(a.fim).getTime():Date.now();
@@ -1111,7 +1120,7 @@ function renderSemChapa(){
   if(semChapaTimerIv){clearInterval(semChapaTimerIv);semChapaTimerIv=null;}
   if(getColabSetor()!=='chapa'){div.innerHTML='';return;}
   const ativo=semChapaAtivo();
-  const mesAtual=new Date().toISOString().substring(0,7);
+  const mesAtual=mesLocalStr(new Date());
   const totalMes=semChapaMinutosMes(colab.id,mesAtual);
   const fmtT=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
   if(ativo){
@@ -1227,6 +1236,23 @@ function aplicarPausasAuto(colaborador){
       if(aptStart>=bEnd)continue;   // o painel só começou depois da pausa
       const breakKey=dataStr+'_'+b.key;
 
+      // (0) O operador registrou MANUALMENTE uma pausa do mesmo tipo perto desta janela?
+      //     (até 30min antes ou depois). Então ele NÃO esqueceu — só pausou em horário
+      //     diferente. Essa pausa manual é a real: não cria a automática e remove a que
+      //     porventura já tenha sido criada, evitando contar o café/almoço duas vezes.
+      const GRACE_PAUSA=30*60000;
+      const temManualPerto=apt.pausas.some(p=>{
+        if(!p||p.auto||!p.inicio||p.tipo!==b.tipo)return false;
+        const s=new Date(p.inicio).getTime();
+        return !isNaN(s)&&s>=bStart-GRACE_PAUSA&&s<=bEnd+GRACE_PAUSA;
+      });
+      if(temManualPerto){
+        const antes=apt.pausas.length;
+        apt.pausas=apt.pausas.filter(p=>!(p&&p.auto&&p._breakKey===breakKey));
+        if(apt.pausas.length!==antes){apt._ts=Date.now();mudou=true;}
+        continue;
+      }
+
       // (a) fecha no horário certo uma pausa automática deste intervalo que ficou aberta
       if(nowMs>=bEnd){
         const abertaAuto=apt.pausas.find(p=>p&&p.auto&&p._breakKey===breakKey&&!p.fim);
@@ -1324,7 +1350,7 @@ function abrirFinalizar(aptId){
 }
 function renderFinPanel(aptId){
   const c=document.getElementById(`fin-${aptId}`);if(!c)return;
-  const _apt=S.apontamentos.find(a=>a.id===aptId);
+  const _apt=S.apontamentos.find(a=>a&&a.id===aptId);
   const _m=_apt?S.modelos.find(x=>x.id===_apt.modeloId):null;
   const _liq=_apt?tempoLiquido(_apt):0;
   const _temPrev=tempoPrevistoApt(_apt,_m);
@@ -1399,7 +1425,7 @@ async function confirmarFin(aptId){
   if(_erroProjeto===true&&!obsErroProjeto){toast('Descreva qual foi o erro de projeto.');return;}
   const el=document.getElementById(`obsErroFin-${aptId}`);
   const obsErro=el?el.value.trim():'';
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt||apt.fim)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
 
   // PROTEÇÃO: verifica se outra pessoa já avançou este painel
   const srvApt=await estadoServidor(aptId);
@@ -1479,7 +1505,7 @@ async function iniciarMontagemFinal(aptId){
   _mfIniciado.add(aptId);
   if(!_mfEstado[aptId])_mfEstado[aptId]={checklist:{},obs:''};
   // grava o horário de início da INSPEÇÃO (persistido, só se ainda não houver)
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(apt){
     if(!apt.mf)apt.mf={};
     if(!apt.mf.inicioInspecao){
@@ -1496,10 +1522,10 @@ function renderMF(){
   const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
   if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
   // SOMENTE quadros em montagem final aguardando inspeção
-  const mfApts=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const mfApts=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
   const badge=document.getElementById('mfBadge');
   const tabs=document.getElementById('colTabs');
-  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
+  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
   if(badge){badge.textContent=mfApts.length;badge.style.display=mfApts.length?'inline':'none';}
   if(!mfApts.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
   div.innerHTML='';
@@ -1578,7 +1604,7 @@ function renderMF(){
 }
 
 async function finalizarMF(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);if(!apt)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt)return;
   // PROTEÇÃO: se o servidor já tem uma decisão para este painel, não sobrescreve
   const srvApt=await estadoServidor(aptId);
   if(srvApt&&srvApt.mf&&srvApt.mf.resultado){

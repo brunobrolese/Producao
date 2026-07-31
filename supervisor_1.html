@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v51</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v54</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -470,6 +470,7 @@ let _modelosExcluidos=new Set(); // modelos removidos intencionalmente
 let _colabsExcluidos=new Set();  // colaboradores removidos intencionalmente
 let _opsExcluidos=new Set();     // OPs removidas intencionalmente
 let _horarioColab=null;          // id do colaborador com editor de horários aberto
+let _editColab=null;             // id do colaborador com editor de nome/dados aberto
 let _prodPeriodo=null;           // filtro rápido ativo na produtividade (hoje/semana/mes)
 let S={colaboradores:[],ops:[],apontamentos:[],nid:1};
 let currentPage='dash';
@@ -481,15 +482,25 @@ function fmtH(iso){if(!iso)return'—';return new Date(iso).toLocaleTimeString('
 function fmtD(iso){if(!iso)return'—';const d=iso.includes('T')?iso.split('T')[0]:iso;const[y,m,dd]=d.split('-');return`${dd}/${m}/${y}`;}
 function fmtDH(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
 function dur(a,b){if(!a||!b)return null;return Math.round((new Date(b)-new Date(a))/60000);}
-function td(){return new Date().toISOString().split('T')[0];}
+function td(){return dataLocalStr(new Date());}
 
 // ── FILTRO DE DATA GLOBAL ──
 let _filtroData={de:'',ate:''};
 
+// Converte um timestamp ISO (UTC) para a data LOCAL 'YYYY-MM-DD' do dispositivo.
+// Sem isso, trabalho da noite (após 21h no BR) cairia no dia seguinte por causa do UTC.
+function dataLocalStr(x){
+  if(!x)return '';
+  const d=(x instanceof Date)?x:new Date(x);
+  if(isNaN(d))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function mesLocalStr(x){return dataLocalStr(x).substring(0,7);}
 function dentroFiltro(dateStr){
-  // verifica se uma data (ISO) está dentro do filtro selecionado
+  // verifica se uma data (ISO) está dentro do filtro selecionado (comparando data LOCAL)
   if(!dateStr)return false;
-  const d=dateStr.substring(0,10);
+  const d=dataLocalStr(dateStr);
+  if(!d)return false;
   if(_filtroData.de&&d<_filtroData.de)return false;
   if(_filtroData.ate&&d>_filtroData.ate)return false;
   return true;
@@ -584,9 +595,11 @@ async function load(){
     if(d){
       S=d;
       // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
+      // Firebase pode retornar objeto {0:..,1:..} OU array com buracos null (item deletado por índice).
+      // Normaliza para array e SEMPRE remove entradas nulas/inválidas, protegendo todas as telas.
       ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
-        if(!S[k]){S[k]=[];}
-        else if(!Array.isArray(S[k])){S[k]=Object.values(S[k]).filter(x=>x!=null);}
+        const base=Array.isArray(S[k])?S[k]:(S[k]&&typeof S[k]==='object'?Object.values(S[k]):[]);
+        S[k]=base.filter(x=>x!=null&&typeof x==='object');
       });
       if(!S.nid)S.nid=1;
     }
@@ -609,7 +622,7 @@ async function save(){
       let aptsServidor=servidor.apontamentos;
       if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
       const localMap={};
-      S.apontamentos.forEach(a=>{if(a&&a.id!=null)localMap[a.id]=a;});
+      S.apontamentos.forEach(a=>{if(!a)return;if(a&&a.id!=null)localMap[a.id]=a;});
       // une servidor + local; em CONFLITO mantém a versão MAIS RECENTE (_ts maior)
       aptsServidor.forEach(a=>{
         if(!a||a.id==null||_idsExcluidos.has(a.id))return;
@@ -708,7 +721,7 @@ async function executarReset(){
       }
     }
   }catch(e){}
-  S.apontamentos.forEach(a=>{if(a&&a.id!=null)_idsExcluidos.add(a.id);});
+  S.apontamentos.forEach(a=>{if(!a)return;if(a&&a.id!=null)_idsExcluidos.add(a.id);});
   // 4. Apaga apenas os apontamentos
   S.apontamentos=[];
   // mantém o nid para evitar colisão de IDs futuros
@@ -765,7 +778,7 @@ async function importarBackup(event){
     // (sem apagar dados mais novos que só existam no servidor — proteção contra perda)
     if(Array.isArray(dados.apontamentos)){
       const agora=Date.now();
-      dados.apontamentos.forEach(a=>{if(a)a._ts=agora;});
+      dados.apontamentos.forEach(a=>{if(!a)return;if(a)a._ts=agora;});
     }
     S=dados;
     _dadosCarregados=true;
@@ -871,6 +884,23 @@ function aplicarPausasAutoSup(colaborador){
       if(aptStart>=bEnd)continue;   // o painel só começou depois da pausa
       const breakKey=dataStr+'_'+b.key;
 
+      // (0) O operador registrou MANUALMENTE uma pausa do mesmo tipo perto desta janela?
+      //     (até 30min antes ou depois). Então ele NÃO esqueceu — só pausou em horário
+      //     diferente. Essa pausa manual é a real: não cria a automática e remove a que
+      //     porventura já tenha sido criada, evitando contar o café/almoço duas vezes.
+      const GRACE_PAUSA=30*60000;
+      const temManualPerto=apt.pausas.some(p=>{
+        if(!p||p.auto||!p.inicio||p.tipo!==b.tipo)return false;
+        const s=new Date(p.inicio).getTime();
+        return !isNaN(s)&&s>=bStart-GRACE_PAUSA&&s<=bEnd+GRACE_PAUSA;
+      });
+      if(temManualPerto){
+        const antes=apt.pausas.length;
+        apt.pausas=apt.pausas.filter(p=>!(p&&p.auto&&p._breakKey===breakKey));
+        if(apt.pausas.length!==antes){apt._ts=Date.now();mudou=true;}
+        continue;
+      }
+
       // (a) fecha no horário certo uma pausa automática deste intervalo que ficou aberta
       if(nowMs>=bEnd){
         const abertaAuto=apt.pausas.find(p=>p&&p.auto&&p._breakKey===breakKey&&!p.fim);
@@ -958,7 +988,7 @@ function fecharPausasEsquecidas(){
 async function processarPausasTodos(){
   if(!_dadosCarregados||!S.colaboradores)return;
   let mudou=false;
-  S.colaboradores.forEach(c=>{if(aplicarPausasAutoSup(c))mudou=true;});
+  S.colaboradores.forEach(c=>{if(!c)return;if(aplicarPausasAutoSup(c))mudou=true;});
   if(fecharPausasEsquecidas())mudou=true;
   if(mudou){
     await save();
@@ -1034,14 +1064,14 @@ window.excluirApontamento=async function(id){
   if(_pendingExcluir===id){
     _pendingExcluir=null;
     _idsExcluidos.add(id); // marca como excluído para o merge ignorar
-    S.apontamentos=S.apontamentos.filter(a=>a.id!==id);
+    S.apontamentos=S.apontamentos.filter(a=>a&&a.id!==id);
     await save();
     renderApt();
     toast('✓ Apontamento excluído.');
     return;
   }
   _pendingExcluir=id;
-  const apt=S.apontamentos.find(a=>a.id===id);
+  const apt=S.apontamentos.find(a=>a&&a.id===id);
   const label=apt?'OP '+(apt.opNum||apt.modeloLabel||'—'):'apontamento #'+id;
   toast('⚠ Clique ✕ novamente para excluir '+label);
   setTimeout(()=>{if(_pendingExcluir===id){_pendingExcluir=null;}},5000);
@@ -1064,7 +1094,7 @@ function inputLocalParaISO(val){
 let _obsEditState=null;
 const SETOR_ETAPA_LBL={chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Montagem Final',geral:'🔀 Geral'};
 function abrirEditarObs(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(!apt)return;
   _obsEditState={
     aptId,
@@ -1087,7 +1117,7 @@ function escHtmlObs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace
 function renderEditarObsBody(){
   const box=document.getElementById('editObsBox');
   if(!box||!_obsEditState)return;
-  const apt=S.apontamentos.find(a=>a.id===_obsEditState.aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===_obsEditState.aptId);
   if(!apt){fecharEditarObs();return;}
   const c=S.colaboradores.find(x=>x.id===apt.colabId);
   const m=S.modelos.find(x=>x.id===apt.modeloId);
@@ -1154,7 +1184,7 @@ function removerObsGeral(i){
 async function salvarEditarObs(){
   if(!_obsEditState)return;
   sincronizarObsDoDom();
-  const apt=S.apontamentos.find(a=>a.id===_obsEditState.aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===_obsEditState.aptId);
   if(!apt){fecharEditarObs();return;}
   // observações gerais: remove as vazias
   apt.observacoes=_obsEditState.observacoes.filter(o=>(o.texto||'').trim()).map(o=>({hora:o.hora||new Date().toISOString(),texto:o.texto.trim()}));
@@ -1174,7 +1204,7 @@ function fecharEditarObs(){
   _obsEditState=null;
 }
 function abrirEditarTempo(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(!apt)return;
   const c=S.colaboradores.find(x=>x.id===apt.colabId);
   const m=S.modelos.find(x=>x.id===apt.modeloId);
@@ -1218,7 +1248,7 @@ function abrirEditarTempo(aptId){
 }
 function fecharEditarTempo(){const ov=document.getElementById('editTempoOverlay');if(ov)ov.remove();}
 async function salvarEditarTempo(aptId){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(!apt)return;
   const msg=document.getElementById('editTempoMsg');
   const iniVal=(document.getElementById('editIni')||{}).value||'';
@@ -1250,7 +1280,7 @@ function renderApt(){
   const noFiltro=a=>!(_filtroData.de||_filtroData.ate)||dentroFiltro(a.fim||a.inicio);
 
   // ── RESUMO DE FINALIZADOS (sem distinção de prazo) ──
-  const finalizados=S.apontamentos.filter(a=>a.fim&&a.opNum&&noFiltro(a));
+  const finalizados=S.apontamentos.filter(a=>a&&a.fim&&a.opNum&&noFiltro(a));
   const comTempo=finalizados.filter(a=>{const m=S.modelos.find(x=>x.id===a.modeloId);return m&&m.tempoPrevisto;});
   const dentroTempo=comTempo.filter(a=>{const m=S.modelos.find(x=>x.id===a.modeloId);return tempoLiquido(a)<=m.tempoPrevisto;}).length;
 
@@ -1274,8 +1304,8 @@ function renderApt(){
   // ── MONTAGEM FINAL ──
   const hmf=document.getElementById('hist-mf');
   if(hmf){
-    const mfPend=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
-    const mfAp=S.apontamentos.filter(a=>a.mf&&a.mf.resultado==='aprovado'&&noFiltro(a));
+    const mfPend=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+    const mfAp=S.apontamentos.filter(a=>a&&a.mf&&a.mf.resultado==='aprovado'&&noFiltro(a));
     hmf.innerHTML=`<h3 style="color:#7c3aed;margin-bottom:10px;">🔍 Montagem Final (${mfPend.length} pendentes · ${mfAp.length} finalizados)</h3>`+
     (mfPend.length?`<div style="overflow-x:auto;"><table><thead><tr><th>OP</th><th>Modelo</th><th>Colaborador</th><th>Status</th></tr></thead><tbody>`+
     mfPend.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);const m=S.modelos.find(x=>x.id===a.modeloId);
@@ -1301,7 +1331,7 @@ function renderApt(){
   }
   const filtOp=(document.getElementById('filtOp')||{}).value||'';
   const filtColabId=parseInt((document.getElementById('filtColab')||{}).value)||0;
-  let apts=S.apontamentos.filter(a=>a.opNum&&noFiltro(a));
+  let apts=S.apontamentos.filter(a=>a&&a.opNum&&noFiltro(a));
   if(filtOp)apts=apts.filter(a=>a.opNum.toLowerCase().includes(filtOp.toLowerCase()));
   if(filtColabId)apts=apts.filter(a=>a.colabId===filtColabId);
   apts=[...apts].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||''));
@@ -1373,7 +1403,7 @@ async function addModelo(){
   const tempoChapa=parseInt(document.getElementById('modTempoChapa').value)||0;
   if(!cod){msg('modMsg','Informe o código do modelo.','bad');return;}
   if(!S.modelos)S.modelos=[];
-  if(S.modelos.find(m=>m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
+  if(S.modelos.find(m=>m&&m.codigo===cod)){msg('modMsg','Modelo já cadastrado.','bad');return;}
   S.modelos.push({id:uid(),codigo:cod,descricao:desc,tempoChapa:tempoChapa,tempoEletrica:tempoEletrica,tempoPrevisto:tempoEletrica});
   document.getElementById('modCod').value='';
   document.getElementById('modDesc').value='';
@@ -1392,14 +1422,14 @@ function tempoModeloSetor(m,setor){
 function renderModelos(){
   if(!S.modelos)S.modelos=[];
   // migração: modelos antigos só têm tempoPrevisto → vira tempoEletrica
-  S.modelos.forEach(m=>{if(m&&m.tempoEletrica==null&&m.tempoPrevisto!=null)m.tempoEletrica=m.tempoPrevisto;});
+  S.modelos.forEach(m=>{if(!m)return;if(m&&m.tempoEletrica==null&&m.tempoPrevisto!=null)m.tempoEletrica=m.tempoPrevisto;});
   const cnt=document.getElementById('modCount');if(cnt)cnt.textContent=S.modelos.length;
   const div=document.getElementById('mod-lista');if(!div)return;
   if(!S.modelos.length){div.innerHTML='<p class="empty">Nenhum modelo cadastrado.</p>';return;}
 
   const wrap=document.createElement('div');
-  S.modelos.forEach(m=>{
-    const usos=S.apontamentos.filter(a=>a.modeloId===m.id).length;
+  S.modelos.forEach(m=>{if(!m)return;
+    const usos=S.apontamentos.filter(a=>a&&a.modeloId===m.id).length;
     const tChapa=m.tempoChapa||0;
     const tElet=(m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
     const fmtT=(t)=>{const h=Math.floor(t/60),mn=t%60;return t?`${t}min`+(h>0||mn>0?` (${h>0?h+'h ':''}${mn>0?mn+'min':''})`:''):'—';};
@@ -1479,7 +1509,7 @@ async function salvarEdicaoModelo(id){
   const tempoEletrica=parseInt(document.getElementById('edit-tempo-elet-'+id).value)||0;
   const tempoChapa=parseInt(document.getElementById('edit-tempo-chapa-'+id).value)||0;
   if(!cod){toast('O código não pode estar vazio.');return;}
-  if(S.modelos.find(m=>m.codigo===cod&&m.id!==id)){toast('Já existe outro modelo com este código.');return;}
+  if(S.modelos.find(m=>m&&m.codigo===cod&&m.id!==id)){toast('Já existe outro modelo com este código.');return;}
   const m=S.modelos.find(x=>x.id===id);if(!m)return;
   m.codigo=cod;m.descricao=desc;m.tempoEletrica=tempoEletrica;m.tempoChapa=tempoChapa;m.tempoPrevisto=tempoEletrica;
   await save();toast('Modelo atualizado!');renderModelos();
@@ -1493,7 +1523,7 @@ async function addOP(){
   const prazo=document.getElementById('opPrazo').value;
   const obs=document.getElementById('opObs').value.trim();
   if(!num||!modelo){msg('opMsg','Preencha número e modelo.','bad');return;}
-  if(S.ops.find(o=>o.num===num)){msg('opMsg','OP já cadastrada.','bad');return;}
+  if(S.ops.find(o=>o&&o.num===num)){msg('opMsg','OP já cadastrada.','bad');return;}
   S.ops.push({id:uid(),num,modelo,qtd,prazo,obs,status:'aberta'});
   ['opNum','opModelo','opObs','opPrazo'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('opQtd').value='';
@@ -1503,12 +1533,12 @@ async function addOP(){
 function renderOPs(){
   const div=document.getElementById('ops-lista');if(!div)return;
   if(!S.ops.length){div.innerHTML='<p class="empty">Nenhuma OP cadastrada.</p>';return;}
-  const ab=S.ops.filter(o=>o.status==='aberta'),conc=S.ops.filter(o=>o.status==='concluida');
+  const ab=S.ops.filter(o=>o&&o.status==='aberta'),conc=S.ops.filter(o=>o&&o.status==='concluida');
   let html='';
   if(ab.length){
     html+='<div class="sep">Em aberto ('+ab.length+')</div>';
     ab.forEach(op=>{
-      const fin=S.apontamentos.filter(a=>a.opId===op.id&&a.fim).length;
+      const fin=S.apontamentos.filter(a=>a&&a.opId===op.id&&a.fim).length;
       const pct=Math.round((fin/op.qtd)*100);
       const venc=op.prazo&&op.prazo<td();
       html+=`<div class="op-card"><div class="op-hd">
@@ -1535,7 +1565,7 @@ function renderOPs(){
 }
 
 function renderAponTabela(op){
-  const apts=S.apontamentos.filter(a=>a.opId===op.id);
+  const apts=S.apontamentos.filter(a=>a&&a.opId===op.id);
   if(!apts.length)return'<div style="font-size:12px;color:#bbb;margin-top:6px;">Nenhum apontamento ainda.</div>';
 
   const rows=apts.map(a=>{
@@ -1596,7 +1626,7 @@ function renderAponTabela(op){
 }
 
 async function concluirOP(id){S.ops=S.ops.map(o=>o.id===id?{...o,status:'concluida'}:o);await save();renderOPs();}
-async function remOP(id){_opsExcluidos.add(id);S.ops=S.ops.filter(o=>o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a.opId!==id);await save();renderOPs();}
+async function remOP(id){_opsExcluidos.add(id);S.ops=S.ops.filter(o=>o&&o.id!==id);S.apontamentos=S.apontamentos.filter(a=>a&&a.opId!==id);await save();renderOPs();}
 
 /* ── COLABORADORES ── */
 async function salvarMfResponsaveis(){
@@ -1651,6 +1681,23 @@ async function salvarHorarios(id){
   renderColabs();
   toast('✓ Horários salvos para '+c.nome);
 }
+async function salvarEdicaoColab(id){
+  const c=S.colaboradores.find(x=>x.id===id);if(!c)return;
+  const gv=(campo)=>{const el=document.getElementById(campo);return el?el.value.trim():'';};
+  const nome=gv('edc-nome-'+id);
+  if(!nome){toast('⚠ O nome não pode ficar em branco.');return;}
+  // nome duplicado?
+  if(S.colaboradores.some(x=>x.id!==id&&(x.nome||'').trim().toLowerCase()===nome.toLowerCase())){
+    toast('⚠ Já existe um colaborador com esse nome.');return;
+  }
+  c.nome=nome;
+  const func=gv('edc-func-'+id);c.funcao=func;
+  const setEl=document.getElementById('edc-setor-'+id);if(setEl&&setEl.value)c.setor=setEl.value;
+  await save();
+  _editColab=null;
+  renderColabs();
+  toast('✓ Colaborador atualizado');
+}
 async function limparHorarios(id){
   const c=S.colaboradores.find(x=>x.id===id);if(!c)return;
   c.horarios=null;
@@ -1666,8 +1713,8 @@ function renderColabs(){
   const tbl=document.createElement('table');
   tbl.innerHTML='<thead><tr><th>Nome</th><th>Função</th><th>Setor</th><th>Quadros finalizados</th><th>Erros</th><th></th></tr></thead>';
   const tbody=document.createElement('tbody');
-  S.colaboradores.forEach(c=>{
-    const apts=S.apontamentos.filter(a=>a.colabId===c.id&&a.fim&&a.tipoRegistro!=='sem_chapa'&&a.opNum);
+  S.colaboradores.forEach(c=>{if(!c)return;
+    const apts=S.apontamentos.filter(a=>a&&a.colabId===c.id&&a.fim&&a.tipoRegistro!=='sem_chapa'&&a.opNum);
     const total=apts.length;
     const erros=apts.filter(a=>a.erros&&a.erros.length>0).length;
     const tr=document.createElement('tr');
@@ -1678,8 +1725,10 @@ function renderColabs(){
     const t4=document.createElement('td');t4.textContent=total+' quadros';
     const t5=document.createElement('td');t5.innerHTML=erros?`<span class="badge bbad">${erros} com erros</span>`:'<span class="badge bok">Sem erros</span>';
     const t6=document.createElement('td');
+    const btnE=document.createElement('button');btnE.className='btn-sm';btnE.textContent='✏️ Editar';btnE.style.marginRight='4px';
+    btnE.addEventListener('click',()=>{_editColab=_editColab===c.id?null:c.id;_horarioColab=null;renderColabs();});
     const btnH=document.createElement('button');btnH.className='btn-sm';btnH.textContent='⏰ Horários';btnH.style.marginRight='4px';
-    btnH.addEventListener('click',()=>{_horarioColab=_horarioColab===c.id?null:c.id;renderColabs();});
+    btnH.addEventListener('click',()=>{_horarioColab=_horarioColab===c.id?null:c.id;_editColab=null;renderColabs();});
     const btn=document.createElement('button');btn.className='btn-sm';btn.textContent='Remover';
     btn.addEventListener('click',()=>{
       const row=document.createElement('div');row.className='confirm-row';
@@ -1690,7 +1739,31 @@ function renderColabs(){
       nao.addEventListener('click',renderColabs);
       row.append(sim,nao);t6.innerHTML='';t6.appendChild(row);
     });
-    t6.appendChild(btnH);t6.appendChild(btn);tr.append(t1,t2,t3,t4,t5,t6);tbody.appendChild(tr);
+    t6.appendChild(btnE);t6.appendChild(btnH);t6.appendChild(btn);tr.append(t1,t2,t3,t4,t5,t6);tbody.appendChild(tr);
+    // linha do editor de dados do colaborador (nome, função, setor)
+    if(_editColab===c.id){
+      const SET=[['chapa','🔧 Chapa'],['eletrica','⚡ Mont. Elétrica'],['mf','🔍 Mont. Final'],['geral','🔀 Geral']];
+      const trE=document.createElement('tr');
+      const tdE=document.createElement('td');tdE.colSpan=6;
+      tdE.style.cssText='background:#f3f0fb;padding:14px;';
+      const esc=(s)=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      tdE.innerHTML=`<div style="font-weight:700;font-size:13px;margin-bottom:10px;">✏️ Editar colaborador</div>
+        <div style="display:grid;grid-template-columns:2fr 2fr 1.5fr;gap:14px;max-width:640px;">
+          <div><label style="font-size:11px;color:#888;">Nome</label>
+            <input id="edc-nome-${c.id}" value="${esc(c.nome)}" style="width:100%;" placeholder="Nome do colaborador"/></div>
+          <div><label style="font-size:11px;color:#888;">Função</label>
+            <input id="edc-func-${c.id}" value="${esc(c.funcao)}" style="width:100%;" placeholder="Ex: Montador"/></div>
+          <div><label style="font-size:11px;color:#888;">Setor</label>
+            <select id="edc-setor-${c.id}" style="width:100%;">${SET.map(([v,l])=>`<option value="${v}"${(c.setor||'eletrica')===v?' selected':''}>${l}</option>`).join('')}</select></div>
+        </div>`;
+      const btnsE=document.createElement('div');btnsE.style.cssText='margin-top:12px;display:flex;gap:8px;';
+      const salvarE=document.createElement('button');salvarE.className='btn-sm';salvarE.style.cssText='background:#7c3aed;color:#fff;';salvarE.textContent='💾 Salvar';
+      salvarE.addEventListener('click',()=>salvarEdicaoColab(c.id));
+      const cancelarE=document.createElement('button');cancelarE.className='btn-cancel';cancelarE.textContent='Cancelar';
+      cancelarE.addEventListener('click',()=>{_editColab=null;renderColabs();});
+      btnsE.append(salvarE,cancelarE);tdE.appendChild(btnsE);
+      trE.appendChild(tdE);tbody.appendChild(trE);
+    }
     // linha do editor de horários (aparece quando aberto)
     if(_horarioColab===c.id){
       const h=c.horarios||{};
@@ -1737,11 +1810,11 @@ async function addColab(){
 
 function renderLivePage(){
   const hoje=td(),mes=hoje.substring(0,7);
-  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
-  const emAnd=S.apontamentos.filter(a=>a.inicio&&!a.fim&&a.tipoRegistro!=='sem_chapa'&&!estaPausado(a)).length;
-  const pausados=S.apontamentos.filter(a=>a.tipoRegistro!=='sem_chapa'&&estaPausado(a)).length;
+  const aptH=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
+  const emAnd=S.apontamentos.filter(a=>a&&a.inicio&&!a.fim&&a.tipoRegistro!=='sem_chapa'&&!estaPausado(a)).length;
+  const pausados=S.apontamentos.filter(a=>a&&a.tipoRegistro!=='sem_chapa'&&estaPausado(a)).length;
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
-  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
+  const aptM=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
 
@@ -1768,8 +1841,8 @@ function renderLive(){
   const tipoColors={chapa:'#b45309',eletrica:'#3550B4',mf:'#7c3aed',geral:'#555'};
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 
-  const ativos=S.apontamentos.filter(a=>!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
-  const mfPendentes=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const ativos=S.apontamentos.filter(a=>a&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
+  const mfPendentes=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
 
   // group by setor/etapa
   const grupos={
@@ -1908,10 +1981,10 @@ function renderDashSetor(setor){
   const temFiltro=_filtroData.de||_filtroData.ate;
   const cor=setor==='chapa'?'#db2777':'#EA580C';
   // aplica filtro de data ao conjunto base
-  const apts=S.apontamentos.filter(a=>a.setor===setor&&a.fim&&a.tipoRegistro!=='sem_chapa'&&(temFiltro?dentroFiltro(a.fim):true));
+  const apts=S.apontamentos.filter(a=>a&&a.setor===setor&&a.fim&&a.tipoRegistro!=='sem_chapa'&&(temFiltro?dentroFiltro(a.fim):true));
   const aptH=apts.filter(a=>temFiltro||a.fim.startsWith(hoje));
   const aptM=apts.filter(a=>temFiltro||a.fim.startsWith(mes));
-  const emAnd=S.apontamentos.filter(a=>a.setor===setor&&!a.fim&&a.tipoRegistro!=='sem_chapa').length;
+  const emAnd=S.apontamentos.filter(a=>a&&a.setor===setor&&!a.fim&&a.tipoRegistro!=='sem_chapa').length;
   const comErro=apts.filter(a=>a.erros&&a.erros.length>0).length;
   const retrabalhos=apts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length;
   const tempos=apts.filter(a=>tempoLiquido(a)>0).map(a=>tempoLiquido(a));
@@ -1962,7 +2035,7 @@ function renderDashSetor(setor){
   // por colaborador
   const divColab=document.getElementById('dash-colab-'+setor);
   if(divColab){
-    const colabs=S.colaboradores.filter(c=>c.setor===setor||c.setor==='geral');
+    const colabs=S.colaboradores.filter(c=>c&&c.setor===setor||c.setor==='geral');
     if(!colabs.length){divColab.innerHTML='<p class="empty">Nenhum colaborador neste setor.</p>';return;}
     divColab.innerHTML='<div style="overflow-x:auto;"><table><thead><tr><th>Colaborador</th><th>Finalizados</th><th>T. médio</th><th>Erros</th><th>Retrabalhos</th></tr></thead><tbody>'+
     colabs.map(c=>{
@@ -1980,12 +2053,12 @@ function renderDashMF(){
   const hoje=td(),mes=hoje.substring(0,7);
   const temFiltro=_filtroData.de||_filtroData.ate;
   // se há filtro de data: conta o período; senão: hoje e mês
-  const aptH=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(hoje)));
-  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(mes)));
+  const aptH=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(hoje)));
+  const aptM=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&a.mf.fim&&(temFiltro?dentroFiltro(a.mf.fim):a.mf.fim.startsWith(mes)));
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
-  const emMF=S.apontamentos.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
+  const emMF=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
   const corrigidosMes=aptM.filter(a=>a.mf&&a.mf.itensCorrigidos&&a.mf.itensCorrigidos.length).length;
 
   const md=document.getElementById('m-dash-mf');
@@ -1993,16 +2066,16 @@ function renderDashMF(){
     <div class="metric"><div class="lbl">✅ Aprovados ${temFiltro?"no período":"hoje"}</div><div class="val ok">${aptH.length}</div><div class="sub">${temFiltro?periodoLabel():"quadros prontos"}</div></div>
     <div class="metric"><div class="lbl">✅ Aprovados no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%<div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div></div>
     <div class="metric"><div class="lbl">🔍 Aguardando MF</div><div class="val" style="color:#7c3aed;">${emMF}</div><div class="sub">na fila</div></div>
-    <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>
+    <div class="metric"><div class="lbl">OPs abertas</div><div class="val">${S.ops.filter(o=>o&&o.status==='aberta').length}</div><div class="sub">ordens ativas</div></div>
     <div class="metric"><div class="lbl">🔧 Corrigidos na MF</div><div class="val ${corrigidosMes?'warn':''}">${corrigidosMes}</div><div class="sub">quadros no mês</div></div>
     <div class="metric"><div class="lbl">Retrabalhos</div><div class="val ${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length?'bad':''}">${aptM.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).length}</div><div class="sub">no mês</div></div>`;
 
   const dops=document.getElementById('dash-ops');
-  const ab=S.ops.filter(o=>o.status==='aberta');
+  const ab=S.ops.filter(o=>o&&o.status==='aberta');
   if(dops){
     if(!ab.length){dops.innerHTML='<p class="empty">Nenhuma OP em aberto.</p>';}
     else dops.innerHTML=ab.map(op=>{
-      const aptsOp=S.apontamentos.filter(a=>a.opNum===op.num);
+      const aptsOp=S.apontamentos.filter(a=>a&&a.opNum===op.num);
       const emChapa=aptsOp.filter(a=>!a.fim&&!a.etapa).length;
       const emEletrica=aptsOp.filter(a=>a.etapa==='eletrica'&&!a.fim).length;
       const emMFop=aptsOp.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length;
@@ -2075,7 +2148,7 @@ function dataConclusao(a){
 function renderGraficos(){
   // conta apenas quadros aprovados na MF, respeitando o filtro de data
   const temFiltro=_filtroData.de||_filtroData.ate;
-  let apts=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&dataConclusao(a));
+  let apts=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.resultado==='aprovado'&&dataConclusao(a));
   if(temFiltro)apts=apts.filter(a=>dentroFiltro(dataConclusao(a)));
 
   const hoje=new Date();
@@ -2130,7 +2203,7 @@ function renderGraficos(){
     for(let i=11;i>=0;i--){const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);meses[`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`]=0;}
   }
   apts.forEach(a=>{
-    const k=dataConclusao(a).substring(0,7);
+    const k=mesLocalStr(dataConclusao(a));
     if(k in meses)meses[k]++;
   });
   const mesKeys=Object.keys(meses).sort();
@@ -2157,7 +2230,7 @@ function renderRelatorio(){
   const colabId=sel?parseInt(sel.value):null;
   _relColabAtual=colabId;
   if(!colabId){div.innerHTML='<p class="empty" style="padding:20px 0;">Selecione um colaborador para ver o relatório.</p>';return;}
-  const colab=S.colaboradores.find(c=>c.id===colabId);
+  const colab=S.colaboradores.find(c=>c&&c.id===colabId);
   if(!colab){div.innerHTML='';return;}
   // apontamentos finalizados desse colaborador no período (só chapa e elétrica)
   const apts=S.apontamentos.filter(a=>a&&a.colabId===colabId&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
@@ -2218,7 +2291,7 @@ function renderRelatorio(){
 }
 function exportarRelatorio(){
   if(!_relColabAtual)return;
-  const colab=S.colaboradores.find(c=>c.id===_relColabAtual);
+  const colab=S.colaboradores.find(c=>c&&c.id===_relColabAtual);
   if(!colab)return;
   const apts=S.apontamentos.filter(a=>a&&a.colabId===_relColabAtual&&a.fim&&dentroFiltro(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
   const grupos={};
@@ -2314,7 +2387,7 @@ function exportarProdutividade(){
 }
 // minutos "sem chapa" de um colaborador num mês (YYYY-MM)
 function semChapaMinutosMesSup(colabId,mesStr){
-  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&a.inicio.substring(0,7)===mesStr)
+  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&mesLocalStr(a.inicio)===mesStr)
     .reduce((tot,a)=>{
       const ini=new Date(a.inicio).getTime();
       const fim=a.fim?new Date(a.fim).getTime():Date.now();
@@ -2357,7 +2430,7 @@ function classificarErro(o){
 function obsFiltroArea(a){_obsArea=a;renderObservacoes();}
 function obsAgruparPor(g){_obsAgrup=g;renderObservacoes();}
 async function excluirObservacao(aptId,origem,obsIdx){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(!apt)return;
   const rotulos={geral:'esta observação',erro:'a observação de erro',projeto:'a observação de erro de projeto',itens:'a observação de itens faltando',retrabalho:'a observação de retrabalho',mf:'a observação da inspeção'};
   if(!confirm('Apagar '+(rotulos[origem]||'esta observação')+'? Esta ação não pode ser desfeita.'))return;
@@ -2382,7 +2455,7 @@ async function excluirObservacao(aptId,origem,obsIdx){
   toast('🗑 Observação apagada');
 }
 async function classificarManual(aptId,origem,obsIdx,categoria){
-  const apt=S.apontamentos.find(a=>a.id===aptId);
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
   if(!apt)return;
   const val=(categoria==='auto'||!categoria)?null:categoria;
   if(origem==='geral'){
@@ -2407,7 +2480,7 @@ function coletarObservacoes(filtroFn){
   (S.apontamentos||[]).forEach(apt=>{
     if(!apt||apt.tipoRegistro==='sem_chapa')return;
     const m=S.modelos.find(x=>x.id===apt.modeloId)||{};
-    const base={aptId:apt.id,opNum:apt.opNum||'',modeloLabel:m.codigo||apt.modeloLabel||'',colab:(S.colaboradores.find(c=>c.id===apt.colabId)||{}).nome||'—'};
+    const base={aptId:apt.id,opNum:apt.opNum||'',modeloLabel:m.codigo||apt.modeloLabel||'',colab:(S.colaboradores.find(c=>c&&c.id===apt.colabId)||{}).nome||'—'};
     const area=apt.setor||'geral';
     // observações gerais: usam a data em que FORAM registradas (o.hora)
     (apt.observacoes||[]).forEach((o,idx)=>{
@@ -2466,8 +2539,8 @@ function anaTrocarMes(){
 }
 function anaMesesDisponiveis(){
   const meses=new Set();
-  coletarObservacoes(()=>true).forEach(o=>{if(o.hora)meses.add(String(o.hora).substring(0,7));});
-  const hoje=new Date().toISOString().substring(0,7);
+  coletarObservacoes(()=>true).forEach(o=>{if(o.hora)meses.add(mesLocalStr(o.hora));});
+  const hoje=mesLocalStr(new Date());
   meses.add(hoje);
   return Array.from(meses).sort().reverse();
 }
@@ -2483,7 +2556,7 @@ function popularAnaMeses(){
 }
 function anaErrosDoMes(mes){
   if(!mes)return [];
-  const doMes=coletarObservacoes((d)=>String(d||'').substring(0,7)===mes);
+  const doMes=coletarObservacoes((d)=>mesLocalStr(d)===mes);
   doMes.forEach(o=>{o._cat=classificarErro(o);});
   return doMes;
 }
@@ -2784,7 +2857,7 @@ function renderProdutividade(){
   let statsAnt={};
   const ant=periodoAnterior();
   if(ant){
-    const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&a.fim.substring(0,10)>=ant.de&&a.fim.substring(0,10)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
+    const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&dataLocalStr(a.fim)>=ant.de&&dataLocalStr(a.fim)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
     statsAnt=calcProdStats(aptsAnt);
   }
   const tendencia=(id,campo)=>{
@@ -2822,7 +2895,7 @@ function renderProdutividade(){
     ${card('🔎',tempoMedioMF==null?'—':fmtMin(tempoMedioMF),'Tempo médio inspeção (MF)','#7c3aed')}
     ${card('⏱',fmtMin(tempoMedioElet),'Tempo médio/quadro (elétrica)','#BA7517')}
     ${card('📈',eficMedia==null?'—':eficMedia+'%','Eficiência média','#1D9E75')}
-    ${destaque?card('🏆',destaque.nome.split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#1D9E75'):''}
+    ${destaque?card('🏆',(destaque.nome||'').split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#1D9E75'):''}
   </div>`;
 
   // ── RANKING COM BARRAS, SEPARADO POR SETOR ──
@@ -2864,9 +2937,9 @@ function renderProdutividade(){
   const rankingsHtml=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px;">${rankElet}${rankChapa}</div>`;
 
   // ── TEMPO SEM CHAPA (mês atual) ──
-  const mesAtual=new Date().toISOString().substring(0,7);
+  const mesAtual=mesLocalStr(new Date());
   const mesLabel=new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-  const chapeiros=S.colaboradores.filter(c=>c.setor==='chapa');
+  const chapeiros=S.colaboradores.filter(c=>c&&c.setor==='chapa');
   const semChapaLinhas=chapeiros.map(c=>({nome:c.nome,min:semChapaMinutosMesSup(c.id,mesAtual)}))
     .filter(x=>x.min>0)
     .sort((a,b)=>b.min-a.min);
@@ -2893,7 +2966,7 @@ function renderProdutividade(){
 function renderMes(){
   const mes=document.getElementById('mFiltro').value;
   const meta=parseInt(document.getElementById('mMeta').value)||50;
-  const aptM=S.apontamentos.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
+  const aptM=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
   const tot=aptM.length,pct=Math.round((tot/meta)*100),pc=pct>=100?'ok':pct>=60?'warn':'bad';
   const errosMes=aptM.filter(a=>a.erros&&a.erros.length>0).length;
   const obsMes=aptM.reduce((s,a)=>s+(a.observacoes||[]).length,0);
@@ -2903,7 +2976,7 @@ function renderMes(){
     <div class="metric"><div class="lbl">Quadros finalizados</div><div class="val ${pc}">${tot}</div><div class="sub">meta ${meta} · ${pct}%</div></div>
     <div class="metric"><div class="lbl">Com erros</div><div class="val ${errosMes?'bad':''}">${errosMes}</div><div class="sub">quadros no mês</div></div>
     <div class="metric"><div class="lbl">Observações</div><div class="val">${obsMes}</div><div class="sub">registradas no mês</div></div>
-    <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o.status==='concluida').length}</div><div class="sub">total</div></div>`;
+    <div class="metric"><div class="lbl">OPs concluídas</div><div class="val ok">${S.ops.filter(o=>o&&o.status==='concluida').length}</div><div class="sub">total</div></div>`;
 
   const cd=S.colaboradores.map(c=>{
     const regs=aptM.filter(a=>a.colabId===c.id);
@@ -2911,7 +2984,7 @@ function renderMes(){
     const mediaLiq=liqs.length?Math.round(liqs.reduce((s,v)=>s+v,0)/liqs.length):0;
     const erros=regs.filter(a=>a.erros&&a.erros.length>0).length;
     const obs=regs.reduce((s,a)=>s+(a.observacoes||[]).length,0);
-    return{nome:c.nome.split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,mediaLiq,erros,obs};
+    return{nome:(c.nome||'').split(' ')[0],nomeC:c.nome,funcao:c.funcao,qtd:regs.length,mediaLiq,erros,obs};
   });
 
   if(chartM)chartM.destroy();
@@ -2929,7 +3002,7 @@ function renderMes(){
       <td>${c.obs||'—'}</td></tr>`).join('')+`</tbody></table>`;
 
   const apts=[...aptM].sort((a,b)=>b.fim.localeCompare(a.fim));
-  const opMap={};S.ops.forEach(o=>opMap[o.id]=o);
+  const opMap={};S.ops.forEach(o=>{if(o)opMap[o.id]=o;});
   const ad=document.getElementById('mes-apon');
   if(!apts.length){ad.innerHTML='<p class="empty">Nenhum apontamento no mês.</p>';return;}
   ad.innerHTML=`<div style="overflow-x:auto;"><table><thead><tr>

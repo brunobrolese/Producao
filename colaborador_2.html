@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v54</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v56</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -386,6 +386,7 @@ async function save(){
       if(servidor.mfResponsavel!==undefined)S.mfResponsavel=servidor.mfResponsavel;
       if(servidor.tema!==undefined)S.tema=servidor.tema;
       if(servidor.planoAcoes!==undefined)S.planoAcoes=servidor.planoAcoes; // plano de ação é do supervisor
+      if(servidor.expediente!==undefined)S.expediente=servidor.expediente; // horário de expediente é do supervisor
     }
 
     // 3. Atualiza nid para evitar colisão de IDs
@@ -1210,8 +1211,8 @@ function renderPausasBadge(){
 //      escolheu trabalhar — dali em diante o sistema não pausa de novo.
 // Preenche apenas as LACUNAS (partes não cobertas) da janela, nunca sobrepõe.
 function aplicarPausasAuto(colaborador){
-  if(!colaborador||!colaborador.horarios)return false;
-  const cfg=colaborador.horarios;
+  if(!colaborador)return false;
+  const cfg=colaborador.horarios||{};
   const defs=[
     {key:'cafeManha',tipo:'intervalo',label:'☕ Café da manhã',cfg:cfg.cafeManha},
     {key:'almoco',   tipo:'almoco',   label:'🍽️ Almoço',       cfg:cfg.almoco},
@@ -1303,6 +1304,26 @@ function aplicarPausasAuto(colaborador){
         const aberta=(retomada===null&&nowMs<bEnd&&e>=limite);
         apt.pausas.push({inicio:new Date(s).toISOString(),fim:aberta?null:new Date(e).toISOString(),tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
         apt._ts=Date.now();mudou=true;
+      }
+    }
+    // ── FIM DO DIA (rede de segurança) ──
+    // Fora do horário de expediente, se o painel continua aberto e sem nenhuma pausa
+    // em curso, cria uma pausa "🌙 Fim do dia" começando no fim do expediente.
+    // Fica ABERTA até o colaborador retomar manualmente (sem retomada automática).
+    const _exp=(typeof S!=='undefined'&&S&&S.expediente)?S.expediente:null;
+    if(_exp&&_exp.fim){
+      const fimMs=mkMs(_exp.fim);
+      const iniMs=_exp.inicio?mkMs(_exp.inicio):null;
+      let refFim=null;
+      if(!isNaN(fimMs)&&nowMs>=fimMs){refFim=fimMs;}                       // à noite: fim de hoje
+      else if(iniMs!=null&&!isNaN(iniMs)&&nowMs<iniMs){refFim=fimMs-86400000;} // madrugada: fim de ontem
+      if(refFim!=null){
+        const jaTemFimDia=apt.pausas.some(p=>p&&!p.fim&&p.tipo==='fimdia');
+        const pausadoAgora=apt.pausas.some(p=>p&&!p.fim);
+        if(!jaTemFimDia&&!pausadoAgora&&aptStart<refFim){
+          apt.pausas.push({inicio:new Date(refFim).toISOString(),fim:null,tipo:'fimdia',tipoLabel:'🌙 Fim do dia',auto:true,_breakKey:dataStr+'_fimdia'});
+          apt._ts=Date.now();mudou=true;
+        }
       }
     }
     // ordena as pausas por início (o cálculo de tempo depende disso)

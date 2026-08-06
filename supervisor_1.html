@@ -79,7 +79,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v54</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v56</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -395,6 +395,23 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
       </div>
 
       <div class="card">
+        <h3>🕐 Horário de expediente</h3>
+        <p style="font-size:13px;color:#888;margin-bottom:16px;">Se um colaborador esquecer de encerrar um painel no fim do dia, o sistema cria automaticamente uma pausa <b>🌙 Fim do dia</b> a partir do horário de fim — assim o tempo não corre a noite toda. O painel fica pausado até o colaborador retomar. Vale para todos os colaboradores.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:360px;">
+          <div>
+            <label>Início do expediente</label>
+            <input type="time" id="expInicio" style="width:100%;">
+          </div>
+          <div>
+            <label>Fim do expediente</label>
+            <input type="time" id="expFim" style="width:100%;">
+          </div>
+        </div>
+        <button class="btn" style="margin-top:14px;" onclick="salvarExpediente()">💾 Salvar horário</button>
+        <div id="expStatus" style="font-size:12px;color:#888;margin-top:8px;"></div>
+      </div>
+
+      <div class="card">
         <h3>🎨 Tema da interface</h3>
         <p style="font-size:13px;color:#888;margin-bottom:16px;">Escolha as cores da barra superior e dos botões.</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px;margin-bottom:16px;" id="themeGrid"></div>
@@ -650,6 +667,12 @@ async function save(){
       S.colaboradores=mergeCol(S.colaboradores,servidor.colaboradores,_colabsExcluidos);
       S.ops=mergeCol(S.ops,servidor.ops,_opsExcluidos);
     }
+    // preserva o horário de expediente: mantém o mais recente (evita que uma tela
+    // com dado antigo apague o ajuste feito em outra)
+    if(servidor&&servidor.expediente){
+      const svTs=servidor.expediente._ts||0, loTs=(S.expediente&&S.expediente._ts)||0;
+      if(svTs>loTs||!S.expediente) S.expediente=servidor.expediente;
+    }
     // garante nid maior que o servidor
     if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
 
@@ -792,6 +815,25 @@ async function importarBackup(event){
   event.target.value='';
 }
 function copyUrl(){navigator.clipboard.writeText(DB_URL).then(()=>toast('URL copiada!')).catch(()=>toast(DB_URL));}
+function popularExpediente(){
+  const ini=document.getElementById('expInicio'),fim=document.getElementById('expFim');
+  if(!ini||!fim)return;
+  const e=S.expediente||{};
+  ini.value=e.inicio||'';
+  fim.value=e.fim||'';
+  const st=document.getElementById('expStatus');
+  if(st)st.textContent=(e.inicio&&e.fim)?('Expediente atual: '+e.inicio+' às '+e.fim):'Ainda não configurado.';
+}
+async function salvarExpediente(){
+  const ini=document.getElementById('expInicio').value,fim=document.getElementById('expFim').value;
+  if(!ini||!fim){toast('⚠ Preencha início e fim do expediente.');return;}
+  if(fim<=ini){toast('⚠ O fim do expediente deve ser depois do início.');return;}
+  S.expediente={inicio:ini,fim:fim,_ts:Date.now()};
+  await save();
+  const st=document.getElementById('expStatus');
+  if(st)st.textContent='Expediente atual: '+ini+' às '+fim;
+  toast('✓ Horário de expediente salvo');
+}
 
 function showApp(){
   if(!loginAutenticado){mostrarLogin();return;}
@@ -802,7 +844,39 @@ function showApp(){
   document.getElementById('mMeta').addEventListener('input',renderMes);
   const el=document.getElementById('urlDisplay');if(el)el.textContent=DB_URL;
   renderDash();renderColabs();if(!S.modelos)S.modelos=[];carregarTema();
-  setInterval(async()=>{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();if(currentPage==='ops')renderOPs();},5000);
+  // ── ATUALIZAÇÃO AUTOMÁTICA INTELIGENTE ──
+// Busca dados novos com frequência (barato, não mexe na tela), mas só REDESENHA
+// quando algo mudou de fato E você não está no meio de uma ação. Assim a tela
+// para de piscar/pular e os gráficos param de re-animar sozinhos a cada poucos segundos.
+let _ultimaAssinaturaSup='';
+let _ultimaDigitacaoSup=0;
+document.addEventListener('input',()=>{_ultimaDigitacaoSup=Date.now();},true);
+function _assinaturaDados(){
+  try{
+    const ap=(S.apontamentos||[]).map(a=>a?(a.id+':'+(a._ts||0)+':'+(a.fim||'')+':'+(a.etapa||'')+':'+((a.pausas||[]).length)+':'+((a.pausas||[]).some(p=>p&&!p.fim)?'P':'')):'x').join(',');
+    const op=(S.ops||[]).map(o=>o?(o.id+':'+(o.status||'')):'x').join(',');
+    return ap+'||'+op+'||'+((S.colaboradores||[]).length);
+  }catch(e){return String(Date.now());}
+}
+setInterval(async()=>{
+  if(document.hidden)return;                    // aba em segundo plano: não faz nada
+  try{await load();}catch(e){return;}           // busca dados novos (não altera a tela)
+  // no meio de uma ação? (digitando há pouco, ou com um modal aberto) → não redesenha agora
+  const el=document.activeElement;
+  const digitando=el&&(el.tagName==='TEXTAREA'||el.tagName==='INPUT'||el.tagName==='SELECT');
+  const modalAberto=!!document.querySelector('[id$="Overlay"]');
+  if((digitando&&Date.now()-_ultimaDigitacaoSup<120000)||modalAberto)return;
+  // nada mudou desde a última vez? → não redesenha (evita piscar)
+  const assin=_assinaturaDados();
+  if(assin===_ultimaAssinaturaSup)return;
+  _ultimaAssinaturaSup=assin;
+  // redesenha só a tela atual, preservando a posição da rolagem
+  const y=window.scrollY;
+  if(currentPage==='dash')renderDash();
+  else if(currentPage==='live')renderLivePage();
+  else if(currentPage==='ops')renderOPs();
+  window.scrollTo(0,y);
+},10000);
 
   // backup automático a cada 3 horas
   const TRES_HORAS=3*60*60*1000;
@@ -858,8 +932,8 @@ function showApp(){
 //      escolheu trabalhar — dali em diante o sistema não pausa de novo.
 // Preenche apenas as LACUNAS (partes não cobertas) da janela, nunca sobrepõe.
 function aplicarPausasAutoSup(colaborador){
-  if(!colaborador||!colaborador.horarios)return false;
-  const cfg=colaborador.horarios;
+  if(!colaborador)return false;
+  const cfg=colaborador.horarios||{};
   const defs=[
     {key:'cafeManha',tipo:'intervalo',label:'☕ Café da manhã',cfg:cfg.cafeManha},
     {key:'almoco',   tipo:'almoco',   label:'🍽️ Almoço',       cfg:cfg.almoco},
@@ -953,6 +1027,26 @@ function aplicarPausasAutoSup(colaborador){
         apt._ts=Date.now();mudou=true;
       }
     }
+    // ── FIM DO DIA (rede de segurança) ──
+    // Fora do horário de expediente, se o painel continua aberto e sem nenhuma pausa
+    // em curso, cria uma pausa "🌙 Fim do dia" começando no fim do expediente.
+    // Fica ABERTA até o colaborador retomar manualmente (sem retomada automática).
+    const _exp=(typeof S!=='undefined'&&S&&S.expediente)?S.expediente:null;
+    if(_exp&&_exp.fim){
+      const fimMs=mkMs(_exp.fim);
+      const iniMs=_exp.inicio?mkMs(_exp.inicio):null;
+      let refFim=null;
+      if(!isNaN(fimMs)&&nowMs>=fimMs){refFim=fimMs;}                       // à noite: fim de hoje
+      else if(iniMs!=null&&!isNaN(iniMs)&&nowMs<iniMs){refFim=fimMs-86400000;} // madrugada: fim de ontem
+      if(refFim!=null){
+        const jaTemFimDia=apt.pausas.some(p=>p&&!p.fim&&p.tipo==='fimdia');
+        const pausadoAgora=apt.pausas.some(p=>p&&!p.fim);
+        if(!jaTemFimDia&&!pausadoAgora&&aptStart<refFim){
+          apt.pausas.push({inicio:new Date(refFim).toISOString(),fim:null,tipo:'fimdia',tipoLabel:'🌙 Fim do dia',auto:true,_breakKey:dataStr+'_fimdia'});
+          apt._ts=Date.now();mudou=true;
+        }
+      }
+    }
     // ordena as pausas por início (o cálculo de tempo depende disso)
     apt.pausas.sort((x,z)=>((x&&x.inicio?new Date(x.inicio).getTime():0)-(z&&z.inicio?new Date(z.inicio).getTime():0)));
   }
@@ -1043,7 +1137,7 @@ function nav(id,btn){
   if(id==='live')renderLivePage();
   if(id==='ops'){load().then(renderOPs);}
   if(id==='apt'){load().then(renderApt);}
-  if(id==='cfg'){renderThemeGrid();renderReprovadosInfo();}
+  if(id==='cfg'){renderThemeGrid();popularExpediente();renderReprovadosInfo();}
   if(id==='mod'){load().then(renderModelos);}
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
   if(id==='mes')renderMes();

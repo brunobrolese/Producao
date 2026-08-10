@@ -70,6 +70,26 @@ tr:last-child td{border-bottom:none;}
 code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
 .err{font-size:12px;color:#A32D2D;margin-top:6px;}
 .url-box{background:#f5f5f3;border:1px solid #ddd;border-radius:8px;padding:10px 14px;font-size:12px;font-family:monospace;word-break:break-all;margin:8px 0;cursor:pointer;color:#1D9E75;}
+
+/* ── MODO TELÃO (visão de fábrica para TV) ── */
+#btnSairTelao{display:none;}
+#telaoTitulo{display:none;}
+body.telao{background:#0f1115;}
+body.telao .topbar,body.telao .nav,body.telao #m-live{display:none!important;}
+body.telao .page{display:none!important;}
+body.telao #page-live{display:block!important;padding:16px 20px;}
+body.telao #telaoBar .btn{display:none;}
+body.telao #telaoTitulo{display:flex;align-items:center;gap:16px;color:#fff;}
+body.telao #page-live .card{background:#fff;border-color:#2a2f3a;}
+body.telao #page-live h3{font-size:23px;}
+body.telao .live-card{padding:16px 18px!important;margin-bottom:14px!important;}
+body.telao .live-op{font-size:30px!important;}
+body.telao .live-pill{font-size:16px!important;padding:6px 14px!important;}
+body.telao .live-modelo{font-size:17px!important;}
+body.telao .live-nome{font-size:22px!important;}
+body.telao .live-tempo{font-size:23px!important;}
+body.telao .live-toggle{display:none!important;}
+body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;top:16px;right:16px;z-index:99999;background:#dc2626;color:#fff;border:none;padding:11px 18px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;}
 </style>
 </head>
 <body>
@@ -79,7 +99,7 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v56</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v57</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -208,6 +228,14 @@ code{background:#f0f0f0;padding:1px 5px;border-radius:4px;font-size:12px;}
     <!-- TEMPO REAL -->
     <div id="page-live" class="page">
       <div class="metrics" id="m-live"></div>
+      <div id="telaoBar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <div id="telaoTitulo">
+          <span style="font-size:27px;font-weight:800;">🏭 Produção ao Vivo</span>
+          <span id="telaoRelogio" style="font-size:27px;font-weight:800;color:#4ade80;"></span>
+        </div>
+        <button class="btn" onclick="toggleTelao()" style="margin-left:auto;">🖥️ Modo Telão</button>
+      </div>
+      <button id="btnSairTelao" onclick="toggleTelao()">✕ Sair do telão</button>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:start;">
         <div class="card" style="border-top:3px solid #db2777;">
           <h3 style="display:flex;align-items:center;justify-content:space-between;">
@@ -1930,116 +1958,146 @@ function toggleLiveCard(id){
   else _liveExpanded.add(id);
   renderLive();
 }
+// tempo previsto do painel conforme a etapa (para detectar atraso)
+function tempoPrevistoDe(a,m){
+  if(!m)return 0;
+  if(a.setor==='chapa')return m.tempoChapa||0;
+  return m.tempoEletrica||m.tempoPrevisto||0;
+}
 function renderLive(){
-  const tipoIcons={chapa:'🔧',eletrica:'⚡',mf:'🔍',geral:'🔀'};
-  const tipoColors={chapa:'#b45309',eletrica:'#3550B4',mf:'#7c3aed',geral:'#555'};
-  const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const tPausa={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
+  const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 
   const ativos=S.apontamentos.filter(a=>a&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
   const mfPendentes=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
 
-  // group by setor/etapa
   const grupos={
     chapa: ativos.filter(a=>a.setor==='chapa'),
     eletrica: ativos.filter(a=>a.setor==='eletrica'||a.setor==='geral'||!a.setor),
     mf: mfPendentes
   };
 
-  // update counts
   const cc=document.getElementById('liveCountChapa');
   const ce=document.getElementById('liveCountEletrica');
   const cm=document.getElementById('liveCountMF');
-  if(cc)cc.textContent=grupos.chapa.length+' painéis · '+now;
-  if(ce)ce.textContent=grupos.eletrica.length+' painéis · '+now;
+  if(cc)cc.textContent=grupos.chapa.length+' · '+now;
+  if(ce)ce.textContent=grupos.eletrica.length+' · '+now;
   if(cm)cm.textContent=grupos.mf.length+' aguardando';
 
-  function renderColuna(apts, divId, setor){
+  // define o status visual do painel (cores tipo semáforo)
+  function statusDe(a,liq,prev,grupo){
+    if(grupo==='mf'){
+      return {key:'mf',cor:'#6d28d9',bg:'#f5f3ff',barra:'#7c3aed',pill:'#7c3aed',rotulo:'🔍 Aguardando MF',desde:a.fim};
+    }
+    if(estaPausado(a)){
+      const up=(a.pausas||[]).slice(-1)[0]||{};
+      return {key:'pausado',cor:'#b45309',bg:'#fffbeb',barra:'#f59e0b',pill:'#f59e0b',
+        rotulo:(tPausa[up.tipo]||'⏸')+' '+(up.tipoLabel||'Pausado'),desde:up.inicio};
+    }
+    if(prev>0&&liq>prev)return {key:'atrasado',cor:'#b91c1c',bg:'#fef2f2',barra:'#dc2626',pill:'#dc2626',rotulo:'⏰ ATRASADO'};
+    return {key:'produzindo',cor:'#15803d',bg:'#f0fdf4',barra:'#16a34a',pill:'#16a34a',rotulo:'▶ Produzindo'};
+  }
+  const fmtDur=(min)=>min>=60?Math.floor(min/60)+'h'+(min%60?' '+(min%60)+'min':''):min+'min';
+
+  function renderColuna(apts, divId, grupo){
     const div=document.getElementById(divId);
     if(!div)return;
     if(!apts.length){
-      div.innerHTML='<p class="empty" style="padding:12px 0;font-size:12px;">Nenhum painel nesta etapa.</p>';
+      div.innerHTML='<p class="empty" style="padding:16px 4px;font-size:13px;">Nenhum painel nesta etapa.</p>';
       return;
     }
     div.innerHTML='';
     apts.forEach(a=>{
-      const c=S.colaboradores.find(x=>x.id===a.colabId);
-      const m=S.modelos?S.modelos.find(x=>x.id===a.modeloId):null;
-      const pausado=estaPausado(a);
-      const ultimaPausa=pausado?(a.pausas||[]).slice(-1)[0]:null;
-      const tipoIcons2={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
-      const tipoPausaIcon=ultimaPausa&&ultimaPausa.tipo?(tipoIcons2[ultimaPausa.tipo]||'⏸'):'⏸';
-      const tipoPausaLabel=ultimaPausa&&ultimaPausa.tipoLabel?ultimaPausa.tipoLabel:'Pausado';
+      const c=S.colaboradores.find(x=>x&&x.id===a.colabId);
+      const m=S.modelos?S.modelos.find(x=>x&&x.id===a.modeloId):null;
       const liq=tempoLiquido(a);
-      const liqTxt=liq>=60?Math.floor(liq/60)+'h '+liq%60+'min':liq+'min';
-      const statusColor=pausado?'#3550B4':'#BA7517';
-      const statusBg=pausado?'#E8EEFF':'#FFF3E0';
-      const statusTxt=pausado?tipoPausaIcon+' '+tipoPausaLabel:'▶ Em andamento';
-      const avatar=(c?c.nome:'?').split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
+      const prev=tempoPrevistoDe(a,m);
+      const st=statusDe(a,liq,prev,grupo);
+      const liqTxt=fmtDur(liq);
       const opLabel=a.opNum||'—';
       const modeloLabel=m?m.codigo:(a.modeloLabel||'—');
       const expandido=_liveExpanded.has(a.id);
+      const pct=prev>0?Math.min(Math.round(liq/prev*100),100):0;
+      const tipoIcons2={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
 
-      // monta o bloco de detalhes (visível quando expandido)
+      // bloco de detalhes (quando expandido) — mantém as informações completas
       let detalhes='';
       if(expandido){
         const linhas=[];
-        linhas.push(`<div style="font-size:11px;color:#666;"><strong>Início:</strong> ${a.inicio?fmtDH(a.inicio):'—'}</div>`);
-        // pausas
-        const pausas=(a.pausas||[]).filter(p=>p.inicio);
+        linhas.push(`<div style="font-size:12px;color:#666;"><strong>Início:</strong> ${a.inicio?fmtDH(a.inicio):'—'}</div>`);
+        const pausas=(a.pausas||[]).filter(p=>p&&p.inicio);
         if(pausas.length){
           const pHtml=pausas.map(p=>{
             const ic=tipoIcons2[p.tipo]||'⏸';
             const fimP=p.fim?fmtH(p.fim):'em andamento';
-            return `<div style="font-size:11px;color:#888;margin-left:8px;">${ic} ${p.tipoLabel||'Pausa'}: ${fmtH(p.inicio)} → ${fimP}</div>`;
+            return `<div style="font-size:12px;color:#888;margin-left:8px;">${ic} ${p.tipoLabel||'Pausa'}: ${fmtH(p.inicio)} → ${fimP}</div>`;
           }).join('');
-          linhas.push(`<div style="font-size:11px;color:#666;margin-top:4px;"><strong>Pausas (${pausas.length}):</strong></div>${pHtml}`);
+          linhas.push(`<div style="font-size:12px;color:#666;margin-top:4px;"><strong>Pausas (${pausas.length}):</strong></div>${pHtml}`);
         }
-        // observações
         const obs=(a.observacoes||[]).filter(o=>o&&o.texto);
         if(obs.length){
-          const oHtml=obs.map(o=>`<div style="font-size:11px;color:#444;margin-left:8px;">• ${o.texto} <span style="color:#aaa;">(${fmtH(o.hora)})</span></div>`).join('');
-          linhas.push(`<div style="font-size:11px;color:#666;margin-top:4px;"><strong>Observações (${obs.length}):</strong></div>${oHtml}`);
+          const oHtml=obs.map(o=>`<div style="font-size:12px;color:#444;margin-left:8px;">• ${o.texto} <span style="color:#aaa;">(${fmtH(o.hora)})</span></div>`).join('');
+          linhas.push(`<div style="font-size:12px;color:#666;margin-top:4px;"><strong>Observações (${obs.length}):</strong></div>${oHtml}`);
         }
-        // itens faltando
         if(a.itensFaltando){
-          linhas.push(`<div style="font-size:11px;color:#BA7517;margin-top:4px;"><strong>⚠ Itens faltando:</strong> ${a.obsItensFaltando||'(sem detalhe)'}</div>`);
+          linhas.push(`<div style="font-size:12px;color:#BA7517;margin-top:4px;"><strong>⚠ Itens faltando:</strong> ${a.obsItensFaltando||'(sem detalhe)'}</div>`);
         }
-        // retrabalho marcado
         if(a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length){
-          linhas.push(`<div style="font-size:11px;color:#A32D2D;margin-top:4px;"><strong>🔧 Retrabalho:</strong> ${a.retrabalho.setores.join(', ')}${a.retrabalho.obs?' — '+a.retrabalho.obs:''}</div>`);
+          linhas.push(`<div style="font-size:12px;color:#A32D2D;margin-top:4px;"><strong>🔧 Retrabalho:</strong> ${a.retrabalho.setores.join(', ')}${a.retrabalho.obs?' — '+a.retrabalho.obs:''}</div>`);
         }
-        if(!linhas.length)linhas.push('<div style="font-size:11px;color:#aaa;">Sem detalhes adicionais.</div>');
-        detalhes=`<div style="margin-top:8px;padding:10px;background:#fafafa;border-radius:8px;border-left:3px solid ${statusColor};">${linhas.join('')}</div>`;
+        if(!linhas.length)linhas.push('<div style="font-size:12px;color:#aaa;">Sem detalhes adicionais.</div>');
+        detalhes=`<div style="margin-top:10px;padding:10px;background:#ffffffcc;border-radius:8px;">${linhas.join('')}</div>`;
       }
 
       const card=document.createElement('div');
-      card.style.cssText='padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+      card.className='live-card';
+      card.style.cssText=`background:${st.bg};border-left:7px solid ${st.barra};border-radius:10px;padding:12px 14px;margin-bottom:10px;cursor:pointer;`;
       card.onclick=()=>toggleLiveCard(a.id);
-      card.innerHTML=`<div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:34px;height:34px;border-radius:50%;background:${statusBg};color:${statusColor};font-size:${pausado?'16px':'12px'};font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          ${pausado?tipoPausaIcon:avatar}
+
+      const tempoBloco = grupo==='mf'
+        ? `<span class="live-tempo" style="font-size:14px;font-weight:700;color:${st.cor};">${st.desde?'aguarda desde '+fmtH(st.desde):''}</span>`
+        : `<span class="live-tempo" style="font-size:16px;font-weight:800;color:${st.cor};">⏱ ${liqTxt}${prev>0?` <span style="font-weight:500;color:#999;font-size:12px;">/ ${fmtDur(prev)}</span>`:''}</span>`;
+
+      card.innerHTML=`
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div class="live-op" style="font-size:21px;font-weight:800;color:#111;line-height:1.05;">OP ${opLabel}</div>
+          <span class="live-pill" style="font-size:12px;font-weight:800;padding:4px 11px;border-radius:99px;background:${st.pill};color:#fff;white-space:nowrap;">${st.rotulo}</span>
         </div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
-            <span style="font-size:13px;font-weight:700;">${c?c.nome:'—'}</span>
-            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${statusBg};color:${statusColor};">${statusTxt}</span>
-          </div>
-          <div style="font-size:12px;font-weight:600;color:#1a1a1a;margin-top:2px;">OP ${opLabel} <span style="color:#bbb;font-size:11px;">${expandido?'▲':'▼'}</span></div>
-          <div style="font-size:11px;color:#888;">${modeloLabel}</div>
-          <div style="font-size:11px;color:#888;margin-top:2px;">⏱ ${liqTxt}${pausado?' · pausado às '+fmtH(ultimaPausa.inicio):' trabalhados'}</div>
-          ${a.itensFaltando&&!expandido?`<div style="font-size:11px;color:#BA7517;margin-top:2px;">⚠ Itens faltando</div>`:''}
+        <div class="live-modelo" style="font-size:13px;color:#555;margin-top:3px;font-weight:600;">${modeloLabel}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;flex-wrap:wrap;">
+          <span class="live-nome" style="font-size:15px;font-weight:700;color:#222;">👤 ${c?c.nome:'—'}</span>
+          ${tempoBloco}
         </div>
-      </div>${detalhes}`;
+        ${grupo!=='mf'&&prev>0?`<div style="height:7px;background:#00000012;border-radius:99px;margin-top:9px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${st.barra};border-radius:99px;"></div></div>`:''}
+        ${st.key==='pausado'&&st.desde?`<div style="font-size:12px;color:${st.cor};margin-top:6px;font-weight:600;">pausado às ${fmtH(st.desde)}</div>`:''}
+        ${a.itensFaltando&&!expandido?`<div style="font-size:12px;color:#BA7517;margin-top:6px;font-weight:700;">⚠ Itens faltando</div>`:''}
+        <div class="live-toggle" style="text-align:center;color:#aaa;font-size:11px;margin-top:6px;">${expandido?'▲ menos':'▼ detalhes'}</div>
+        ${detalhes}`;
       div.appendChild(card);
     });
-    // remove last border
-    if(div.lastChild)div.lastChild.style.borderBottom='none';
   }
 
   renderColuna(grupos.chapa,'dash-live-chapa','chapa');
   renderColuna(grupos.eletrica,'dash-live-eletrica','eletrica');
   renderColuna(grupos.mf,'dash-live-mf','mf');
 }
+// ── MODO TELÃO (visão de fábrica em TV) ──
+function toggleTelao(){
+  const ativo=document.body.classList.toggle('telao');
+  try{
+    if(ativo){ if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen(); }
+    else { if(document.fullscreenElement&&document.exitFullscreen)document.exitFullscreen(); }
+  }catch(e){}
+  if(ativo){ currentPage='live'; renderLivePage(); atualizaRelogioTelao(); }
+}
+function atualizaRelogioTelao(){
+  const rel=document.getElementById('telaoRelogio');
+  if(rel)rel.textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+// relógio do telão (só trabalha quando o modo está ativo)
+setInterval(()=>{ if(document.body.classList.contains('telao'))atualizaRelogioTelao(); },1000);
+// se o usuário sair do fullscreen (ex.: tecla ESC), desliga o modo telão junto
+document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement)document.body.classList.remove('telao'); });
 
 /* ── DASHBOARD ── */
 function renderDash(){

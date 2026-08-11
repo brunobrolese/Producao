@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel do Gerente — Produção</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0f1115;color:#fff;padding:20px 22px;min-height:100vh;}
+  .topo{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px;}
+  .titulo{font-size:30px;font-weight:800;display:flex;align-items:center;gap:12px;}
+  .relogio{font-size:30px;font-weight:800;color:#4ade80;font-variant-numeric:tabular-nums;}
+  .periodos{display:flex;gap:8px;flex-wrap:wrap;}
+  .pbtn{background:#1e222b;color:#c7cdd6;border:1px solid #2a2f3a;padding:10px 20px;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;}
+  .pbtn.ativo{background:#2563eb;color:#fff;border-color:#2563eb;}
+  .geral{background:#161a22;border:1px solid #232833;border-radius:16px;padding:20px 24px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .geral .lbl{font-size:16px;color:#8b93a1;font-weight:600;}
+  .geral .big{font-size:56px;font-weight:800;line-height:1;}
+  .geral .sub{font-size:15px;color:#8b93a1;margin-top:4px;}
+  .setores{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+  .setor{background:#fff;color:#111;border-radius:16px;padding:22px 22px 20px;border-top:8px solid #ccc;}
+  .setor .cab{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;margin-bottom:14px;}
+  .setor .prodlbl{font-size:15px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
+  .setor .prod{font-size:72px;font-weight:800;line-height:1;margin:2px 0 10px;}
+  .setor .barra{height:12px;background:#0000000f;border-radius:99px;overflow:hidden;margin-bottom:16px;}
+  .setor .barra > div{height:100%;border-radius:99px;}
+  .setor .linhas{display:flex;gap:10px;}
+  .setor .cel{flex:1;background:#f4f5f7;border-radius:10px;padding:10px 12px;text-align:center;}
+  .setor .cel .n{font-size:26px;font-weight:800;color:#222;}
+  .setor .cel .t{font-size:13px;color:#777;font-weight:600;margin-top:2px;}
+  .rodape{margin-top:20px;text-align:center;font-size:14px;color:#5b6270;}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;margin-right:6px;vertical-align:middle;}
+  .dot.off{background:#ef4444;}
+  @media(max-width:900px){.setores{grid-template-columns:1fr;}.setor .prod{font-size:60px;}}
+</style>
+</head>
+<body>
+  <div class="topo">
+    <div class="titulo">🏭 Produção — Painel do Gerente</div>
+    <div class="relogio" id="relogio">--:--:--</div>
+  </div>
+
+  <div class="periodos" id="periodos" style="margin-bottom:18px;">
+    <button class="pbtn ativo" data-p="hoje" onclick="setPeriodo('hoje')">Hoje</button>
+    <button class="pbtn" data-p="semana" onclick="setPeriodo('semana')">Semana (7 dias)</button>
+    <button class="pbtn" data-p="mes" onclick="setPeriodo('mes')">Mês</button>
+  </div>
+
+  <div class="geral">
+    <div>
+      <div class="lbl">Produtividade geral (Chapa + Elétrica)</div>
+      <div class="sub" id="geralSub">carregando…</div>
+    </div>
+    <div class="big" id="geralProd" style="color:#4ade80;">—</div>
+  </div>
+
+  <div class="setores" id="setores"></div>
+
+  <div class="rodape" id="rodape"><span class="dot" id="statusDot"></span><span id="statusTxt">conectando…</span></div>
+
+<script>
+const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis';
+let S={apontamentos:[],modelos:[],colaboradores:[],ops:[]};
+let _periodo='hoje';
+
+// ── helpers de data local (mesmo padrão do sistema, evita erro de fuso) ──
+function dataLocalStr(x){
+  if(!x)return '';
+  const d=(x instanceof Date)?x:new Date(x);
+  if(isNaN(d))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function mesLocalStr(x){return dataLocalStr(x).substring(0,7);}
+
+// ── tempo líquido (idêntico ao do sistema) ──
+function tempoLiquido(apt){
+  if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
+  if(!apt||!apt.inicio)return 0;
+  const ini=new Date(apt.inicio).getTime();
+  if(isNaN(ini))return 0;
+  const fimMs=apt.fim?new Date(apt.fim).getTime():Date.now();
+  if(isNaN(fimMs)||fimMs<=ini)return 0;
+  const ps=[];
+  (apt.pausas||[]).forEach(p=>{
+    if(!p||!p.inicio)return;
+    let s=new Date(p.inicio).getTime();if(isNaN(s))return;
+    let e=p.fim?new Date(p.fim).getTime():fimMs;if(isNaN(e))e=fimMs;
+    s=Math.max(s,ini);e=Math.min(e,fimMs);
+    if(e>s)ps.push([s,e]);
+  });
+  ps.sort((a,b)=>a[0]-b[0]);
+  let pausado=0,curS=null,curE=null;
+  for(const par of ps){const s=par[0],e=par[1];
+    if(curS===null){curS=s;curE=e;}
+    else if(s<=curE){if(e>curE)curE=e;}
+    else{pausado+=curE-curS;curS=s;curE=e;}}
+  if(curS!==null)pausado+=curE-curS;
+  return Math.max(0,Math.round((fimMs-ini-pausado)/60000));
+}
+function tempoModeloSetor(m,setor){
+  if(!m)return 0;
+  if(setor==='chapa')return m.tempoChapa||0;
+  if(setor==='eletrica')return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
+  return 0;
+}
+
+// ── carrega do Firebase (somente leitura) com sanitização ──
+async function load(){
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    if(d){
+      S=d;
+      ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
+        const base=Array.isArray(S[k])?S[k]:(S[k]&&typeof S[k]==='object'?Object.values(S[k]):[]);
+        S[k]=base.filter(x=>x!=null&&typeof x==='object');
+      });
+    }
+    setStatus(true);
+    return true;
+  }catch(e){setStatus(false);return false;}
+}
+
+// ── período ──
+function noPeriodo(iso){
+  const dstr=dataLocalStr(iso);
+  if(!dstr)return false;
+  if(_periodo==='hoje')return dstr===dataLocalStr(new Date());
+  if(_periodo==='mes')return mesLocalStr(iso)===mesLocalStr(new Date());
+  const t=new Date(iso).getTime();
+  return !isNaN(t)&&t>=Date.now()-7*86400000&&t<=Date.now()+60000;
+}
+
+// ── produtividade por setor ──
+function calcSetorStats(){
+  const base={
+    chapa:{nome:'Chapa',icone:'🔧',cor:'#db2777'},
+    eletrica:{nome:'Montagem Elétrica',icone:'⚡',cor:'#EA580C'},
+    mf:{nome:'Montagem Final',icone:'🔍',cor:'#7c3aed'}
+  };
+  const out={};
+  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
+  (S.apontamentos||[]).forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa')return;
+    // Chapa / Elétrica: conta pelo fim do apontamento
+    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&noPeriodo(a.fim)){
+      const setor=(a.setor==='geral')?'eletrica':a.setor;
+      const o=out[setor];
+      if(o){
+        const liq=tempoLiquido(a);
+        const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+        const prev=tempoModeloSetor(m,setor);
+        let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
+        if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
+        o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+      }
+    }
+    // Montagem Final: conta pela inspeção aprovada (mf.fim)
+    if(a.mf&&a.mf.fim&&noPeriodo(a.mf.fim)){
+      const o=out.mf;
+      const insp=(a.mf.inicioInspecao)?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):0;
+      o.volume++;o.somaLiq+=insp;o.somaBruto+=insp;
+    }
+  });
+  for(const k in out){
+    const o=out[k];
+    o.eficiencia=o.somaReal>0?Math.round(o.somaPrev/o.somaReal*100):null;
+    o.aproveitamento=o.somaBruto>0?Math.round(o.somaLiq/o.somaBruto*100):null;
+    o.tempoMedio=o.volume?Math.round(o.somaLiq/o.volume):0;
+  }
+  return out;
+}
+
+// cor conforme a produtividade (semáforo)
+function corProd(pct){
+  if(pct==null)return {c:'#9ca3af',b:'#9ca3af'};
+  if(pct>=90)return {c:'#15803d',b:'#16a34a'};
+  if(pct>=70)return {c:'#b45309',b:'#f59e0b'};
+  return {c:'#b91c1c',b:'#dc2626'};
+}
+const fmtDur=(min)=>min>=60?Math.floor(min/60)+'h'+(min%60?' '+(min%60)+'min':''):min+'min';
+
+function render(){
+  const st=calcSetorStats();
+
+  // produtividade geral = eficiência ponderada de Chapa + Elétrica
+  let gp=st.chapa.somaPrev+st.eletrica.somaPrev, gr=st.chapa.somaReal+st.eletrica.somaReal;
+  const geral=gr>0?Math.round(gp/gr*100):null;
+  const cg=corProd(geral);
+  document.getElementById('geralProd').textContent=geral==null?'—':geral+'%';
+  document.getElementById('geralProd').style.color=geral==null?'#9ca3af':(geral>=90?'#4ade80':geral>=70?'#fbbf24':'#f87171');
+  const volGeral=st.chapa.volume+st.eletrica.volume;
+  document.getElementById('geralSub').textContent=volGeral+' painéis no período · eficiência = tempo previsto ÷ tempo real';
+
+  const cont=document.getElementById('setores');
+  cont.innerHTML='';
+  ['chapa','eletrica','mf'].forEach(k=>{
+    const o=st[k];
+    const card=document.createElement('div');
+    card.className='setor';
+    card.style.borderTopColor=o.cor;
+    if(o.temMeta){
+      const c=corProd(o.eficiencia);
+      const pct=o.eficiencia==null?0:Math.min(o.eficiencia,100);
+      card.innerHTML=`
+        <div class="cab" style="color:${o.cor};">${o.icone} ${o.nome}</div>
+        <div class="prodlbl">Produtividade</div>
+        <div class="prod" style="color:${c.c};">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
+        <div class="barra"><div style="width:${pct}%;background:${c.b};"></div></div>
+        <div class="linhas">
+          <div class="cel"><div class="n">${o.volume}</div><div class="t">painéis</div></div>
+          <div class="cel"><div class="n">${o.tempoMedio?fmtDur(o.tempoMedio):'—'}</div><div class="t">tempo médio</div></div>
+          <div class="cel"><div class="n">${o.aproveitamento==null?'—':o.aproveitamento+'%'}</div><div class="t">aproveitamento</div></div>
+        </div>`;
+    } else {
+      // Montagem Final não tem meta de tempo → mostra throughput
+      card.innerHTML=`
+        <div class="cab" style="color:${o.cor};">${o.icone} ${o.nome}</div>
+        <div class="prodlbl">Inspecionados</div>
+        <div class="prod" style="color:#6d28d9;">${o.volume}</div>
+        <div class="barra"><div style="width:100%;background:#7c3aed;opacity:.25;"></div></div>
+        <div class="linhas">
+          <div class="cel"><div class="n">${o.volume}</div><div class="t">painéis</div></div>
+          <div class="cel"><div class="n">${o.tempoMedio?fmtDur(o.tempoMedio):'—'}</div><div class="t">insp. média</div></div>
+          <div class="cel"><div class="n" style="font-size:15px;color:#999;">sem meta<br>de tempo</div><div class="t">&nbsp;</div></div>
+        </div>`;
+    }
+    cont.appendChild(card);
+  });
+}
+
+function setPeriodo(p){
+  _periodo=p;
+  document.querySelectorAll('.pbtn').forEach(b=>b.classList.toggle('ativo',b.dataset.p===p));
+  render();
+}
+function relogio(){
+  document.getElementById('relogio').textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function setStatus(ok){
+  const dot=document.getElementById('statusDot'),txt=document.getElementById('statusTxt');
+  if(dot)dot.className='dot'+(ok?'':' off');
+  if(txt)txt.textContent=ok?('atualizado às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})):'sem conexão — tentando novamente…';
+}
+
+// inicialização
+(async()=>{
+  relogio();setInterval(relogio,1000);
+  await load();render();
+  // atualiza os dados a cada 20s (leve, só re-renderiza)
+  setInterval(async()=>{ if(document.hidden)return; await load(); render(); },20000);
+})();
+</script>
+</body>
+</html>

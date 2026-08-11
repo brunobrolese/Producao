@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v59</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v60</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -228,6 +228,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <!-- TEMPO REAL -->
     <div id="page-live" class="page">
       <div class="metrics" id="m-live"></div>
+      <div id="live-prod"></div>
       <div id="telaoBar" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
         <div id="telaoTitulo">
           <span style="font-size:27px;font-weight:800;">🏭 Produção ao Vivo</span>
@@ -1957,6 +1958,7 @@ function renderLivePage(){
       <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
 
   renderProntosHoje(aptH);
+  renderLiveProdutividade();
   renderLive();
 }
 // lista detalhada dos quadros que ficaram prontos hoje, com modelo, colaborador e horário
@@ -3036,7 +3038,8 @@ function exportarObservacoes(){
   toast('📥 Observações exportadas');
 }
 // produtividade por setor (respeita o filtro de data da aba) — usada no topo da aba e espelha o app do gerente
-function calcSetorStatsSup(){
+function calcSetorStatsSup(filtroFn){
+  filtroFn=filtroFn||dentroFiltro;
   const base={
     chapa:{nome:'Chapa',icone:'🔧',cor:'#db2777'},
     eletrica:{nome:'Elétrica',icone:'⚡',cor:'#EA580C'},
@@ -3046,7 +3049,7 @@ function calcSetorStatsSup(){
   for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
   (S.apontamentos||[]).forEach(a=>{
     if(!a||a.tipoRegistro==='sem_chapa')return;
-    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&dentroFiltro(a.fim)){
+    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&filtroFn(a.fim)){
       const setor=(a.setor==='geral')?'eletrica':a.setor;
       const o=out[setor];
       if(o){
@@ -3058,7 +3061,7 @@ function calcSetorStatsSup(){
         o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
       }
     }
-    if(a.mf&&a.mf.fim&&dentroFiltro(a.mf.fim)){
+    if(a.mf&&a.mf.fim&&filtroFn(a.mf.fim)){
       const o=out.mf;
       const insp=(a.mf.inicioInspecao)?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):0;
       o.volume++;o.somaLiq+=insp;o.somaBruto+=insp;
@@ -3106,6 +3109,32 @@ function renderProdSetores(){
       <div style="font-size:44px;font-weight:800;color:${geral==null?'#9ca3af':(geral>=90?'#4ade80':geral>=70?'#fbbf24':'#f87171')};">${geral==null?'—':geral+'%'}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px;">${cards}</div>`;
+}
+// produtividade de hoje, compacta, para a tela Ao Vivo
+function renderLiveProdutividade(){
+  const div=document.getElementById('live-prod');
+  if(!div)return;
+  const hoje=td();
+  const st=calcSetorStatsSup(iso=>dataLocalStr(iso)===hoje);
+  const corProd=(pct)=>pct==null?'#9ca3af':pct>=90?'#16a34a':pct>=70?'#f59e0b':'#dc2626';
+  const item=(o)=>{
+    if(o.temMeta){
+      return `<div style="flex:1;text-align:center;padding:6px 4px;min-width:90px;">
+        <div style="font-size:13px;color:${o.cor};font-weight:700;">${o.icone} ${o.nome}</div>
+        <div style="font-size:30px;font-weight:800;color:${corProd(o.eficiencia)};line-height:1.15;">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
+        <div style="font-size:11px;color:#999;">${o.volume} ${o.volume===1?'painel':'painéis'}</div></div>`;
+    }
+    return `<div style="flex:1;text-align:center;padding:6px 4px;min-width:90px;">
+      <div style="font-size:13px;color:${o.cor};font-weight:700;">${o.icone} ${o.nome}</div>
+      <div style="font-size:30px;font-weight:800;color:#6d28d9;line-height:1.15;">${o.volume}</div>
+      <div style="font-size:11px;color:#999;">inspecionados</div></div>`;
+  };
+  const semMeta=(st.chapa.eficiencia==null&&st.eletrica.eficiencia==null&&(st.chapa.volume||st.eletrica.volume));
+  div.innerHTML=`<div class="card" style="margin-bottom:12px;padding:10px 14px;">
+    <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px;">📊 Produtividade de hoje <span style="color:#bbb;">· eficiência = tempo previsto ÷ tempo real</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">${item(st.chapa)}${item(st.eletrica)}${item(st.mf)}</div>
+    ${semMeta?'<div style="font-size:11px;color:#BA7517;margin-top:6px;">⚠ Cadastre o tempo previsto (chapa/elétrica) nos modelos para calcular a produtividade.</div>':''}
+  </div>`;
 }
 function renderProdutividade(){
   renderProdSetores();

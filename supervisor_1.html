@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v60</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v61</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -892,7 +892,11 @@ function _assinaturaDados(){
   try{
     const ap=(S.apontamentos||[]).map(a=>a?(a.id+':'+(a._ts||0)+':'+(a.fim||'')+':'+(a.etapa||'')+':'+((a.pausas||[]).length)+':'+((a.pausas||[]).some(p=>p&&!p.fim)?'P':'')):'x').join(',');
     const op=(S.ops||[]).map(o=>o?(o.id+':'+(o.status||'')):'x').join(',');
-    return ap+'||'+op+'||'+((S.colaboradores||[]).length);
+    // TEMPO REAL: se há painel em andamento (aberto, não pausado), muda a cada minuto
+    // para os tempos decorridos e a produtividade avançarem sozinhos na tela.
+    const rodando=(S.apontamentos||[]).some(a=>a&&!a.fim&&a.tipoRegistro!=='sem_chapa'&&a.etapa!=='montagem_final'&&a.etapa!=='concluido'&&!(a.pausas||[]).some(p=>p&&!p.fim));
+    const minuto=rodando?Math.floor(Date.now()/60000):0;
+    return ap+'||'+op+'||'+((S.colaboradores||[]).length)+'||'+minuto;
   }catch(e){return String(Date.now());}
 }
 setInterval(async()=>{
@@ -3038,7 +3042,7 @@ function exportarObservacoes(){
   toast('📥 Observações exportadas');
 }
 // produtividade por setor (respeita o filtro de data da aba) — usada no topo da aba e espelha o app do gerente
-function calcSetorStatsSup(filtroFn){
+function calcSetorStatsSup(filtroFn,tempoReal){
   filtroFn=filtroFn||dentroFiltro;
   const base={
     chapa:{nome:'Chapa',icone:'🔧',cor:'#db2777'},
@@ -3046,19 +3050,28 @@ function calcSetorStatsSup(filtroFn){
     mf:{nome:'Mont. Final',icone:'🔍',cor:'#7c3aed'}
   };
   const out={};
-  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
+  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,emAndamento:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
   (S.apontamentos||[]).forEach(a=>{
     if(!a||a.tipoRegistro==='sem_chapa')return;
-    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&filtroFn(a.fim)){
+    if(a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral'){
       const setor=(a.setor==='geral')?'eletrica':a.setor;
       const o=out[setor];
       if(o){
-        const liq=tempoLiquido(a);
         const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
         const prev=tempoModeloSetor(m,setor);
-        let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
-        if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
-        o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+        if(a.fim&&filtroFn(a.fim)){
+          // painel CONCLUÍDO: crédito total do tempo previsto (pode passar de 100% se foi rápido)
+          const liq=tempoLiquido(a);
+          let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
+          if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
+          o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+        } else if(tempoReal&&!a.fim&&a.inicio&&a.etapa!=='montagem_final'&&a.etapa!=='concluido'){
+          // TEMPO REAL — painel EM ANDAMENTO: crédito limitado ao tempo já decorrido
+          // (não infla quando acabou de começar; se passar do previsto, puxa a produtividade pra baixo)
+          const liq=tempoLiquido(a); // decorrido até agora
+          if(prev>0&&liq>0){o.somaPrev+=Math.min(prev,liq);o.somaReal+=liq;}
+          o.emAndamento++;
+        }
       }
     }
     if(a.mf&&a.mf.fim&&filtroFn(a.mf.fim)){
@@ -3110,28 +3123,29 @@ function renderProdSetores(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px;">${cards}</div>`;
 }
-// produtividade de hoje, compacta, para a tela Ao Vivo
+// produtividade EM TEMPO REAL (inclui painéis em andamento), para a tela Ao Vivo
 function renderLiveProdutividade(){
   const div=document.getElementById('live-prod');
   if(!div)return;
   const hoje=td();
-  const st=calcSetorStatsSup(iso=>dataLocalStr(iso)===hoje);
+  const st=calcSetorStatsSup(iso=>dataLocalStr(iso)===hoje, true);
   const corProd=(pct)=>pct==null?'#9ca3af':pct>=90?'#16a34a':pct>=70?'#f59e0b':'#dc2626';
   const item=(o)=>{
     if(o.temMeta){
+      const emand=o.emAndamento?` · ${o.emAndamento} em andamento`:'';
       return `<div style="flex:1;text-align:center;padding:6px 4px;min-width:90px;">
         <div style="font-size:13px;color:${o.cor};font-weight:700;">${o.icone} ${o.nome}</div>
         <div style="font-size:30px;font-weight:800;color:${corProd(o.eficiencia)};line-height:1.15;">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
-        <div style="font-size:11px;color:#999;">${o.volume} ${o.volume===1?'painel':'painéis'}</div></div>`;
+        <div style="font-size:11px;color:#999;">${o.volume} ${o.volume===1?'pronto':'prontos'}${emand}</div></div>`;
     }
     return `<div style="flex:1;text-align:center;padding:6px 4px;min-width:90px;">
       <div style="font-size:13px;color:${o.cor};font-weight:700;">${o.icone} ${o.nome}</div>
       <div style="font-size:30px;font-weight:800;color:#6d28d9;line-height:1.15;">${o.volume}</div>
       <div style="font-size:11px;color:#999;">inspecionados</div></div>`;
   };
-  const semMeta=(st.chapa.eficiencia==null&&st.eletrica.eficiencia==null&&(st.chapa.volume||st.eletrica.volume));
+  const semMeta=(st.chapa.eficiencia==null&&st.eletrica.eficiencia==null&&(st.chapa.volume||st.eletrica.volume||st.chapa.emAndamento||st.eletrica.emAndamento));
   div.innerHTML=`<div class="card" style="margin-bottom:12px;padding:10px 14px;">
-    <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px;">📊 Produtividade de hoje <span style="color:#bbb;">· eficiência = tempo previsto ÷ tempo real</span></div>
+    <div style="font-size:12px;color:#888;font-weight:600;margin-bottom:4px;">📊 Produtividade em tempo real <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#16a34a;vertical-align:middle;"></span> <span style="color:#bbb;">· inclui os painéis em andamento agora</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">${item(st.chapa)}${item(st.eletrica)}${item(st.mf)}</div>
     ${semMeta?'<div style="font-size:11px;color:#BA7517;margin-top:6px;">⚠ Cadastre o tempo previsto (chapa/elétrica) nos modelos para calcular a produtividade.</div>':''}
   </div>`;

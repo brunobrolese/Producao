@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v57</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v59</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -259,6 +259,13 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
           <div id="dash-live-mf"></div>
         </div>
       </div>
+      <div class="card" id="prontos-hoje-card" style="margin-top:12px;border-top:3px solid #16a34a;">
+        <h3 style="display:flex;align-items:center;justify-content:space-between;">
+          <span>✅ Prontos hoje</span>
+          <span id="prontosHojeCount" style="font-size:11px;font-weight:400;color:#888;"></span>
+        </h3>
+        <div id="prontos-hoje"></div>
+      </div>
     </div>
 
     <!-- OPS -->
@@ -382,6 +389,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <!-- PRODUTIVIDADE -->
     <div id="page-prod" class="page">
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Ranking de produtividade dos colaboradores no período selecionado (use o filtro de data no topo).</div>
+      <div id="prod-setores"></div>
       <div id="prod-conteudo"></div>
     </div>
 
@@ -1932,11 +1940,11 @@ async function addColab(){
 
 function renderLivePage(){
   const hoje=td(),mes=hoje.substring(0,7);
-  const aptH=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(hoje));
+  const aptH=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&dataLocalStr(a.mf.fim)===hoje);
   const emAnd=S.apontamentos.filter(a=>a&&a.inicio&&!a.fim&&a.tipoRegistro!=='sem_chapa'&&!estaPausado(a)).length;
   const pausados=S.apontamentos.filter(a=>a&&a.tipoRegistro!=='sem_chapa'&&estaPausado(a)).length;
   const meta=parseInt(document.getElementById('mMeta')?.value)||50;
-  const aptM=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.mf.fim.startsWith(mes));
+  const aptM=S.apontamentos.filter(a=>a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&mesLocalStr(a.mf.fim)===mes);
   const pct=Math.round((aptM.length/meta)*100);
   const pc=pct>=100?'ok':pct>=60?'warn':'bad';
 
@@ -1948,7 +1956,52 @@ function renderLivePage(){
     <div class="metric"><div class="lbl">Quadros no mês</div><div class="val ${pc}">${aptM.length}</div><div class="sub">meta ${meta} · ${pct}%</div>
       <div class="pbar"><div class="pfill ${pc==='ok'?'':pc}" style="width:${Math.min(pct,100)}%"></div></div></div>`;
 
+  renderProntosHoje(aptH);
   renderLive();
+}
+// lista detalhada dos quadros que ficaram prontos hoje, com modelo, colaborador e horário
+function renderProntosHoje(aptH){
+  const cont=document.getElementById('prontos-hoje');
+  const countEl=document.getElementById('prontosHojeCount');
+  if(!cont)return;
+  const lista=(aptH||[]).slice().sort((a,b)=>new Date(b.mf.fim)-new Date(a.mf.fim));
+  if(countEl)countEl.textContent=lista.length+(lista.length===1?' quadro':' quadros');
+  if(!lista.length){
+    cont.innerHTML='<p class="empty" style="padding:12px 4px;font-size:13px;">Nenhum quadro finalizado hoje ainda.</p>';
+    return;
+  }
+  // resumo por modelo (quantos de cada)
+  const porModelo={};
+  lista.forEach(a=>{
+    const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+    const cod=m?m.codigo:(a.modeloLabel||'—');
+    porModelo[cod]=(porModelo[cod]||0)+1;
+  });
+  const chips=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]).map(([cod,n])=>
+    `<span style="display:inline-block;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:99px;padding:3px 11px;font-size:12px;font-weight:700;margin:0 6px 6px 0;">${cod} · ${n}</span>`
+  ).join('');
+
+  // linhas detalhadas
+  const linhas=lista.map(a=>{
+    const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+    const cod=m?m.codigo:(a.modeloLabel||'—');
+    const desc=m&&m.descricao?m.descricao:'';
+    const c=(S.colaboradores||[]).find(x=>x&&x.id===a.colabId);
+    const hora=a.mf&&a.mf.fim?fmtH(a.mf.fim):'—';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #f0f0f0;">
+      <div style="width:30px;height:30px;border-radius:8px;background:#f0fdf4;color:#16a34a;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;">✓</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:700;color:#1a1a1a;">OP ${a.opNum||'—'} <span style="color:#16a34a;font-weight:800;">· ${cod}</span></div>
+        ${desc?`<div style="font-size:11px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${desc}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:13px;font-weight:700;color:#15803d;">⏱ ${hora}</div>
+        <div style="font-size:11px;color:#888;">${c?c.nome:'—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML=`<div style="margin-bottom:10px;">${chips}</div>${linhas}`;
 }
 
 /* ── TEMPO REAL ── */
@@ -2982,7 +3035,80 @@ function exportarObservacoes(){
   a.download='observacoes_'+(_filtroData.de||'tudo')+'.csv';a.click();
   toast('📥 Observações exportadas');
 }
+// produtividade por setor (respeita o filtro de data da aba) — usada no topo da aba e espelha o app do gerente
+function calcSetorStatsSup(){
+  const base={
+    chapa:{nome:'Chapa',icone:'🔧',cor:'#db2777'},
+    eletrica:{nome:'Elétrica',icone:'⚡',cor:'#EA580C'},
+    mf:{nome:'Mont. Final',icone:'🔍',cor:'#7c3aed'}
+  };
+  const out={};
+  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
+  (S.apontamentos||[]).forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa')return;
+    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&dentroFiltro(a.fim)){
+      const setor=(a.setor==='geral')?'eletrica':a.setor;
+      const o=out[setor];
+      if(o){
+        const liq=tempoLiquido(a);
+        const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+        const prev=tempoModeloSetor(m,setor);
+        let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
+        if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
+        o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+      }
+    }
+    if(a.mf&&a.mf.fim&&dentroFiltro(a.mf.fim)){
+      const o=out.mf;
+      const insp=(a.mf.inicioInspecao)?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):0;
+      o.volume++;o.somaLiq+=insp;o.somaBruto+=insp;
+    }
+  });
+  for(const k in out){const o=out[k];
+    o.eficiencia=o.somaReal>0?Math.round(o.somaPrev/o.somaReal*100):null;
+    o.aproveitamento=o.somaBruto>0?Math.round(o.somaLiq/o.somaBruto*100):null;
+    o.tempoMedio=o.volume?Math.round(o.somaLiq/o.volume):0;
+  }
+  return out;
+}
+function renderProdSetores(){
+  const div=document.getElementById('prod-setores');
+  if(!div)return;
+  const st=calcSetorStatsSup();
+  const corProd=(pct)=>pct==null?{c:'#9ca3af',b:'#9ca3af'}:pct>=90?{c:'#15803d',b:'#16a34a'}:pct>=70?{c:'#b45309',b:'#f59e0b'}:{c:'#b91c1c',b:'#dc2626'};
+  const fmtMin=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
+  // geral = eficiência ponderada chapa+elétrica
+  const gp=st.chapa.somaPrev+st.eletrica.somaPrev, gr=st.chapa.somaReal+st.eletrica.somaReal;
+  const geral=gr>0?Math.round(gp/gr*100):null;
+  const cg=corProd(geral);
+  let cards=['chapa','eletrica','mf'].map(k=>{
+    const o=st[k];
+    if(o.temMeta){
+      const c=corProd(o.eficiencia);const pct=o.eficiencia==null?0:Math.min(o.eficiencia,100);
+      return `<div class="card" style="border-top:4px solid ${o.cor};margin:0;">
+        <div style="font-size:14px;font-weight:700;color:${o.cor};">${o.icone} ${o.nome}</div>
+        <div style="font-size:11px;color:#999;font-weight:600;text-transform:uppercase;margin-top:6px;">Produtividade</div>
+        <div style="font-size:38px;font-weight:800;color:${c.c};line-height:1;">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
+        <div style="height:6px;background:#00000010;border-radius:99px;overflow:hidden;margin:8px 0;"><div style="height:100%;width:${pct}%;background:${c.b};border-radius:99px;"></div></div>
+        <div style="font-size:12px;color:#666;">${o.volume} painéis · média ${o.tempoMedio?fmtMin(o.tempoMedio):'—'}</div></div>`;
+    }
+    return `<div class="card" style="border-top:4px solid ${o.cor};margin:0;">
+      <div style="font-size:14px;font-weight:700;color:${o.cor};">${o.icone} ${o.nome}</div>
+      <div style="font-size:11px;color:#999;font-weight:600;text-transform:uppercase;margin-top:6px;">Inspecionados</div>
+      <div style="font-size:38px;font-weight:800;color:#6d28d9;line-height:1;">${o.volume}</div>
+      <div style="font-size:12px;color:#999;margin:8px 0 0;">sem meta de tempo</div>
+      <div style="font-size:12px;color:#666;">insp. média ${o.tempoMedio?fmtMin(o.tempoMedio):'—'}</div></div>`;
+  }).join('');
+  div.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#111827;border-radius:12px;padding:14px 18px;margin-bottom:12px;">
+      <div><div style="font-size:12px;color:#9ca3af;font-weight:600;">PRODUTIVIDADE GERAL (Chapa + Elétrica)</div>
+        <div style="font-size:13px;color:#9ca3af;margin-top:2px;">eficiência = tempo previsto ÷ tempo real</div></div>
+      <div style="font-size:44px;font-weight:800;color:${geral==null?'#9ca3af':(geral>=90?'#4ade80':geral>=70?'#fbbf24':'#f87171')};">${geral==null?'—':geral+'%'}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:18px;">${cards}</div>`;
+}
 function renderProdutividade(){
+  renderProdSetores();
   const div=document.getElementById('prod-conteudo');
   if(!div)return;
   const fmtMin=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';

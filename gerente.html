@@ -140,20 +140,28 @@ function calcSetorStats(){
     mf:{nome:'Montagem Final',icone:'🔍',cor:'#7c3aed'}
   };
   const out={};
-  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
+  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,emAndamento:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
   (S.apontamentos||[]).forEach(a=>{
     if(!a||a.tipoRegistro==='sem_chapa')return;
-    // Chapa / Elétrica: conta pelo fim do apontamento
-    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&noPeriodo(a.fim)){
+    // Chapa / Elétrica
+    if(a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral'){
       const setor=(a.setor==='geral')?'eletrica':a.setor;
       const o=out[setor];
       if(o){
-        const liq=tempoLiquido(a);
         const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
         const prev=tempoModeloSetor(m,setor);
-        let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
-        if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
-        o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+        if(a.fim&&noPeriodo(a.fim)){
+          // concluído: crédito total do previsto
+          const liq=tempoLiquido(a);
+          let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
+          if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
+          o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
+        } else if(_periodo==='hoje'&&!a.fim&&a.inicio&&a.etapa!=='montagem_final'&&a.etapa!=='concluido'){
+          // TEMPO REAL (só no "Hoje"): painel em andamento, crédito limitado ao decorrido
+          const liq=tempoLiquido(a);
+          if(prev>0&&liq>0){o.somaPrev+=Math.min(prev,liq);o.somaReal+=liq;}
+          o.emAndamento++;
+        }
       }
     }
     // Montagem Final: conta pela inspeção aprovada (mf.fim)
@@ -191,7 +199,9 @@ function render(){
   document.getElementById('geralProd').textContent=geral==null?'—':geral+'%';
   document.getElementById('geralProd').style.color=geral==null?'#9ca3af':(geral>=90?'#4ade80':geral>=70?'#fbbf24':'#f87171');
   const volGeral=st.chapa.volume+st.eletrica.volume;
-  document.getElementById('geralSub').textContent=volGeral+' painéis no período · eficiência = tempo previsto ÷ tempo real';
+  const emAndTotal=(st.chapa.emAndamento||0)+(st.eletrica.emAndamento||0);
+  const rt=_periodo==='hoje';
+  document.getElementById('geralSub').textContent=(rt?'⏱ tempo real · ':'')+volGeral+' prontos'+(rt&&emAndTotal?' · '+emAndTotal+' em andamento':'')+' · eficiência = previsto ÷ real';
 
   const cont=document.getElementById('setores');
   cont.innerHTML='';
@@ -209,7 +219,7 @@ function render(){
         <div class="prod" style="color:${c.c};">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
         <div class="barra"><div style="width:${pct}%;background:${c.b};"></div></div>
         <div class="linhas">
-          <div class="cel"><div class="n">${o.volume}</div><div class="t">painéis</div></div>
+          <div class="cel"><div class="n">${o.volume}</div><div class="t">${(_periodo==='hoje'&&o.emAndamento)?o.emAndamento+' em and.':'prontos'}</div></div>
           <div class="cel"><div class="n">${o.tempoMedio?fmtDur(o.tempoMedio):'—'}</div><div class="t">tempo médio</div></div>
           <div class="cel"><div class="n">${o.aproveitamento==null?'—':o.aproveitamento+'%'}</div><div class="t">aproveitamento</div></div>
         </div>`;

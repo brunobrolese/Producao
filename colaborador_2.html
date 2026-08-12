@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v61</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v63</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -573,7 +573,9 @@ function selecionarItens(temFalta){
   abrirConfirmacao();
 }
 
+let _confirmandoIniciar=false;
 async function confirmarIniciar(){
+  if(_confirmandoIniciar)return; // trava anti-duplo-clique
   if(_itensFaltando===null){toast('Responda se há itens faltando.');return;}
   const obsEl=document.getElementById('obsItensInput');
   if(obsEl)_obsItens=obsEl.value.trim();
@@ -627,32 +629,39 @@ async function confirmarIniciar(){
     inicioISO=new Date().toISOString(); // sem hora informada: usa agora
   }
 
-  // encerra o registro "sem chapa" (se estiver contando) — o tempo parado para aqui
-  encerrarSemChapa();
+  _confirmandoIniciar=true;
+  try{
+    // encerra o registro "sem chapa" (se estiver contando) — o tempo parado para aqui
+    encerrarSemChapa();
 
-  S.apontamentos.push({
-    id:uid(),
-    opNum,
-    modeloId:parseInt(modeloId),
-    modeloLabel:modelo?modelo.codigo:'',
-    colabId:colab.id,
-    setor:getColabSetor(),
-    _ts:Date.now(),
-    inicio:inicioISO,
-    fim:null,
-    pausas:[],
-    observacoes:[],
-    erros:[],
-    obsErro:'',
-    itensFaltando:_itensFaltando,
-    obsItensFaltando:_obsItens
-  });
+    S.apontamentos.push({
+      id:uid(),
+      opNum,
+      modeloId:parseInt(modeloId),
+      modeloLabel:modelo?modelo.codigo:'',
+      colabId:colab.id,
+      setor:getColabSetor(),
+      _ts:Date.now(),
+      inicio:inicioISO,
+      fim:null,
+      pausas:[],
+      observacoes:[],
+      erros:[],
+      obsErro:'',
+      itensFaltando:_itensFaltando,
+      obsItensFaltando:_obsItens
+    });
 
-  _itensFaltando=null;_obsItens='';
-  await save();
-  cancelarAdicionar();
-  renderAll();
-  toast('Quadro iniciado! ▶');
+    _itensFaltando=null;_obsItens='';
+    // retorno visual IMEDIATO: fecha o formulário e atualiza antes do save
+    cancelarAdicionar();
+    renderAll();
+    toast('Quadro iniciado! ▶');
+    await save();
+    renderAll();
+  } finally {
+    _confirmandoIniciar=false;
+  }
 }
 
 /* ── RENDER ── */
@@ -727,23 +736,35 @@ function renderFilaEletrica(){
   });
 }
 
+let _iniciandoEletrica=false;
 async function iniciarEletrica(opNum,modeloId,modeloLabel,chapaAptId){
   const normOp=(s)=>String(s||'').trim().toLowerCase();
+  // trava anti-duplo-clique: se já está processando um início, ignora cliques repetidos
+  if(_iniciandoEletrica)return;
   // já existe montagem elétrica em aberto para esta OP?
   if(S.apontamentos.find(a=>a&&a.setor==='eletrica'&&!a.fim&&normOp(a.opNum)===normOp(opNum))){
     toast('Você já iniciou a montagem elétrica deste quadro.');return;
   }
-  const novoId=uid();
-  S.apontamentos.push({
-    id:novoId,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
-    inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
-    erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
-  });
-  // MARCA o apontamento da chapa: assim a fila não depende de casar opNum+modeloId
-  const chapaApt=S.apontamentos.find(a=>a&&a.id===chapaAptId)
-    ||S.apontamentos.find(a=>a&&a.etapa==='eletrica'&&normOp(a.opNum)===normOp(opNum));
-  if(chapaApt){chapaApt.eletricaIniciada=true;chapaApt.eletricaAptId=novoId;chapaApt._ts=Date.now();}
-  await save();renderAll();toast('⚡ Montagem elétrica iniciada!');
+  _iniciandoEletrica=true;
+  try{
+    const novoId=uid();
+    S.apontamentos.push({
+      id:novoId,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
+      inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
+      erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
+    });
+    // MARCA o apontamento da chapa: assim a fila não depende de casar opNum+modeloId
+    const chapaApt=S.apontamentos.find(a=>a&&a.id===chapaAptId)
+      ||S.apontamentos.find(a=>a&&a.etapa==='eletrica'&&normOp(a.opNum)===normOp(opNum));
+    if(chapaApt){chapaApt.eletricaIniciada=true;chapaApt.eletricaAptId=novoId;chapaApt._ts=Date.now();}
+    // retorno visual IMEDIATO: o painel sai da fila na hora (antes do save), evitando novo clique
+    renderAll();
+    toast('⚡ Montagem elétrica iniciada!');
+    await save();
+    renderAll();
+  } finally {
+    _iniciandoEletrica=false;
+  }
 }
 
 function renderOps(){
@@ -1318,7 +1339,9 @@ function aplicarPausasAuto(colaborador){
       if(!isNaN(fimMs)&&nowMs>=fimMs){refFim=fimMs;}                       // à noite: fim de hoje
       else if(iniMs!=null&&!isNaN(iniMs)&&nowMs<iniMs){refFim=fimMs-86400000;} // madrugada: fim de ontem
       if(refFim!=null){
-        const jaTemFimDia=apt.pausas.some(p=>p&&!p.fim&&p.tipo==='fimdia');
+        // já existe pausa "fim do dia" para este ponto (aberta OU já retomada pelo colaborador)?
+        // se ele já retomou, NÃO recria — o painel segue de onde ele voltou (evita re-pausar quem entra cedo)
+        const jaTemFimDia=apt.pausas.some(p=>p&&p.tipo==='fimdia'&&p.inicio&&Math.abs(new Date(p.inicio).getTime()-refFim)<60000);
         const pausadoAgora=apt.pausas.some(p=>p&&!p.fim);
         if(!jaTemFimDia&&!pausadoAgora&&aptStart<refFim){
           apt.pausas.push({inicio:new Date(refFim).toISOString(),fim:null,tipo:'fimdia',tipoLabel:'🌙 Fim do dia',auto:true,_breakKey:dataStr+'_fimdia'});
@@ -1437,7 +1460,9 @@ async function estadoServidor(aptId){
   }catch(e){return null;}
 }
 
+let _finalizandoAcao=false;
 async function confirmarFin(aptId){
+  if(_finalizandoAcao)return; // trava anti-duplo-clique
   if(!_semErro&&!_errosSel.length){toast('Selecione "Nenhum erro" ou indique o tipo.');return;}
   // valida resposta sobre erro de projeto
   if(_erroProjeto===null){toast('Indique se houve erro de projeto.');return;}
@@ -1447,6 +1472,8 @@ async function confirmarFin(aptId){
   const el=document.getElementById(`obsErroFin-${aptId}`);
   const obsErro=el?el.value.trim():'';
   const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
+  _finalizandoAcao=true;
+  try{
 
   // PROTEÇÃO: verifica se outra pessoa já avançou este painel
   const srvApt=await estadoServidor(aptId);
@@ -1489,6 +1516,10 @@ async function confirmarFin(aptId){
     const isMfResp2=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
     toast('Enviado para Montagem Final 🔍');
     if(isMfResp2)switchTab('mf');
+  }
+
+  } finally {
+    _finalizandoAcao=false;
   }
 }
 function startTimer(aptId,apt){

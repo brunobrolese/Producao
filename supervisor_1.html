@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v61</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v63</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -1080,7 +1080,9 @@ function aplicarPausasAutoSup(colaborador){
       if(!isNaN(fimMs)&&nowMs>=fimMs){refFim=fimMs;}                       // à noite: fim de hoje
       else if(iniMs!=null&&!isNaN(iniMs)&&nowMs<iniMs){refFim=fimMs-86400000;} // madrugada: fim de ontem
       if(refFim!=null){
-        const jaTemFimDia=apt.pausas.some(p=>p&&!p.fim&&p.tipo==='fimdia');
+        // já existe pausa "fim do dia" para este ponto (aberta OU já retomada pelo colaborador)?
+        // se ele já retomou, NÃO recria — o painel segue de onde ele voltou (evita re-pausar quem entra cedo)
+        const jaTemFimDia=apt.pausas.some(p=>p&&p.tipo==='fimdia'&&p.inicio&&Math.abs(new Date(p.inicio).getTime()-refFim)<60000);
         const pausadoAgora=apt.pausas.some(p=>p&&!p.fim);
         if(!jaTemFimDia&&!pausadoAgora&&aptStart<refFim){
           apt.pausas.push({inicio:new Date(refFim).toISOString(),fim:null,tipo:'fimdia',tipoLabel:'🌙 Fim do dia',auto:true,_breakKey:dataStr+'_fimdia'});

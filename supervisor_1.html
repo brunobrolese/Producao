@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v63</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v64</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -158,6 +158,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('obs',this)">📝 Observações</button>
     <button onclick="nav('ana',this)">🔎 Análise de Erros</button>
+    <button onclick="nav('analise',this)">📈 Análise do Mês</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -403,6 +404,25 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         </div>
       </div>
       <div id="rel-conteudo"></div>
+    </div>
+
+    <!-- ANÁLISE DO MÊS -->
+    <div id="page-analise" class="page">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+        <span style="font-size:14px;color:#666;">Análise consolidada do mês para levar à gerência.</span>
+        <select id="anaMesSel" onchange="renderAnaliseMes()" style="padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-left:auto;"></select>
+      </div>
+      <div id="analise-conteudo"></div>
+      <div class="card" style="margin-top:14px;border-top:3px solid #7c3aed;">
+        <h3>✨ Resumo com IA (opcional)</h3>
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">A IA lê os números acima e escreve uma análise executiva. Precisa de uma chave da API da Anthropic (fica salva só neste dispositivo). Tem custo por uso, cobrado na sua conta da Anthropic.</div>
+        <div class="frow" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:2;min-width:220px;"><label style="font-size:12px;color:#666;">Chave da API (sk-ant-...)</label><input id="iaKey" type="password" placeholder="sk-ant-..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;"/></div>
+          <div style="flex:1;min-width:160px;"><label style="font-size:12px;color:#666;">Modelo</label><input id="iaModelo" value="claude-haiku-4-5-20251001" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;"/></div>
+          <button class="btn" style="background:#7c3aed;" onclick="analiseComIA()">✨ Gerar análise com IA</button>
+        </div>
+        <div id="ia-output" style="margin-top:12px;"></div>
+      </div>
     </div>
 
     <!-- ANÁLISE DE ERROS -->
@@ -1188,6 +1208,7 @@ function nav(id,btn){
   if(id==='rel')popularRelColab();
   if(id==='obs')renderObservacoes();
   if(id==='ana')popularAnaMeses();
+  if(id==='analise'){popularAnaliseMeses();renderAnaliseMes();}
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -3152,6 +3173,200 @@ function renderLiveProdutividade(){
     ${semMeta?'<div style="font-size:11px;color:#BA7517;margin-top:6px;">⚠ Cadastre o tempo previsto (chapa/elétrica) nos modelos para calcular a produtividade.</div>':''}
   </div>`;
 }
+// ══════════════ ANÁLISE DO MÊS ══════════════
+function _mesAnterior(mesStr){
+  const p=String(mesStr).split('-');const y=+p[0],m=+p[1];
+  const d=new Date(y,m-2,1);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function _nomeMes(mesStr){
+  const meses=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const p=String(mesStr).split('-');return (meses[(+p[1])-1]||'?')+'/'+p[0];
+}
+function analiseMesDados(mesStr){
+  const fMes=iso=>mesLocalStr(iso)===mesStr;
+  const mesAnt=_mesAnterior(mesStr);
+  const fAnt=iso=>mesLocalStr(iso)===mesAnt;
+  const refMes=a=>mesLocalStr((a&&a.mf&&a.mf.fim)||(a&&a.fim)||(a&&a.inicio)||'');
+  const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+
+  const concluidos=apts.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&fMes(a.mf.fim));
+  const concluidosAnt=apts.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&fAnt(a.mf.fim));
+  const porModelo={};
+  concluidos.forEach(a=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);const cod=m?m.codigo:(a.modeloLabel||'—');porModelo[cod]=(porModelo[cod]||0)+1;});
+  const topModelos=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]);
+
+  const setores=calcSetorStatsSup(fMes);
+  const setoresAnt=calcSetorStatsSup(fAnt);
+  const efGeral=(st)=>{const gp=st.chapa.somaPrev+st.eletrica.somaPrev,gr=st.chapa.somaReal+st.eletrica.somaReal;return gr>0?Math.round(gp/gr*100):null;};
+  const geral=efGeral(setores),geralAnt=efGeral(setoresAnt);
+
+  const mesApts=apts.filter(a=>refMes(a)===mesStr);
+  const comRetrab=mesApts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length);
+  const retrabSetores={};
+  comRetrab.forEach(a=>a.retrabalho.setores.forEach(s=>retrabSetores[s]=(retrabSetores[s]||0)+1));
+  const comItensFalt=mesApts.filter(a=>a.itensFaltando);
+  const comErros=mesApts.filter(a=>a.erros&&a.erros.length);
+
+  let atrasados=0,totalComparaveis=0,somaOver=0,pior=null;
+  apts.forEach(a=>{
+    if((a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral')&&a.fim&&fMes(a.fim)){
+      const setor=a.setor==='geral'?'eletrica':a.setor;
+      const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+      const prev=tempoModeloSetor(m,setor);
+      if(prev>0){const liq=tempoLiquido(a);totalComparaveis++;if(liq>prev){atrasados++;const over=liq-prev;somaOver+=over;if(!pior||over>pior.over)pior={op:a.opNum,over,setor};}}
+    }
+  });
+  let sLiq=0,sBruto=0;['chapa','eletrica'].forEach(k=>{sLiq+=setores[k].somaLiq;sBruto+=setores[k].somaBruto;});
+  const aproveitamento=sBruto>0?Math.round(sLiq/sBruto*100):null;
+
+  const porColab={};
+  concluidos.forEach(a=>{if(a.colabId!=null)porColab[a.colabId]=(porColab[a.colabId]||0)+1;});
+  let destaque=null;
+  Object.entries(porColab).forEach(([id,n])=>{if(!destaque||n>destaque.n){const c=(S.colaboradores||[]).find(x=>x&&String(x.id)===String(id));destaque={nome:c?c.nome:'—',n};}});
+
+  return {mesStr,mesAnt,concluidos:concluidos.length,concluidosAnt:concluidosAnt.length,topModelos,
+    setores,setoresAnt,geral,geralAnt,retrab:comRetrab.length,retrabSetores,itensFalt:comItensFalt.length,
+    erros:comErros.length,atrasados,totalComparaveis,mediaOver:atrasados?Math.round(somaOver/atrasados):0,pior,
+    aproveitamento,destaque,totalPaineis:mesApts.length};
+}
+function analiseHeuristica(d){
+  const positivos=[],atencao=[],recomendacoes=[];
+  const pctRetrab=d.totalPaineis?Math.round(d.retrab/d.totalPaineis*100):0;
+  const pctItens=d.totalPaineis?Math.round(d.itensFalt/d.totalPaineis*100):0;
+  const pctAtraso=d.totalComparaveis?Math.round(d.atrasados/d.totalComparaveis*100):0;
+  if(d.concluidosAnt>0){const delta=d.concluidos-d.concluidosAnt,pct=Math.round(delta/d.concluidosAnt*100);
+    if(delta>0)positivos.push('Produção subiu '+pct+'% vs mês anterior ('+d.concluidosAnt+' → '+d.concluidos+' quadros).');
+    else if(delta<0)atencao.push('Produção caiu '+Math.abs(pct)+'% vs mês anterior ('+d.concluidosAnt+' → '+d.concluidos+' quadros).');}
+  if(d.geral!=null){
+    if(d.geral>=90)positivos.push('Produtividade geral de '+d.geral+'% (dentro/acima da meta).');
+    else if(d.geral<70)atencao.push('Produtividade geral baixa: '+d.geral+'%.');
+    if(d.geralAnt!=null){const dd=d.geral-d.geralAnt;if(dd>=3)positivos.push('Produtividade melhorou '+dd+' pontos vs mês anterior.');else if(dd<=-3)atencao.push('Produtividade caiu '+Math.abs(dd)+' pontos vs mês anterior.');}
+  }
+  ['chapa','eletrica'].forEach(k=>{const s=d.setores[k];if(s.eficiencia!=null){
+    if(s.eficiencia<70){atencao.push('Setor '+s.nome+' com eficiência de '+s.eficiencia+'% (gargalo).');recomendacoes.push('Investigar o setor '+s.nome+': revisar tempos previstos, disponibilidade de material e capacitação.');}
+    else if(s.eficiencia>=100)positivos.push('Setor '+s.nome+' muito produtivo: '+s.eficiencia+'%.');}});
+  if(d.retrab>0){const sr=Object.entries(d.retrabSetores).sort((a,b)=>b[1]-a[1]).map(x=>x[0]+' ('+x[1]+')').join(', ');
+    if(pctRetrab>=10){atencao.push('Retrabalho alto: '+d.retrab+' casos ('+pctRetrab+'% dos painéis). Setores: '+sr+'.');recomendacoes.push('Reduzir retrabalho nos setores '+sr+' — inspeção na origem e checklist mais rígido.');}
+    else atencao.push('Retrabalho: '+d.retrab+' casos ('+pctRetrab+'%). Setores: '+sr+'.');}
+  else positivos.push('Nenhum retrabalho registrado no mês.');
+  if(d.itensFalt>0){atencao.push('Itens faltando em '+d.itensFalt+' painéis ('+pctItens+'%) — indica falha de abastecimento.');if(pctItens>=10)recomendacoes.push('Revisar o abastecimento de materiais: itens faltando estão travando a produção com frequência.');}
+  if(d.atrasados>0){atencao.push(d.atrasados+' de '+d.totalComparaveis+' painéis passaram do tempo previsto ('+pctAtraso+'%), em média +'+d.mediaOver+'min.');}
+  if(d.destaque)positivos.push('Destaque de produção: '+d.destaque.nome+' ('+d.destaque.n+' quadros).');
+  if(d.aproveitamento!=null&&d.aproveitamento<75)atencao.push('Aproveitamento de tempo de '+d.aproveitamento+'% (muito tempo em pausas).');
+  if(!recomendacoes.length&&!atencao.length)recomendacoes.push('Manter o ritmo — indicadores saudáveis no mês.');
+  return {positivos,atencao,recomendacoes};
+}
+function _fmtMin(m){return m>=60?Math.floor(m/60)+'h'+(m%60?' '+(m%60)+'min':''):m+'min';}
+function popularAnaliseMeses(){
+  const sel=document.getElementById('anaMesSel');
+  if(!sel)return;
+  const set=new Set();
+  (S.apontamentos||[]).forEach(a=>{if(!a)return;const ref=(a.mf&&a.mf.fim)||a.fim||a.inicio;if(ref){const m=mesLocalStr(ref);if(m)set.add(m);}});
+  const atual=mesLocalStr(new Date());set.add(atual);
+  const meses=Array.from(set).sort().reverse();
+  const prev=sel.value;
+  sel.innerHTML=meses.map(m=>'<option value="'+m+'">'+_nomeMes(m)+'</option>').join('');
+  if(prev&&meses.includes(prev))sel.value=prev; else sel.value=atual;
+}
+function renderAnaliseMes(){
+  const sel=document.getElementById('anaMesSel');
+  const cont=document.getElementById('analise-conteudo');
+  if(!cont)return;
+  const mesStr=sel&&sel.value?sel.value:mesLocalStr(new Date());
+  const d=analiseMesDados(mesStr);
+  const h=analiseHeuristica(d);
+  const corProd=p=>p==null?'#9ca3af':p>=90?'#16a34a':p>=70?'#f59e0b':'#dc2626';
+  const setasProd=(d.geralAnt!=null&&d.geral!=null)?(d.geral>d.geralAnt?'▲':d.geral<d.geralAnt?'▼':'▬'):'';
+  const deltaProd=(d.concluidosAnt>0)?(()=>{const p=Math.round((d.concluidos-d.concluidosAnt)/d.concluidosAnt*100);return (p>=0?'+':'')+p+'%';})():'—';
+
+  // KPIs
+  let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">';
+  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Quadros concluídos</div><div style="font-size:34px;font-weight:800;">'+d.concluidos+'</div><div style="font-size:12px;color:#888;">'+deltaProd+' vs '+_nomeMes(d.mesAnt)+'</div></div>';
+  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Produtividade geral</div><div style="font-size:34px;font-weight:800;color:'+corProd(d.geral)+';">'+(d.geral==null?'—':d.geral+'%')+' <span style="font-size:16px;">'+setasProd+'</span></div><div style="font-size:12px;color:#888;">eficiência (previsto ÷ real)</div></div>';
+  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Retrabalho</div><div style="font-size:34px;font-weight:800;color:'+(d.retrab?'#dc2626':'#16a34a')+';">'+d.retrab+'</div><div style="font-size:12px;color:#888;">painéis com retrabalho</div></div>';
+  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Itens faltando</div><div style="font-size:34px;font-weight:800;color:'+(d.itensFalt?'#BA7517':'#16a34a')+';">'+d.itensFalt+'</div><div style="font-size:12px;color:#888;">painéis afetados</div></div>';
+  html+='</div>';
+
+  // produtividade por setor
+  html+='<div class="card"><h3>Produtividade por setor</h3><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">';
+  ['chapa','eletrica','mf'].forEach(k=>{const s=d.setores[k];
+    if(s.temMeta)html+='<div style="text-align:center;padding:8px;background:#fafafa;border-radius:8px;"><div style="font-size:13px;font-weight:700;color:'+s.cor+';">'+s.icone+' '+s.nome+'</div><div style="font-size:28px;font-weight:800;color:'+corProd(s.eficiencia)+';">'+(s.eficiencia==null?'—':s.eficiencia+'%')+'</div><div style="font-size:11px;color:#888;">'+s.volume+' painéis · '+(s.tempoMedio?_fmtMin(s.tempoMedio):'—')+'</div></div>';
+    else html+='<div style="text-align:center;padding:8px;background:#fafafa;border-radius:8px;"><div style="font-size:13px;font-weight:700;color:'+s.cor+';">'+s.icone+' '+s.nome+'</div><div style="font-size:28px;font-weight:800;color:#6d28d9;">'+s.volume+'</div><div style="font-size:11px;color:#888;">inspecionados</div></div>';});
+  html+='</div>';
+  if(d.topModelos.length)html+='<div style="margin-top:10px;font-size:13px;color:#555;"><strong>Modelos mais produzidos:</strong> '+d.topModelos.slice(0,5).map(x=>x[0]+' ('+x[1]+')').join(', ')+'</div>';
+  html+='</div>';
+
+  // pontos positivos e atenção
+  const lista=(arr,cor,bg)=>arr.length?arr.map(t=>'<div style="padding:8px 12px;background:'+bg+';border-left:4px solid '+cor+';border-radius:6px;margin-bottom:8px;font-size:14px;">'+t+'</div>').join(''):'<div style="font-size:13px;color:#999;padding:6px;">Nada a destacar.</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;">';
+  html+='<div class="card"><h3 style="color:#15803d;">🟢 Pontos positivos</h3>'+lista(h.positivos,'#16a34a','#f0fdf4')+'</div>';
+  html+='<div class="card"><h3 style="color:#b91c1c;">🔴 Pontos de atenção</h3>'+lista(h.atencao,'#dc2626','#fef2f2')+'</div>';
+  html+='</div>';
+  if(h.recomendacoes.length)html+='<div class="card"><h3 style="color:#b45309;">💡 Recomendações</h3>'+lista(h.recomendacoes,'#f59e0b','#fffbeb')+'</div>';
+
+  // resumo executivo (texto copiável)
+  const resumo=montarResumoTexto(d,h);
+  html+='<div class="card"><h3>📋 Resumo executivo (para a apresentação)</h3>'
+    +'<textarea id="anaResumoTxt" readonly style="width:100%;min-height:220px;font-family:inherit;font-size:13px;line-height:1.5;padding:12px;border:1px solid #ddd;border-radius:8px;resize:vertical;">'+resumo.replace(/</g,'&lt;')+'</textarea>'
+    +'<button class="btn" style="margin-top:8px;" onclick="copiarResumoAnalise()">📋 Copiar resumo</button></div>';
+
+  cont.innerHTML=html;
+}
+function montarResumoTexto(d,h){
+  const L=[];
+  L.push('ANÁLISE DE PRODUÇÃO — '+_nomeMes(d.mesStr).toUpperCase());
+  L.push('');
+  L.push('PRODUÇÃO');
+  L.push('- Quadros concluídos: '+d.concluidos+(d.concluidosAnt?' (mês anterior: '+d.concluidosAnt+')':''));
+  if(d.topModelos.length)L.push('- Modelos mais produzidos: '+d.topModelos.slice(0,5).map(x=>x[0]+' ('+x[1]+')').join(', '));
+  L.push('');
+  L.push('PRODUTIVIDADE (eficiência = tempo previsto ÷ tempo real)');
+  L.push('- Geral (chapa + elétrica): '+(d.geral==null?'sem dados':d.geral+'%')+(d.geralAnt!=null?' (mês anterior: '+d.geralAnt+'%)':''));
+  ['chapa','eletrica'].forEach(k=>{const s=d.setores[k];L.push('- '+s.nome+': '+(s.eficiencia==null?'sem tempo previsto cadastrado':s.eficiencia+'%')+' ('+s.volume+' painéis)');});
+  L.push('- Montagem Final: '+d.setores.mf.volume+' inspecionados');
+  L.push('');
+  L.push('PONTOS POSITIVOS');
+  h.positivos.forEach(t=>L.push('- '+t));
+  L.push('');
+  L.push('PONTOS DE ATENÇÃO');
+  (h.atencao.length?h.atencao:['- Nenhum ponto crítico no mês.']).forEach(t=>L.push(h.atencao.length?'- '+t:t));
+  L.push('');
+  L.push('RECOMENDAÇÕES');
+  h.recomendacoes.forEach(t=>L.push('- '+t));
+  return L.join('\n');
+}
+function copiarResumoAnalise(){
+  const t=document.getElementById('anaResumoTxt');
+  if(!t)return;
+  t.select();
+  try{navigator.clipboard.writeText(t.value);toast('Resumo copiado! 📋');}
+  catch(e){document.execCommand('copy');toast('Resumo copiado! 📋');}
+}
+async function analiseComIA(){
+  const out=document.getElementById('ia-output');
+  const sel=document.getElementById('anaMesSel');
+  const keyEl=document.getElementById('iaKey');
+  const key=((keyEl&&keyEl.value)||localStorage.getItem('anthropicKey')||'').trim();
+  if(!key){out.innerHTML='<div style="color:#b45309;font-size:13px;">Cole sua chave da API da Anthropic no campo acima para gerar a análise por IA.</div>';return;}
+  localStorage.setItem('anthropicKey',key);
+  const modelo=((document.getElementById('iaModelo')||{}).value||'claude-haiku-4-5-20251001').trim();
+  const mesStr=sel&&sel.value?sel.value:mesLocalStr(new Date());
+  const d=analiseMesDados(mesStr);
+  out.innerHTML='<div style="color:#666;font-size:14px;">⏳ Analisando com IA… (alguns segundos)</div>';
+  const prompt='Você é um analista de produção industrial. Com base nos dados do mês de uma fábrica de painéis elétricos, escreva uma análise executiva em português do Brasil, pronta para uma apresentação à gerência. Seja objetivo, use títulos e tópicos curtos. Estruture em: 1) Visão geral da produção, 2) Produtividade por setor, 3) Principais problemas e riscos, 4) Pontos positivos, 5) Recomendações práticas e priorizadas. Não invente números além dos fornecidos.\n\nDADOS DO MÊS (JSON):\n'+JSON.stringify(d);
+  try{
+    const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+      headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:modelo,max_tokens:1600,messages:[{role:'user',content:prompt}]})});
+    if(!resp.ok){const t=await resp.text();out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Erro da API ('+resp.status+'). Verifique a chave e o nome do modelo.<br><span style="color:#999;">'+String(t).substring(0,300).replace(/</g,'&lt;')+'</span></div>';return;}
+    const data=await resp.json();
+    const txt=(data.content||[]).map(b=>b&&b.type==='text'?b.text:'').join('\n').trim();
+    out.innerHTML='<div style="white-space:pre-wrap;line-height:1.55;font-size:14px;background:#fff;padding:14px;border:1px solid #e5e5e5;border-radius:8px;">'+(txt||'(sem resposta)').replace(/</g,'&lt;')+'</div>'
+      +'<button class="btn" style="margin-top:8px;" onclick="(function(){const t=document.createElement(\'textarea\');t.value=document.getElementById(\'ia-output\').innerText;document.body.appendChild(t);t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand(\'copy\');}document.body.removeChild(t);toast(\'Copiado! 📋\');})()">📋 Copiar análise da IA</button>';
+  }catch(e){out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Falha ao chamar a IA: '+e.message+'. Verifique a conexão e a chave.</div>';}
+}
+
 function renderProdutividade(){
   renderProdSetores();
   const div=document.getElementById('prod-conteudo');

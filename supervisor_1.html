@@ -99,7 +99,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v64</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v67</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -439,6 +439,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <!-- OBSERVAÇÕES -->
     <div id="page-obs" class="page">
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Todas as observações que os colaboradores registraram, separadas por área (use o filtro de data no topo).</div>
+      <div id="erros-relatorio"></div>
       <div id="obs-conteudo"></div>
     </div>
 
@@ -2708,6 +2709,132 @@ async function classificarManual(aptId,origem,obsIdx,categoria){
   renderObservacoes();
   toast(val?'✓ Reclassificado':'↩ Voltou para automático');
 }
+// ══════════ RELATÓRIOS DE ERROS (aba Observações) ══════════
+const _SETOR_NOME={chapa:'Chapa',eletrica:'Elétrica',mf:'Montagem Final',geral:'Geral'};
+function dadosErros(filtroFn){
+  filtroFn=filtroFn||dentroFiltro;
+  const ocorrencias=[],porTipo={},porSetor={};
+  (S.apontamentos||[]).forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa')return;
+    const tem=(a.erros&&a.erros.length)||(a.obsErro||'').trim();
+    if(!tem)return;
+    const h=a.fim||a.inicio;
+    if(h&&!filtroFn(h))return;
+    const tipos=(a.erros&&a.erros.length)?a.erros.slice():['(sem tipo)'];
+    const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId)||{};
+    const c=(S.colaboradores||[]).find(x=>x&&x.id===a.colabId)||{};
+    const setor=a.setor||'geral';
+    ocorrencias.push({op:a.opNum||'—',modelo:m.codigo||a.modeloLabel||'—',setor,colab:c.nome||'—',data:h,tipos,obs:(a.obsErro||'').trim()});
+    tipos.forEach(t=>porTipo[t]=(porTipo[t]||0)+1);
+    porSetor[setor]=(porSetor[setor]||0)+1;
+  });
+  const totalTipos=Object.values(porTipo).reduce((s,n)=>s+n,0);
+  const ranking=Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([tipo,n])=>({tipo,n,pct:totalTipos?Math.round(n/totalTipos*100):0}));
+  const rankingSetor=Object.entries(porSetor).sort((a,b)=>b[1]-a[1]).map(([s,n])=>({setor:_SETOR_NOME[s]||s,n}));
+  ocorrencias.sort((a,b)=>new Date(b.data||0)-new Date(a.data||0));
+  return {ocorrencias,porTipo,porSetor,ranking,rankingSetor,totalOcorrencias:ocorrencias.length,totalTipos};
+}
+function renderRelatorioErros(){
+  const div=document.getElementById('erros-relatorio');
+  if(!div)return;
+  const d=dadosErros();
+  if(!d.totalOcorrencias){
+    div.innerHTML='<div class="card" style="border-top:3px solid #A32D2D;"><h3>🔧 Relatórios de erros</h3><p class="empty" style="padding:10px 4px;">Nenhum erro registrado no período selecionado.</p></div>';
+    return;
+  }
+  const fmtDta=(iso)=>{const dd=new Date(iso);return isNaN(dd)?'—':dd.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});};
+  // 1) PRIORIDADE (Pareto)
+  let acum=0;
+  const prio=d.ranking.map((r,i)=>{
+    acum+=r.pct;const top=i<2;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:'+(top?'#fef2f2':'#fafafa')+';border-radius:8px;margin-bottom:6px;">'
+      +'<div style="width:24px;height:24px;border-radius:50%;background:'+(top?'#dc2626':'#9ca3af')+';color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">'+(i+1)+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:700;">'+r.tipo+'</div>'
+      +'<div style="height:6px;background:#00000010;border-radius:99px;margin-top:4px;overflow:hidden;"><div style="height:100%;width:'+r.pct+'%;background:'+(top?'#dc2626':'#9ca3af')+';"></div></div></div>'
+      +'<div style="text-align:right;flex-shrink:0;"><div style="font-size:16px;font-weight:800;">'+r.n+'</div><div style="font-size:11px;color:#888;">'+r.pct+'% · acum '+acum+'%</div></div></div>';
+  }).join('');
+  const top=d.ranking[0];
+  const setorTop=d.rankingSetor[0];
+  const callout='<div style="background:#fef2f2;border-left:5px solid #dc2626;border-radius:8px;padding:12px 14px;margin-bottom:12px;">'
+    +'<div style="font-size:13px;font-weight:800;color:#b91c1c;">🎯 Ataque primeiro:</div>'
+    +'<div style="font-size:15px;font-weight:700;margin-top:2px;">'+top.tipo+' — '+top.n+' ocorrências ('+top.pct+'% de todos os erros)</div>'
+    +'<div style="font-size:13px;color:#666;margin-top:4px;">Setor mais afetado: <strong>'+(setorTop?setorTop.setor+' ('+setorTop.n+' erros)':'—')+'</strong>. Resolver os 2 primeiros tipos elimina '+Math.min(d.ranking.slice(0,2).reduce((s,r)=>s+r.pct,0),100)+'% dos erros.</div></div>';
+
+  // 2) ERROS POR TIPO (barras)
+  const maxN=Math.max.apply(null,d.ranking.map(r=>r.n));
+  const porTipoHtml=d.ranking.map(r=>'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+    +'<div style="width:150px;font-size:13px;flex-shrink:0;">'+r.tipo+'</div>'
+    +'<div style="flex:1;height:22px;background:#f0f0f0;border-radius:6px;overflow:hidden;"><div style="height:100%;width:'+Math.round(r.n/maxN*100)+'%;background:#A32D2D;border-radius:6px;"></div></div>'
+    +'<div style="width:70px;text-align:right;font-size:13px;font-weight:700;flex-shrink:0;">'+r.n+' ('+r.pct+'%)</div></div>').join('');
+
+  // 3) TODOS OS ERROS (lista detalhada)
+  const linhas=d.ocorrencias.map(o=>'<div style="padding:9px 4px;border-bottom:1px solid #f0f0f0;">'
+    +'<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+    +'<span style="font-size:13px;font-weight:700;">OP '+o.op+' <span style="color:#999;font-weight:400;">· '+o.modelo+'</span></span>'
+    +'<span style="font-size:12px;color:#888;">'+(_SETOR_NOME[o.setor]||o.setor)+' · '+o.colab+' · '+fmtDta(o.data)+'</span></div>'
+    +'<div style="font-size:13px;color:#A32D2D;font-weight:600;margin-top:2px;">'+o.tipos.join(', ')+'</div>'
+    +(o.obs?'<div style="font-size:12px;color:#555;margin-top:2px;">"'+o.obs+'"</div>':'')+'</div>').join('');
+
+  div.innerHTML='<div class="card" style="border-top:3px solid #A32D2D;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">🔧 Relatórios de erros</h3>'
+    +'<button class="btn" onclick="copiarRelatorioErros()">📋 Copiar relatório</button></div>'
+    +'<div style="font-size:12px;color:#888;margin:6px 0 14px;">'+d.totalOcorrencias+' painéis com erro · '+d.totalTipos+' erros no total (respeita o filtro de data do topo).</div>'
+    +'<h3 style="font-size:15px;color:#b91c1c;">🎯 Resumo e prioridade</h3>'+callout+prio
+    +'<h3 style="font-size:15px;margin-top:18px;">📊 Erros por tipo</h3>'+porTipoHtml
+    +'<h3 style="font-size:15px;margin-top:18px;">📈 Gráfico de Pareto</h3><div style="position:relative;height:300px;margin-top:6px;"><canvas id="paretoChart"></canvas></div>'
+    +'<h3 style="font-size:15px;margin-top:18px;">📋 Todos os erros ('+d.totalOcorrencias+')</h3>'+linhas
+    +'</div>';
+  renderParetoErros(d);
+}
+let _paretoChart=null;
+function renderParetoErros(d){
+  const cv=document.getElementById('paretoChart');
+  if(!cv||typeof Chart==='undefined')return;
+  if(_paretoChart){try{_paretoChart.destroy();}catch(e){}}
+  const labels=d.ranking.map(r=>r.tipo), counts=d.ranking.map(r=>r.n);
+  let ac=0;const cum=d.ranking.map(r=>{ac+=r.pct;return Math.min(ac,100);});
+  _paretoChart=new Chart(cv.getContext('2d'),{
+    data:{labels,datasets:[
+      {type:'bar',label:'Ocorrências',data:counts,backgroundColor:'#A32D2D',yAxisID:'y',order:2},
+      {type:'line',label:'% acumulado',data:cum,borderColor:'#2563eb',backgroundColor:'#2563eb',yAxisID:'y1',order:1,tension:0.2,pointRadius:4,fill:false}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}},
+      scales:{
+        y:{beginAtZero:true,position:'left',title:{display:true,text:'Ocorrências'},ticks:{precision:0}},
+        y1:{beginAtZero:true,position:'right',max:100,grid:{drawOnChartArea:false},title:{display:true,text:'% acumulado'},ticks:{callback:v=>v+'%'}}
+      }}
+  });
+}
+function montarRelatorioErrosTexto(){
+  const d=dadosErros();
+  const L=[];
+  L.push('RELATÓRIO DE ERROS');
+  L.push('');
+  if(!d.totalOcorrencias){L.push('Nenhum erro registrado no período.');return L.join('\n');}
+  L.push('RESUMO E PRIORIDADE (o que atacar primeiro):');
+  let acum=0;
+  d.ranking.forEach((r,i)=>{acum+=r.pct;L.push((i+1)+'. '+r.tipo+' — '+r.n+' ('+r.pct+'%, acumulado '+acum+'%)'+(i<2?'  <== ATACAR PRIMEIRO':''));});
+  L.push('');
+  L.push('Setor mais afetado: '+(d.rankingSetor[0]?d.rankingSetor[0].setor+' ('+d.rankingSetor[0].n+' erros)':'—'));
+  L.push('');
+  L.push('ERROS POR TIPO:');
+  d.ranking.forEach(r=>L.push('- '+r.tipo+': '+r.n+' ('+r.pct+'%)'));
+  L.push('');
+  L.push('ERROS POR SETOR:');
+  d.rankingSetor.forEach(s=>L.push('- '+s.setor+': '+s.n));
+  L.push('');
+  L.push('TODOS OS ERROS ('+d.totalOcorrencias+'):');
+  const fmt=(iso)=>{const dd=new Date(iso);return isNaN(dd)?'—':dd.toLocaleDateString('pt-BR');};
+  d.ocorrencias.forEach(o=>L.push('- OP '+o.op+' | '+(_SETOR_NOME[o.setor]||o.setor)+' | '+o.colab+' | '+fmt(o.data)+' | '+o.tipos.join(', ')+(o.obs?' | "'+o.obs+'"':'')));
+  return L.join('\n');
+}
+function copiarRelatorioErros(){
+  const txt=montarRelatorioErrosTexto();
+  const t=document.createElement('textarea');t.value=txt;document.body.appendChild(t);t.select();
+  try{navigator.clipboard.writeText(txt);}catch(e){document.execCommand('copy');}
+  document.body.removeChild(t);toast('Relatório de erros copiado! 📋');
+}
+
 function coletarObservacoes(filtroFn){
   const arr=[];
   const ok=(d)=>!d||(filtroFn?filtroFn(d):dentroFiltro(d)); // filtra pela data da PRÓPRIA observação
@@ -2950,6 +3077,7 @@ function exportarAnalise(){
   toast('📥 Análise exportada');
 }
 function renderObservacoes(){
+  renderRelatorioErros();
   const div=document.getElementById('obs-conteudo');
   if(!div)return;
   const buscaEl=document.getElementById('obsBusca');
@@ -3309,7 +3437,8 @@ function renderAnaliseMes(){
   const resumo=montarResumoTexto(d,h);
   html+='<div class="card"><h3>📋 Resumo executivo (para a apresentação)</h3>'
     +'<textarea id="anaResumoTxt" readonly style="width:100%;min-height:220px;font-family:inherit;font-size:13px;line-height:1.5;padding:12px;border:1px solid #ddd;border-radius:8px;resize:vertical;">'+resumo.replace(/</g,'&lt;')+'</textarea>'
-    +'<button class="btn" style="margin-top:8px;" onclick="copiarResumoAnalise()">📋 Copiar resumo</button></div>';
+    +'<button class="btn" style="margin-top:8px;" onclick="copiarResumoAnalise()">📋 Copiar resumo</button> '
+    +'<button id="btnPptx" class="btn" style="margin-top:8px;background:#C43E1C;" onclick="gerarPowerPoint()">📊 Gerar PowerPoint</button></div>';
 
   cont.innerHTML=html;
 }
@@ -3365,6 +3494,93 @@ async function analiseComIA(){
     out.innerHTML='<div style="white-space:pre-wrap;line-height:1.55;font-size:14px;background:#fff;padding:14px;border:1px solid #e5e5e5;border-radius:8px;">'+(txt||'(sem resposta)').replace(/</g,'&lt;')+'</div>'
       +'<button class="btn" style="margin-top:8px;" onclick="(function(){const t=document.createElement(\'textarea\');t.value=document.getElementById(\'ia-output\').innerText;document.body.appendChild(t);t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand(\'copy\');}document.body.removeChild(t);toast(\'Copiado! 📋\');})()">📋 Copiar análise da IA</button>';
   }catch(e){out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Falha ao chamar a IA: '+e.message+'. Verifique a conexão e a chave.</div>';}
+}
+
+function carregarPptx(){
+  return new Promise((resolve,reject)=>{
+    if(typeof PptxGenJS!=='undefined')return resolve();
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error('não foi possível carregar o gerador de PowerPoint (verifique a internet)'));
+    document.head.appendChild(s);
+  });
+}
+function montarPptx(P,d,h,de){
+  P.layout='LAYOUT_WIDE';
+  const nomeMes=_nomeMes(d.mesStr);
+  const C={verde:'16a34a',verm:'dc2626',ambar:'f59e0b',roxo:'7c3aed',cinza:'6b7280'};
+  const titulo=(s,t)=>{s.addText(t,{x:0.6,y:0.35,w:12.1,h:0.8,fontSize:30,bold:true,color:'1a1a1a'});s.addShape(P.ShapeType.line,{x:0.6,y:1.2,w:12.1,h:0,line:{color:'E5E5E5',width:1}});};
+  const bullets=(s,arr,y0)=>{
+    if(!arr.length){s.addText('Nada a destacar.',{x:0.7,y:y0,w:12,h:0.4,fontSize:16,color:'9CA3AF'});return;}
+    s.addText(arr.map(t=>({text:t,options:{bullet:{code:'2022'},color:'333333',fontSize:16,paraSpaceAfter:10}})),{x:0.7,y:y0,w:12,h:5.5,valign:'top'});
+  };
+  // 1 — capa
+  let s=P.addSlide();s.background={color:'0F1115'};
+  s.addText('Análise de Produção',{x:0.7,y:2.5,w:11.9,h:1,fontSize:44,bold:true,color:'FFFFFF'});
+  s.addText(nomeMes,{x:0.7,y:3.6,w:11.9,h:0.6,fontSize:26,color:'4ADE80'});
+  s.addText('Procer — Painéis Elétricos',{x:0.7,y:6.5,w:11.9,h:0.5,fontSize:14,color:'6B7280'});
+  // 2 — produção
+  s=P.addSlide();titulo(s,'Produção do mês');
+  const kpi=(x,lbl,val,sub,cor)=>{
+    s.addShape(P.ShapeType.roundRect,{x,y:1.6,w:2.9,h:2,fill:{color:'F4F5F7'},line:{color:'E5E5E5',width:1},rectRadius:0.1});
+    s.addText(lbl,{x,y:1.78,w:2.9,h:0.4,fontSize:11,color:'6B7280',align:'center',bold:true});
+    s.addText(val,{x,y:2.15,w:2.9,h:0.9,fontSize:40,bold:true,color:cor,align:'center'});
+    s.addText(sub,{x,y:3.05,w:2.9,h:0.4,fontSize:11,color:'9CA3AF',align:'center'});
+  };
+  const deltaTxt=d.concluidosAnt>0?((d.concluidos-d.concluidosAnt>=0?'+':'')+Math.round((d.concluidos-d.concluidosAnt)/d.concluidosAnt*100)+'% vs '+_nomeMes(d.mesAnt)):'—';
+  kpi(0.7,'QUADROS CONCLUÍDOS',String(d.concluidos),deltaTxt,'1A1A1A');
+  kpi(3.75,'PRODUTIVIDADE GERAL',d.geral==null?'—':d.geral+'%','previsto ÷ real',d.geral==null?C.cinza:(d.geral>=90?C.verde:d.geral>=70?C.ambar:C.verm));
+  kpi(6.8,'RETRABALHO',String(d.retrab),'painéis',d.retrab?C.verm:C.verde);
+  kpi(9.85,'ITENS FALTANDO',String(d.itensFalt),'painéis',d.itensFalt?C.ambar:C.verde);
+  if(d.topModelos.length)s.addText('Modelos mais produzidos:   '+d.topModelos.slice(0,5).map(x=>x[0]+' ('+x[1]+')').join('     '),{x:0.7,y:4.2,w:12,h:0.6,fontSize:15,color:'444444'});
+  // 3 — produtividade por setor
+  s=P.addSlide();titulo(s,'Produtividade por setor');
+  const hdr=t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'}}});
+  const rows=[[hdr('Setor'),hdr('Produtividade'),hdr('Painéis'),hdr('Tempo médio')]];
+  ['chapa','eletrica'].forEach(k=>{const x=d.setores[k];rows.push([x.nome,x.eficiencia==null?'—':x.eficiencia+'%',String(x.volume),x.tempoMedio?_fmtMin(x.tempoMedio):'—']);});
+  rows.push(['Montagem Final','—',String(d.setores.mf.volume)+' inspec.',d.setores.mf.tempoMedio?_fmtMin(d.setores.mf.tempoMedio):'—']);
+  s.addTable(rows,{x:0.7,y:1.7,w:12,fontSize:16,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.6,valign:'middle',align:'center'});
+  // 4 — positivos
+  s=P.addSlide();titulo(s,'Pontos positivos');bullets(s,h.positivos,1.6);
+  // 5 — atenção
+  s=P.addSlide();titulo(s,'Pontos de atenção');bullets(s,h.atencao.length?h.atencao:['Nenhum ponto crítico no mês.'],1.6);
+  // 6 — principais erros e prioridades (Pareto)
+  if(de&&de.totalOcorrencias){
+    s=P.addSlide();titulo(s,'Principais erros e prioridades');
+    s.addChart(P.ChartType.bar,[{name:'Ocorrências',labels:de.ranking.map(r=>r.tipo),values:de.ranking.map(r=>r.n)}],
+      {x:0.6,y:1.5,w:7.2,h:5,barDir:'bar',chartColors:['A32D2D'],showValue:true,catAxisLabelFontSize:10,dataLabelFontSize:11,valAxisMinVal:0});
+    const top=de.ranking[0];
+    const box=[{text:'🎯 Atacar primeiro',options:{bold:true,color:'B91C1C',fontSize:16,paraSpaceAfter:6}},
+      {text:top.tipo+' — '+top.n+' ocorrências ('+top.pct+'%)',options:{fontSize:14,color:'333333',paraSpaceAfter:4}},
+      {text:'Setor mais afetado: '+(de.rankingSetor[0]?de.rankingSetor[0].setor+' ('+de.rankingSetor[0].n+')':'—'),options:{fontSize:13,color:'555555',paraSpaceAfter:12}},
+      {text:'Ranking:',options:{bold:true,fontSize:13,color:'444444',paraSpaceAfter:4}}];
+    de.ranking.slice(0,7).forEach((r,i)=>box.push({text:(i+1)+'. '+r.tipo+' — '+r.n+' ('+r.pct+'%)',options:{fontSize:12,color:'555555',paraSpaceAfter:3}}));
+    s.addText(box,{x:8.1,y:1.6,w:4.6,h:5,valign:'top'});
+  }
+  // 7 — recomendações
+  s=P.addSlide();titulo(s,'Recomendações');bullets(s,h.recomendacoes,1.6);
+  return P;
+}
+async function gerarPowerPoint(){
+  const sel=document.getElementById('anaMesSel');
+  const mesStr=sel&&sel.value?sel.value:mesLocalStr(new Date());
+  const btn=document.getElementById('btnPptx');
+  const orig=btn?btn.textContent:'';
+  if(btn){btn.disabled=true;btn.textContent='⏳ Gerando...';}
+  try{
+    await carregarPptx();
+    const d=analiseMesDados(mesStr),h=analiseHeuristica(d);
+    const de=dadosErros(iso=>mesLocalStr(iso)===mesStr);
+    const P=new PptxGenJS();
+    montarPptx(P,d,h,de);
+    await P.writeFile({fileName:'Analise_Producao_'+mesStr+'.pptx'});
+    toast('PowerPoint gerado! 📊');
+  }catch(e){
+    toast('Erro ao gerar PowerPoint: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent=orig||'📊 Gerar PowerPoint';}
+  }
 }
 
 function renderProdutividade(){

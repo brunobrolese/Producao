@@ -90,6 +90,7 @@ body.telao .live-nome{font-size:22px!important;}
 body.telao .live-tempo{font-size:23px!important;}
 body.telao .live-toggle{display:none!important;}
 body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;top:16px;right:16px;z-index:99999;background:#dc2626;color:#fff;border:none;padding:11px 18px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;}
+.hide{display:none!important;}
 </style>
 </head>
 <body>
@@ -99,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v67</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v71</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -159,6 +160,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('obs',this)">📝 Observações</button>
     <button onclick="nav('ana',this)">🔎 Análise de Erros</button>
     <button onclick="nav('analise',this)">📈 Análise do Mês</button>
+    <button onclick="nav('pedidos',this)">📦 Pedidos</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -322,6 +324,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         <button class="btn" onclick="addModelo()">Cadastrar modelo</button>
         <div id="modMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
       </div>
+      <div id="ajuste-tempos"></div>
       <div class="card"><h3>📋 Modelos cadastrados (<span id="modCount">0</span>)</h3><div id="mod-lista"></div></div>
     </div>
 
@@ -425,12 +428,29 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
       </div>
     </div>
 
+    <!-- PEDIDOS -->
+    <div id="page-pedidos" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">Suba a planilha de pedidos para ver, por mês, o que está pronto e cruzar com a produção do sistema. Suba a versão atualizada todo dia.</div>
+      <div class="card" style="border-top:3px solid #2563eb;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <label class="btn" style="background:#2563eb;cursor:pointer;margin:0;">📤 Carregar planilha (.xlsx)
+            <input type="file" accept=".xlsx,.xls,.csv" onchange="carregarPlanilhaPedidos(this)" style="display:none;"/>
+          </label>
+          <span id="pedStatus" style="font-size:13px;color:#666;"></span>
+        </div>
+      </div>
+      <div id="pedidos-conteudo"></div>
+    </div>
+
     <!-- ANÁLISE DE ERROS -->
     <div id="page-ana" class="page">
       <div style="font-size:13px;color:#666;margin-bottom:14px;">Análise mensal dos erros por categoria, com plano de ação para corrigi-los.</div>
-      <div class="frow" style="max-width:280px;margin-bottom:16px;">
+      <div class="frow" style="max-width:560px;margin-bottom:16px;gap:10px;">
         <div style="flex:1;"><label>Mês</label>
           <select id="anaMes" onchange="anaTrocarMes()"></select>
+        </div>
+        <div style="flex:1;"><label>Categoria</label>
+          <select id="anaCat" onchange="anaTrocarCat()"></select>
         </div>
       </div>
       <div id="ana-conteudo"></div>
@@ -1210,6 +1230,7 @@ function nav(id,btn){
   if(id==='obs')renderObservacoes();
   if(id==='ana')popularAnaMeses();
   if(id==='analise'){popularAnaliseMeses();renderAnaliseMes();}
+  if(id==='pedidos')renderPedidos();
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -1578,8 +1599,93 @@ function tempoModeloSetor(m,setor){
   if(setor==='eletrica')return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
   return 0;
 }
+// ══════════ AJUSTE DE TEMPOS (média aparada da produção real) ══════════
+function _mediaAparada(valores){
+  const v=(valores||[]).filter(x=>typeof x==='number'&&x>0).sort((a,b)=>a-b);
+  if(v.length<3)return null; // precisa remover o menor e o maior e ainda sobrar pelo menos 1
+  const meio=v.slice(1,-1); // descarta o menor e o maior (fora da curva)
+  return Math.round(meio.reduce((s,x)=>s+x,0)/meio.length);
+}
+function _temposReais(modeloId,setor){
+  const out=[];
+  (S.apontamentos||[]).forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa'||!a.fim||a.modeloId!==modeloId)return;
+    const s=(a.setor==='geral')?'eletrica':a.setor;
+    if(s!==setor)return;
+    const t=tempoLiquido(a);
+    if(t>0)out.push(t);
+  });
+  return out;
+}
+function sugestoesTempos(){
+  return (S.modelos||[]).filter(m=>m).map(m=>{
+    const cha=_temposReais(m.id,'chapa'), ele=_temposReais(m.id,'eletrica');
+    return {id:m.id, codigo:m.codigo||'—', descricao:m.descricao||'',
+      chapa:{atual:m.tempoChapa||0, sugerido:_mediaAparada(cha), n:cha.length},
+      eletrica:{atual:m.tempoEletrica||0, sugerido:_mediaAparada(ele), n:ele.length}};
+  });
+}
+function aplicarTempo(modeloId,setor){
+  const m=(S.modelos||[]).find(x=>x&&String(x.id)===String(modeloId)); if(!m)return;
+  const sug=_mediaAparada(_temposReais(m.id,setor));
+  if(sug==null){toast('Poucos dados para calcular (mínimo 3 quadros).');return;}
+  if(setor==='chapa')m.tempoChapa=sug; else {m.tempoEletrica=sug;m.tempoPrevisto=sug;}
+  save();
+  toast('Tempo de '+(setor==='chapa'?'chapa':'elétrica')+' do '+(m.codigo||'')+' → '+sug+' min.');
+  renderModelos();
+}
+function aplicarTodosTempos(){
+  if(!confirm('Atualizar o tempo previsto de TODOS os modelos com 3+ quadros pela média real da produção? Isso substitui os tempos atuais.'))return;
+  let n=0;
+  (S.modelos||[]).forEach(m=>{
+    if(!m)return;
+    const sc=_mediaAparada(_temposReais(m.id,'chapa'));
+    const se=_mediaAparada(_temposReais(m.id,'eletrica'));
+    if(sc!=null){m.tempoChapa=sc;n++;}
+    if(se!=null){m.tempoEletrica=se;m.tempoPrevisto=se;n++;}
+  });
+  save();
+  toast(n+' tempo(s) atualizados pela média real.');
+  renderModelos();
+}
+function renderAjusteTempos(){
+  const div=document.getElementById('ajuste-tempos');
+  if(!div)return;
+  const sugs=sugestoesTempos();
+  const comDados=sugs.filter(s=>s.chapa.sugerido!=null||s.eletrica.sugerido!=null);
+  const cel=(o,setor,id)=>{
+    if(o.sugerido==null)return '<span style="font-size:12px;color:#bbb;">'+(o.n?o.n+' quadros (mín. 3)':'sem dados')+'</span>';
+    const dif=o.sugerido-o.atual;
+    const cor=o.atual===0?'#2563eb':(dif>0?'#b45309':dif<0?'#15803d':'#6b7280');
+    const tag=o.atual?((dif>0?'▲':dif<0?'▼':'=')+Math.abs(dif)):'novo';
+    return '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'
+      +'<span style="font-size:13px;color:#999;">'+(o.atual||'—')+'</span><span style="color:#ccc;">→</span>'
+      +'<span style="font-size:15px;font-weight:800;color:'+cor+';">'+o.sugerido+'min</span>'
+      +'<span style="font-size:11px;color:#aaa;">('+o.n+' quadros · '+tag+')</span>'
+      +'<button class="btn" style="padding:3px 10px;font-size:11px;width:auto;margin:0;" onclick="aplicarTempo('+id+',&quot;'+setor+'&quot;)">aplicar</button></div>';
+  };
+  let html='<div class="card" style="border-top:3px solid #2563eb;">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⏱ Ajuste de tempos pela produção real</h3>'
+    +(comDados.length?'<button class="btn" onclick="aplicarTodosTempos()">✓ Aplicar todos</button>':'')+'</div>'
+    +'<div style="font-size:12px;color:#888;margin:6px 0 12px;">Média dos tempos reais de cada modelo, <strong>descartando o menor e o maior</strong> (fora da curva). Precisa de pelo menos 3 quadros por setor. Aplique para o tempo previsto virar a média real.</div>';
+  if(!comDados.length){
+    html+='<p class="empty" style="padding:8px 0;">Ainda não há modelos com 3+ quadros concluídos para calcular a média. Conforme a produção rodar, as sugestões aparecem aqui.</p></div>';
+    div.innerHTML=html;return;
+  }
+  html+='<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">'
+    +'<tr style="text-align:left;color:#888;border-bottom:1px solid #eee;"><th style="padding:6px 8px;">Modelo</th><th style="padding:6px 8px;">🔧 Chapa (atual → sugerido)</th><th style="padding:6px 8px;">⚡ Elétrica (atual → sugerido)</th></tr>';
+  comDados.forEach(s=>{
+    html+='<tr style="border-bottom:1px solid #f2f2f2;"><td style="padding:8px;font-weight:700;">'+s.codigo+'</td>'
+      +'<td style="padding:8px;">'+cel(s.chapa,'chapa',s.id)+'</td>'
+      +'<td style="padding:8px;">'+cel(s.eletrica,'eletrica',s.id)+'</td></tr>';
+  });
+  html+='</table></div></div>';
+  div.innerHTML=html;
+}
+
 function renderModelos(){
   if(!S.modelos)S.modelos=[];
+  renderAjusteTempos();
   // migração: modelos antigos só têm tempoPrevisto → vira tempoEletrica
   S.modelos.forEach(m=>{if(!m)return;if(m&&m.tempoEletrica==null&&m.tempoPrevisto!=null)m.tempoEletrica=m.tempoPrevisto;});
   const cnt=document.getElementById('modCount');if(cnt)cnt.textContent=S.modelos.length;
@@ -2868,6 +2974,7 @@ function coletarObservacoes(filtroFn){
   return arr;
 }
 // ── ANÁLISE DE ERROS (mensal, com plano de ação) ──
+let _anaCat='';
 let _anaMes=null;
 // sugestões de ação por categoria — ponto de partida, não substituem a análise de causa raiz com a equipe
 const SUGESTOES_ACAO={
@@ -2898,6 +3005,11 @@ function anaTrocarMes(){
   _anaMes=sel?sel.value:null;
   renderAnalise();
 }
+function anaTrocarCat(){
+  const s=document.getElementById('anaCat');
+  _anaCat=s?s.value:'';
+  renderAnalise();
+}
 function anaMesesDisponiveis(){
   const meses=new Set();
   coletarObservacoes(()=>true).forEach(o=>{if(o.hora)meses.add(mesLocalStr(o.hora));});
@@ -2913,6 +3025,8 @@ function popularAnaMeses(){
   sel.innerHTML=meses.map(m=>`<option value="${m}">${nomeMes(m)}</option>`).join('');
   if(!_anaMes||!meses.includes(_anaMes))_anaMes=meses[0];
   sel.value=_anaMes;
+  const selCat=document.getElementById('anaCat');
+  if(selCat){selCat.innerHTML='<option value="">Todas as categorias</option>'+CATEGORIAS_ERRO.map(cc=>`<option value="${cc.key}">${cc.label}</option>`).join('');selCat.value=_anaCat||'';}
   renderAnalise();
 }
 function anaErrosDoMes(mes){
@@ -3009,7 +3123,7 @@ function renderAnalise(){
   // ── PLANO DE AÇÃO por categoria ──
   const statusCor={aberto:'#A32D2D','em_andamento':'#BA7517',concluido:'#1D9E75'};
   const statusLbl={aberto:'Aberto','em_andamento':'Em andamento',concluido:'Concluído'};
-  const planos=ordenadas.filter(c=>cont[c.key]>0).map(c=>{
+  const planoCard=(c)=>{
     const a=anaGetAcao(_anaMes,c.key);
     const exemplos=erros.filter(o=>o._cat===c.key).slice(0,3);
     const sug=SUGESTOES_ACAO[c.key]||[];
@@ -3036,7 +3150,33 @@ function renderAnalise(){
         <button class="btn" style="margin-top:0;padding:8px 14px;width:auto;" onclick="anaSalvarAcao('${c.key}')">✓ Salvar</button>
       </div>
     </div>`;
-  }).join('');
+  };
+  const planos=ordenadas.filter(c=>cont[c.key]>0).map(planoCard).join('');
+
+  // ── FILTRO POR CATEGORIA: mostra só os erros da categoria escolhida ──
+  if(_anaCat){
+    const c=CAT_ERRO_LBL[_anaCat]||CATEGORIAS_ERRO.find(x=>x.key==='outros');
+    const itens=(_anaCat==='outros')?naoClass:erros.filter(o=>o._cat===_anaCat);
+    const nAnt=(_anaCat==='outros')?0:(contAnt[_anaCat]||0);
+    const dif=itens.length-nAnt;
+    const seta=nAnt===0?'':(dif>0?`<span style="color:#A32D2D;">▲${dif}</span>`:(dif<0?`<span style="color:#1D9E75;">▼${Math.abs(dif)}</span>`:'<span style="color:#999;">→</span>'));
+    const linhas=itens.length?itens.map(o=>`<div style="padding:9px 4px;border-bottom:1px solid #f0f0f0;">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:700;">OP ${escHtmlObs(o.opNum||'—')} <span style="color:#999;font-weight:400;">· ${escHtmlObs(o.modeloLabel||'—')}</span></span>
+          <span style="font-size:12px;color:#888;">${OBS_AREA_LBL[o.setor]||o.setor||''} · ${escHtmlObs(o.colab||'—')} · ${o.hora?new Date(o.hora).toLocaleDateString('pt-BR'):''}</span>
+        </div>
+        <div style="font-size:13px;color:#333;margin-top:2px;">“${escHtmlObs((o.texto||'').substring(0,200))}”</div>
+      </div>`).join(''):'<p class="empty" style="padding:12px 4px;">Nenhum erro desta categoria neste mês.</p>';
+    div.innerHTML=`<div style="background:#fff;border:1px solid #eee;border-left:4px solid ${c.cor};border-radius:12px;padding:16px;margin-bottom:14px;">
+        <div style="font-size:18px;font-weight:800;color:${c.cor};">${c.label}</div>
+        <div style="font-size:13px;color:#666;margin-top:4px;">${itens.length} erro(s) neste mês ${seta}</div>
+      </div>
+      <div style="background:#fff;border:1px solid #eee;border-radius:12px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">📋 Erros desta categoria (${itens.length})</div>${linhas}
+      </div>
+      ${_anaCat!=='outros'?('<div style="font-size:16px;font-weight:800;margin-bottom:10px;">🛠 Plano de ação</div>'+planoCard(c)):''}`;
+    return;
+  }
 
   div.innerHTML=cards+pareto+quebra+
     `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -3581,6 +3721,107 @@ async function gerarPowerPoint(){
   }finally{
     if(btn){btn.disabled=false;btn.textContent=orig||'📊 Gerar PowerPoint';}
   }
+}
+
+// ══════════ PEDIDOS (planilha × produção) ══════════
+let _pedidos=null;
+const _MES_NOME=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function carregarSheetJS(){
+  return new Promise((res,rej)=>{
+    if(typeof XLSX!=='undefined')return res();
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+    s.onload=()=>res(); s.onerror=()=>rej(new Error('não foi possível carregar o leitor de planilha (verifique a internet)'));
+    document.head.appendChild(s);
+  });
+}
+function _pMesDe(v){if(v==null||v==='')return null;if(v instanceof Date)return v.getMonth()+1;const n=parseInt(v);return isNaN(n)?null:(n>=1&&n<=12?n:null);}
+function _pMesData(v){if(!v)return null;const d=(v instanceof Date)?v:new Date(v);return isNaN(d)?null:d.getMonth()+1;}
+function _pAnoData(v){if(!v)return null;const d=(v instanceof Date)?v:new Date(v);return isNaN(d)?null:d.getFullYear();}
+function _pBucket(s){s=String(s).trim().toUpperCase();if(s==='FATURADO'||s==='EXPEDIÇÃO')return 'pronto';if(s.indexOf('MONTAGEM')>=0||s==='TESTE')return 'producao';if(s==='CANCELADO')return 'cancelado';return 'pendente';}
+function parsePedidos(rows){
+  if(!rows||!rows.length)return[];
+  const header=rows[0].map(h=>String(h==null?'':h).trim().toUpperCase());
+  const idx=n=>header.indexOf(n);
+  const iOP=idx('OP'),iChic=idx('CHICOTES'),iStatus=idx('STATUS'),iMes=idx('MÊS'),iAno=idx('ANO'),iDesc=idx('DESCRIÇÃO'),iPed=idx('PEDIDO'),iEnvio=idx('DATA ENVIO'),iEntrega=idx('DATA ENTREGA');
+  const out=[];
+  for(let r=1;r<rows.length;r++){
+    const row=rows[r];if(!row)continue;
+    const op=iOP>=0?row[iOP]:null,chic=iChic>=0?row[iChic]:null,status=iStatus>=0?String(row[iStatus]||'').trim():'';
+    if((op==null||op==='')&&(chic==null||chic==='')&&!status)continue;
+    const dataRef=iEnvio>=0?row[iEnvio]:(iEntrega>=0?row[iEntrega]:null);
+    let mes=_pMesDe(iMes>=0?row[iMes]:null); if(mes==null)mes=_pMesData(dataRef);
+    let ano=(iAno>=0&&row[iAno])?parseInt(row[iAno]):null; if(!ano)ano=_pAnoData(dataRef);
+    const cand=[];[op,chic].forEach(v=>{if(v==null)return;const ms=String(v).match(/\d{4,}/g);if(ms)ms.forEach(n=>{if(cand.indexOf(n)<0)cand.push(n);});});
+    out.push({pedido:(iPed>=0&&row[iPed]!=null)?row[iPed]:'',op:op==null?'':op,chicotes:chic==null?'':chic,status,bucket:_pBucket(status),mes,ano,desc:iDesc>=0?String(row[iDesc]||''):'',cand});
+  }
+  return out;
+}
+async function carregarPlanilhaPedidos(input){
+  const file=input&&input.files&&input.files[0];
+  if(!file)return;
+  const st=document.getElementById('pedStatus');
+  if(st)st.textContent='⏳ Lendo planilha...';
+  try{
+    await carregarSheetJS();
+    const buf=await file.arrayBuffer();
+    let wb=XLSX.read(buf,{type:'array',cellDates:true,sheets:['Pedidos']});
+    let name=wb.SheetNames.indexOf('Pedidos')>=0?'Pedidos':wb.SheetNames[0];
+    if(!wb.Sheets[name]){wb=XLSX.read(buf,{type:'array',cellDates:true});name=wb.SheetNames[0];}
+    const sheet=wb.Sheets[name];
+    if(sheet&&sheet['!ref']){const R=XLSX.utils.decode_range(sheet['!ref']);R.e.r=Math.min(R.e.r,9999);R.e.c=Math.min(R.e.c,40);sheet['!ref']=XLSX.utils.encode_range(R);}
+    const rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+    _pedidos=parsePedidos(rows);
+    try{localStorage.setItem('pedidosCache',JSON.stringify({at:Date.now(),peds:_pedidos}));}catch(e){}
+    if(st)st.textContent='✓ '+_pedidos.length+' pedidos lidos — '+file.name;
+    renderPedidos();
+  }catch(e){ if(st)st.textContent='Erro ao ler a planilha: '+e.message; }
+}
+function opsConcluidasSet(){
+  const set=new Set();
+  (S.apontamentos||[]).forEach(a=>{if(a&&a.etapa==='concluido'&&a.mf&&a.mf.fim&&a.opNum!=null){const n=String(a.opNum).replace(/\D/g,'');if(n)set.add(n);}});
+  return set;
+}
+function renderPedidos(){
+  const div=document.getElementById('pedidos-conteudo');
+  if(!div)return;
+  if(!_pedidos){try{const c=JSON.parse(localStorage.getItem('pedidosCache')||'null');if(c&&c.peds)_pedidos=c.peds;}catch(e){}}
+  if(!_pedidos||!_pedidos.length){div.innerHTML='<p class="empty" style="padding:16px 0;">Suba a planilha de pedidos acima para ver a análise por mês.</p>';return;}
+  const concl=opsConcluidasSet();
+  const prod=p=>p.cand&&p.cand.some(n=>concl.has(n));
+  const grupos={};
+  _pedidos.forEach(p=>{const key=(p.ano||'0000')+'-'+String(p.mes||0).padStart(2,'0');(grupos[key]=grupos[key]||[]).push(p);});
+  const keys=Object.keys(grupos).sort().reverse();
+  const badge=(txt,cor,bg)=>'<span style="display:inline-block;background:'+bg+';color:'+cor+';border-radius:99px;padding:2px 9px;font-size:12px;font-weight:700;">'+txt+'</span>';
+  const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const tot=_pedidos.length, totProd=_pedidos.filter(prod).length;
+  let html='<div class="card" style="border-top:3px solid #2563eb;"><div style="font-size:13px;color:#555;">'+tot+' pedidos na planilha · <strong style="color:#15803d;">'+totProd+'</strong> já produzidos no sistema (OP concluída na Montagem Final)</div>'
+    +'<div style="font-size:11px;color:#aaa;margin-top:4px;">"Produzido no sistema" = a OP/chicote do pedido bate com um painel concluído aqui no programa. O status colorido vem da própria planilha.</div></div>';
+  keys.forEach(k=>{
+    const arr=grupos[k];
+    const parts=k.split('-'),ano=parts[0],mes=parseInt(parts[1]);
+    const nome=(_MES_NOME[mes]||'Sem mês')+(ano&&ano!=='0000'?'/'+ano:'');
+    const b={pronto:0,producao:0,pendente:0,cancelado:0};arr.forEach(p=>b[p.bucket]++);
+    const nProd=arr.filter(prod).length;
+    const bcor={pronto:['#15803d','#f0fdf4'],producao:['#b45309','#fffbeb'],pendente:['#3550B4','#eef2ff'],cancelado:['#b91c1c','#fef2f2']};
+    const linhas=arr.map(p=>{
+      const bc=bcor[p.bucket]||['#666','#f5f5f5'];const pz=prod(p);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 4px;border-bottom:1px solid #f2f2f2;flex-wrap:wrap;">'
+        +'<div style="min-width:0;"><span style="font-size:13px;font-weight:700;">OP '+esc(p.op||'—')+'</span> <span style="font-size:12px;color:#999;">· ped '+esc(p.pedido||'—')+'</span>'
+        +'<div style="font-size:11px;color:#aaa;overflow:hidden;text-overflow:ellipsis;max-width:360px;white-space:nowrap;">'+esc((p.desc||'').substring(0,70))+'</div></div>'
+        +'<div style="display:flex;align-items:center;gap:6px;">'+(pz?badge('✓ produzido','#15803d','#dcfce7'):'')+badge(esc(p.status||'—'),bc[0],bc[1])+'</div></div>';
+    }).join('');
+    html+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;cursor:pointer;" onclick="this.parentElement.querySelector(&quot;.ped-lista&quot;).classList.toggle(&quot;hide&quot;)">'
+      +'<div style="font-size:17px;font-weight:800;">'+nome+' <span style="font-size:13px;color:#999;font-weight:400;">· '+arr.length+' pedidos ▾</span></div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+      +badge('✅ '+b.pronto+' prontos','#15803d','#f0fdf4')
+      +(b.producao?badge('🔧 '+b.producao+' produção','#b45309','#fffbeb'):'')
+      +(b.pendente?badge('⏳ '+b.pendente+' pendentes','#3550B4','#eef2ff'):'')
+      +(b.cancelado?badge('❌ '+b.cancelado+' cancel.','#b91c1c','#fef2f2'):'')
+      +(nProd?badge('✓ '+nProd+' no sistema','#15803d','#dcfce7'):'')
+      +'</div></div><div class="ped-lista hide" style="margin-top:10px;">'+linhas+'</div></div>';
+  });
+  div.innerHTML=html;
 }
 
 function renderProdutividade(){

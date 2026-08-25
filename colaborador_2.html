@@ -1,69 +1,261 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Painel do Gerente — Produção</title>
+<meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Apontamento — Painéis Elétricos</title>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:system-ui,-apple-system,sans-serif;background:#0f1115;color:#fff;padding:20px 22px;min-height:100vh;}
-  .topo{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:20px;}
-  .titulo{font-size:30px;font-weight:800;display:flex;align-items:center;gap:12px;}
-  .relogio{font-size:30px;font-weight:800;color:#4ade80;font-variant-numeric:tabular-nums;}
-  .periodos{display:flex;gap:8px;flex-wrap:wrap;}
-  .pbtn{background:#1e222b;color:#c7cdd6;border:1px solid #2a2f3a;padding:10px 20px;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;}
-  .pbtn.ativo{background:#2563eb;color:#fff;border-color:#2563eb;}
-  .geral{background:#161a22;border:1px solid #232833;border-radius:16px;padding:20px 24px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
-  .geral .lbl{font-size:16px;color:#8b93a1;font-weight:600;}
-  .geral .big{font-size:56px;font-weight:800;line-height:1;}
-  .geral .sub{font-size:15px;color:#8b93a1;margin-top:4px;}
-  .setores{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
-  .setor{background:#fff;color:#111;border-radius:16px;padding:22px 22px 20px;border-top:8px solid #ccc;}
-  .setor .cab{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;margin-bottom:14px;}
-  .setor .prodlbl{font-size:15px;color:#666;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}
-  .setor .prod{font-size:72px;font-weight:800;line-height:1;margin:2px 0 10px;}
-  .setor .barra{height:12px;background:#0000000f;border-radius:99px;overflow:hidden;margin-bottom:16px;}
-  .setor .barra > div{height:100%;border-radius:99px;}
-  .setor .linhas{display:flex;gap:10px;}
-  .setor .cel{flex:1;background:#f4f5f7;border-radius:10px;padding:10px 12px;text-align:center;}
-  .setor .cel .n{font-size:26px;font-weight:800;color:#222;}
-  .setor .cel .t{font-size:13px;color:#777;font-weight:600;margin-top:2px;}
-  .rodape{margin-top:20px;text-align:center;font-size:14px;color:#5b6270;}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;margin-right:6px;vertical-align:middle;}
-  .dot.off{background:#ef4444;}
-  @media(max-width:900px){.setores{grid-template-columns:1fr;}.setor .prod{font-size:60px;}}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:15px;}
+.topbar{background:#1a1a1a;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.topbar h1{font-size:15px;font-weight:600;color:#fff;}
+.badge-col{background:#1D9E75;color:#fff;font-size:11px;padding:2px 9px;border-radius:99px;font-weight:500;}
+.sync-info{font-size:11px;color:#aaa;display:flex;align-items:center;gap:5px;}
+.dot{width:7px;height:7px;border-radius:50%;background:#1D9E75;display:inline-block;flex-shrink:0;}
+label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px;}
+input,select,textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;outline:none;font-family:inherit;}
+input:focus,select:focus,textarea:focus{border-color:#1D9E75;}
+textarea{resize:vertical;}
+.btn{background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:9px;font-size:14px;font-weight:600;border:none;cursor:pointer;width:100%;margin-top:12px;}
+.err{font-size:12px;color:#A32D2D;margin-top:6px;}
+.setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;padding:24px;text-align:center;}
+.setup h2{font-size:20px;font-weight:700;margin-bottom:6px;}
+.setup p{font-size:14px;color:#666;margin-bottom:20px;max-width:440px;}
+.setup-card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:20px 24px;width:100%;max-width:440px;text-align:left;}
+.setup-card h3{font-size:14px;font-weight:600;margin-bottom:14px;}
+.step{display:flex;gap:10px;margin-bottom:12px;font-size:13px;color:#555;align-items:flex-start;}
+.sn{width:22px;height:22px;border-radius:50%;background:#1a1a1a;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.select-screen{display:flex;flex-direction:column;align-items:center;padding:32px 20px;min-height:70vh;}
+.select-screen h2{font-size:20px;font-weight:700;margin-bottom:6px;}
+.select-screen p{font-size:14px;color:#888;margin-bottom:24px;}
+.colab-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;width:100%;max-width:560px;}
+.colab-btn{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:18px 12px;cursor:pointer;text-align:center;}
+.colab-btn:active{border-color:#1D9E75;background:#f5fbf7;}
+.c-avatar{width:48px;height:48px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:center;margin:0 auto 10px;}
+.c-nome{font-size:13px;font-weight:600;}
+.c-func{font-size:11px;color:#888;margin-top:2px;}
+.main{padding:14px 18px 80px;}
+.header-user{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
+.user-info{display:flex;align-items:center;gap:10px;}
+.u-avatar{width:40px;height:40px;border-radius:50%;background:#EAF3DE;color:#3B6D11;font-size:15px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.u-name{font-size:15px;font-weight:700;}
+.u-func{font-size:12px;color:#888;}
+.btn-sm{font-size:12px;padding:6px 12px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;color:#666;}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:500;}
+.bok{background:#EAF3DE;color:#3B6D11;} .bwarn{background:#FAEEDA;color:#854F0B;} .bgray{background:#f0f0f0;color:#888;} .bbad{background:#FCEBEB;color:#A32D2D;} .bpause{background:#E8EEFF;color:#3550B4;}
+.add-card{background:#fff;border:1.5px dashed #1D9E75;border-radius:12px;padding:14px 16px;margin-bottom:16px;cursor:pointer;text-align:center;color:#1D9E75;font-weight:600;font-size:14px;}
+.add-card:active{background:#f5fbf7;}
+.add-form{background:#fff;border:1.5px solid #1D9E75;border-radius:12px;padding:16px;margin-bottom:16px;}
+.add-form h4{font-size:14px;font-weight:700;margin-bottom:14px;color:#1a1a1a;}
+.confirm-card{background:#fff;border:2px solid #BA7517;border-radius:12px;padding:16px;margin-top:10px;}
+.confirm-card h4{font-size:15px;font-weight:700;margin-bottom:4px;}
+.confirm-card p{font-size:13px;color:#555;margin-bottom:16px;line-height:1.5;}
+.radio-group{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.radio-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e5e5e5;border-radius:9px;cursor:pointer;background:#fff;}
+.radio-opt.sel{border-color:#1D9E75;background:#f5fbf7;}
+.radio-opt.sel-bad{border-color:#A32D2D;background:#fff8f8;}
+.radio-label{font-size:13px;font-weight:600;}
+.radio-sub{font-size:11px;color:#888;margin-top:1px;}
+.btn-confirmar{width:100%;padding:13px;border-radius:10px;background:#1D9E75;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;margin-top:4px;}
+.btn-cancelar{width:100%;padding:10px;border-radius:10px;background:#fff;color:#888;font-size:13px;border:1px solid #ddd;cursor:pointer;margin-top:8px;}
+.op-sep{font-size:12px;font-weight:700;color:#888;padding:8px 0 6px;border-bottom:1px solid #e5e5e5;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.op-tag{font-size:15px;font-weight:700;}
+.op-mod{font-size:12px;color:#888;}
+.qcard{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+.qcard.andamento{border-color:#BA7517;background:#fffbf5;}
+.qcard.pausado{border-color:#3550B4;background:#f5f7ff;}
+.qcard.feito{border-color:#1D9E75;background:#f5fbf7;opacity:.82;}
+.qcard.feito-erro{border-color:#A32D2D;background:#fff8f8;opacity:.82;}
+.qh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;}
+.qnum{font-size:14px;font-weight:700;}
+.hora-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+.hora-item{font-size:12px;color:#888;}
+.hora-item span{color:#1a1a1a;font-weight:600;}
+.outros{font-size:12px;color:#aaa;margin-bottom:8px;}
+.btn-end{width:100%;padding:13px;border-radius:10px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.btn-pause{width:100%;padding:13px;border-radius:10px;background:#fff;color:#3550B4;font-size:14px;font-weight:700;border:2px solid #3550B4;cursor:pointer;}
+.pausa-selector{background:#EEF1FF;border:1.5px solid #3550B4;border-radius:12px;padding:14px;margin-top:8px;}
+.pausa-selector h5{font-size:13px;font-weight:700;color:#3550B4;margin-bottom:12px;}
+.pausa-tipos{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.pausa-tipo{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #ddd;border-radius:9px;cursor:pointer;background:#fff;}
+.pausa-tipo.sel{border-color:#3550B4;background:#f0f4ff;}
+.pausa-tipo-icon{font-size:20px;flex-shrink:0;}
+.pausa-tipo-label{font-size:13px;font-weight:600;}
+.pausa-tipo-sub{font-size:11px;color:#888;margin-top:1px;}
+.btn-confirmar-pausa{width:100%;padding:12px;border-radius:10px;background:#3550B4;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.btn-cancel-pausa{width:100%;padding:9px;border-radius:10px;background:#fff;color:#888;font-size:13px;border:1px solid #ddd;cursor:pointer;margin-top:6px;}
+.btn-resume{width:100%;padding:14px;border-radius:10px;background:#3550B4;color:#fff;font-size:15px;font-weight:700;border:none;cursor:pointer;}
+.acoes-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.timer-box{background:#FFF3E0;border-radius:9px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.timer-txt{font-size:14px;color:#BA7517;font-weight:700;}
+.timer-liq{font-size:11px;color:#888;}
+.pause-box{border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+.pause-box.intervalo{background:#FFF3E0;border:1.5px solid #f0c060;}
+.pause-box.atividade{background:#EEF1FF;border:1.5px solid #a0a8e8;}
+.pause-box.almoco{background:#FFF0F5;border:1.5px solid #e8a0c0;}
+.pause-box.fimdia{background:#F0F0F5;border:1.5px solid #c0c0d8;}
+.pause-box.default{background:#EEF1FF;border:1.5px solid #3550B4;}
+.pause-icon{font-size:32px;flex-shrink:0;line-height:1;}
+.pause-info{}
+.pause-txt{font-size:15px;font-weight:700;margin-bottom:3px;}
+.pause-txt.intervalo{color:#BA7517;}
+.pause-txt.atividade{color:#3550B4;}
+.pause-txt.almoco{color:#c0357a;}
+.pause-txt.fimdia{color:#555;}
+.pause-sub{font-size:12px;color:#888;}
+.obs-section{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f0;}
+.retrab-card{background:#fff;border:1.5px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-top:12px;}
+.retrab-card.ativo{border-color:#A32D2D;background:#fff8f8;}
+.retrab-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.retrab-header-info{}
+.retrab-title{font-size:13px;font-weight:700;color:#1a1a1a;}
+.retrab-sub{font-size:11px;color:#888;margin-top:2px;}
+.toggle-wrap{flex-shrink:0;margin-top:2px;}
+.toggle-btn{width:42px;height:24px;border-radius:99px;background:#ddd;border:none;cursor:pointer;position:relative;transition:background .2s;}
+.toggle-btn.on{background:#A32D2D;}
+.toggle-knob{width:20px;height:20px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle-btn.on .toggle-knob{left:20px;}
+.retrab-body{margin-top:14px;padding-top:14px;border-top:1px solid #f0f0f0;}
+.retrab-label{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+.setores-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.setor-btn{padding:10px 8px;border-radius:9px;border:1.5px solid #e5e5e5;background:#fff;text-align:center;font-size:12px;font-weight:600;color:#666;cursor:pointer;transition:all .15s;}
+.setor-btn:active{opacity:.8;}
+.setor-btn.sel{border-color:#A32D2D;background:#FCEBEB;color:#A32D2D;}
+.setor-icon{font-size:20px;margin-bottom:5px;}
+.retrab-obs{margin-top:8px;}
+.retrab-obs label{font-size:12px;color:#666;display:block;margin-bottom:4px;}
+.retrab-obs textarea{width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-family:inherit;resize:vertical;}
+.obs-section h5{font-size:12px;font-weight:700;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
+.obs-item{background:#f8f8f6;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:13px;}
+.obs-item .obs-hora{font-size:11px;color:#aaa;margin-bottom:2px;}
+.obs-input-row{display:flex;gap:8px;}
+.obs-input-row textarea{min-height:50px;font-size:13px;}
+.btn-obs{padding:8px 14px;border-radius:8px;background:#1a1a1a;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer;white-space:nowrap;align-self:flex-end;}
+.fin-panel{background:#fff;border:1.5px solid #1a1a1a;border-radius:12px;padding:16px;margin-top:10px;}
+.fin-panel h4{font-size:14px;font-weight:700;margin-bottom:14px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.chip{padding:7px 12px;border:1.5px solid #ddd;border-radius:99px;font-size:12px;font-weight:500;cursor:pointer;background:#fff;color:#555;}
+.chip.ativo{border-color:#A32D2D;background:#FCEBEB;color:#A32D2D;}
+.btn-confirmar-fin{width:100%;padding:13px;border-radius:10px;background:#1D9E75;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-top:14px;}
+.btn-cancel-fin{width:100%;padding:10px;border-radius:10px;background:#fff;color:#888;font-size:13px;border:1px solid #ddd;cursor:pointer;margin-top:8px;}
+.feito-msg{font-size:14px;font-weight:700;text-align:center;padding:6px 0;color:#3B6D11;}
+.feito-msg.erro{color:#A32D2D;}
+.itens-falt{background:#fff8f0;border:1px solid #f5c5a5;border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;color:#BA7517;}
+.empty{font-size:14px;color:#aaa;text-align:center;padding:40px 20px;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 24px;border-radius:12px;font-size:14px;display:none;z-index:999;text-align:center;}
+.sec-title{font-size:13px;font-weight:700;color:#1a1a1a;margin:20px 0 10px;padding-bottom:6px;border-bottom:2px solid #1a1a1a;}
+.modelo-desc{font-size:11px;color:#888;margin-top:3px;}
+.mf-card{background:#fff;border:1.5px solid #7c3aed;border-radius:12px;padding:14px 16px;margin-bottom:10px;}
+.mf-card.aprovado{border-color:#1D9E75;background:#f5fbf7;}
+.mf-card.reprovado{border-color:#A32D2D;background:#fff8f8;}
+.mf-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.mf-title{font-size:14px;font-weight:700;}
+.checklist{display:flex;flex-direction:column;gap:8px;margin-bottom:14px;}
+.check-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid #e5e5e5;border-radius:9px;background:#fff;cursor:pointer;}
+.check-item.ok{border-color:#1D9E75;background:#f5fbf7;}
+.check-item.nok{border-color:#A32D2D;background:#fff8f8;}
+.check-icon{font-size:18px;flex-shrink:0;}
+.check-label{font-size:13px;font-weight:600;flex:1;}
+.check-status{font-size:12px;font-weight:500;}
+.btn-aprovar{width:100%;padding:13px;border-radius:10px;background:#1D9E75;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;margin-bottom:8px;}
+.btn-reprovar{width:100%;padding:13px;border-radius:10px;background:#A32D2D;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;}
+.mf-obs{margin-top:10px;}
+.mf-obs label{font-size:12px;font-weight:700;color:#A32D2D;display:block;margin-bottom:4px;}
 </style>
 </head>
 <body>
-  <div class="topo">
-    <div class="titulo">🏭 Produção — Painel do Gerente</div>
-    <div class="relogio" id="relogio">--:--:--</div>
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <h1>Apontamento</h1>
+    <span class="badge-col">COLABORADOR</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v71</span>
   </div>
-
-  <div class="periodos" id="periodos" style="margin-bottom:18px;">
-    <button class="pbtn ativo" data-p="hoje" onclick="setPeriodo('hoje')">Hoje</button>
-    <button class="pbtn" data-p="semana" onclick="setPeriodo('semana')">Semana (7 dias)</button>
-    <button class="pbtn" data-p="mes" onclick="setPeriodo('mes')">Mês</button>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
+    <button onclick="abrirSupervisor()" style="font-size:11px;padding:4px 10px;border-radius:7px;border:1px solid #444;background:transparent;color:#aaa;cursor:pointer;">⚙ Supervisor</button>
   </div>
+</div>
 
-  <div class="geral">
-    <div>
-      <div class="lbl">Produtividade geral (Chapa + Elétrica)</div>
-      <div class="sub" id="geralSub">carregando…</div>
+<div id="setupScreen" class="setup" style="display:none;">
+  <h2>Configuração inicial</h2>
+  <p>Para sincronizar com o supervisor, informe a URL do banco de dados Firebase.</p>
+  <div class="setup-card">
+    <h3>🔗 Inserir URL do banco de dados</h3>
+    <div class="step"><span class="sn">1</span><span>Peça ao supervisor a <strong>URL do Firebase</strong></span></div>
+    <div class="step"><span class="sn">2</span><span>Cole abaixo e toque em <strong>Conectar</strong></span></div>
+    <label>URL do Firebase</label>
+    <input id="setupUrl" placeholder="https://seu-projeto-default-rtdb.firebaseio.com" type="url"/>
+    <div id="setupErr" class="err"></div>
+    <button class="btn" onclick="conectar()">Conectar</button>
+  </div>
+</div>
+
+<div id="selectScreen" class="select-screen" style="display:none;">
+  <h2>Quem é você?</h2>
+  <p>Toque no seu nome para começar.</p>
+  <div class="colab-grid" id="colabGrid"></div>
+</div>
+
+<div id="mainScreen" style="display:none;">
+  <div class="main">
+    <div class="header-user">
+      <div class="user-info">
+        <div class="u-avatar" id="uAvatar"></div>
+        <div><div class="u-name" id="uName"></div><div class="u-func" id="uFunc"></div></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sm" onclick="refresh()">↻ Atualizar</button>
+        <button class="btn-sm" onclick="trocar()">Trocar</button>
+      </div>
     </div>
-    <div class="big" id="geralProd" style="color:#4ade80;">—</div>
+    <div id="setorBadge" style="margin-bottom:10px;"></div>
+    <div id="pausasBadge" style="margin-bottom:10px;"></div>
+    <div id="semChapaArea" style="margin-bottom:10px;"></div>
+    <div id="addFormArea">
+      <div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>
+    </div>
+    <div id="opsDiv"></div>
+    <div id="filaEletricaDiv"></div>
+    <div id="mfDiv" style="display:none;">
+      <div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Montagem Final — Inspeção</div>
+      <div id="mfLista"></div>
+    </div>
   </div>
+</div>
 
-  <div class="setores" id="setores"></div>
+<!-- TABS COLABORADOR -->
+<div id="colTabs" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #e5e5e5;display:none;z-index:100;padding:8px 12px;gap:8px;justify-content:center;">
+  <button id="tab-producao" onclick="switchTab('producao')" style="flex:1;padding:10px;border-radius:9px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">▶ Produção</button>
+  <button id="tab-mf" onclick="switchTab('mf')" style="flex:1;padding:10px;border-radius:9px;border:1px solid #7c3aed;background:#fff;color:#7c3aed;font-size:13px;font-weight:600;cursor:pointer;">🔍 Mont. Final <span id="mfBadge" style="display:none;background:#A32D2D;color:#fff;border-radius:99px;padding:0 6px;font-size:11px;margin-left:4px;"></span></button>
+</div>
 
-  <div class="rodape" id="rodape"><span class="dot" id="statusDot"></span><span id="statusTxt">conectando…</span></div>
-
+<div class="toast" id="toast"></div>
 <script>
-const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis';
-let S={apontamentos:[],modelos:[],colaboradores:[],ops:[]};
-let _periodo='hoje';
+const DB_URL='https://producao-200d2-default-rtdb.firebaseio.com/paineis'; // URL fixa — não depende de localStorage
+let _dadosCarregados=false;
+// Gera ID único que nunca colide entre colaboradores/abas (timestamp + aleatório)
+function uid(){
+  return Date.now()*1000 + Math.floor(Math.random()*1000);
+}
+let _idsExcluidos=new Set(); // proteção: só salva após carregar do Firebase
+let S={colaboradores:[],ops:[],apontamentos:[],modelos:[],nid:1};
+let colab=null,timerIv=null,finalizando=null;
+let _semErro=false,_errosSel=[],_obsErro='';
+let _erroProjeto=null,_obsErroProjeto='';
+let _itensFaltando=null,_obsItens='';
+let _retrabAtivo={};  // {aptId: {ativo, setores[], obs}}
+const TIPOS_ERRO=['Erro de cabeamento','Componente incorreto','Falta de componente','Erro de montagem','Dano em componente','Erro de identificação','Outro'];
 
-// ── helpers de data local (mesmo padrão do sistema, evita erro de fuso) ──
+function ini(n){return n.split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();}
+function fmtH(iso){if(!iso)return'—';return new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+function fmtD(iso){if(!iso)return'';const d=new Date(iso);return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});}
+function durMin(a,b){if(!a||!b)return 0;return Math.round((new Date(b)-new Date(a))/60000);}
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',2400);}
+function setSync(ok){document.getElementById('dot').style.background=ok?'#1D9E75':'#A32D2D';document.getElementById('syncTxt').textContent=ok?'sincronizado':'sem conexão';}
+
 function dataLocalStr(x){
   if(!x)return '';
   const d=(x instanceof Date)?x:new Date(x);
@@ -71,40 +263,46 @@ function dataLocalStr(x){
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function mesLocalStr(x){return dataLocalStr(x).substring(0,7);}
-
-// ── tempo líquido (idêntico ao do sistema) ──
 function tempoLiquido(apt){
+  // se houver tempo definido manualmente pelo supervisor, ele tem prioridade
   if(apt&&apt.tempoManual!=null&&apt.tempoManual!==''&&!isNaN(apt.tempoManual))return Math.max(0,Math.round(Number(apt.tempoManual)));
   if(!apt||!apt.inicio)return 0;
   const ini=new Date(apt.inicio).getTime();
   if(isNaN(ini))return 0;
   const fimMs=apt.fim?new Date(apt.fim).getTime():Date.now();
   if(isNaN(fimMs)||fimMs<=ini)return 0;
+  // Normaliza as pausas: descarta invalidas, RECORTA ao intervalo do apontamento,
+  // ORDENA por inicio e FUNDE sobreposicoes. Assim pausas fora da janela (ex.: apos o
+  // supervisor corrigir inicio/fim) ou fora de ordem nao distorcem o tempo.
   const ps=[];
   (apt.pausas||[]).forEach(p=>{
     if(!p||!p.inicio)return;
-    let s=new Date(p.inicio).getTime();if(isNaN(s))return;
-    let e=p.fim?new Date(p.fim).getTime():fimMs;if(isNaN(e))e=fimMs;
-    s=Math.max(s,ini);e=Math.min(e,fimMs);
+    let s=new Date(p.inicio).getTime();
+    if(isNaN(s))return;
+    let e=p.fim?new Date(p.fim).getTime():fimMs; // pausa aberta corre ate o fim (ou agora)
+    if(isNaN(e))e=fimMs;
+    s=Math.max(s,ini);
+    e=Math.min(e,fimMs);
     if(e>s)ps.push([s,e]);
   });
   ps.sort((a,b)=>a[0]-b[0]);
   let pausado=0,curS=null,curE=null;
-  for(const par of ps){const s=par[0],e=par[1];
+  for(const par of ps){
+    const s=par[0],e=par[1];
     if(curS===null){curS=s;curE=e;}
     else if(s<=curE){if(e>curE)curE=e;}
-    else{pausado+=curE-curS;curS=s;curE=e;}}
+    else{pausado+=curE-curS;curS=s;curE=e;}
+  }
   if(curS!==null)pausado+=curE-curS;
   return Math.max(0,Math.round((fimMs-ini-pausado)/60000));
 }
-function tempoModeloSetor(m,setor){
-  if(!m)return 0;
-  if(setor==='chapa')return m.tempoChapa||0;
-  if(setor==='eletrica')return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
-  return 0;
+
+function estaPausado(apt){
+  if(!apt||apt.fim)return false;
+  const p=apt.pausas||[];
+  return p.some(x=>x&&x.inicio&&!x.fim);
 }
 
-// ── carrega do Firebase (somente leitura) com sanitização ──
 async function load(){
   try{
     const r=await fetch(DB_URL+'.json');
@@ -112,155 +310,1557 @@ async function load(){
     const d=await r.json();
     if(d){
       S=d;
+      // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
+      // Firebase pode retornar objeto {0:..,1:..} OU array com buracos null (item deletado por índice).
+      // Normaliza para array e SEMPRE remove entradas nulas/inválidas, protegendo todas as telas.
       ['colaboradores','ops','apontamentos','modelos'].forEach(k=>{
         const base=Array.isArray(S[k])?S[k]:(S[k]&&typeof S[k]==='object'?Object.values(S[k]):[]);
         S[k]=base.filter(x=>x!=null&&typeof x==='object');
       });
+      if(!S.nid)S.nid=1;
     }
-    setStatus(true);
+    // mantém a referência do colaborador atual sincronizada (ex.: horários definidos pelo supervisor)
+    if(colab&&S.colaboradores)colab=S.colaboradores.find(c=>c&&c.id===colab.id)||colab;
+    setSync(true);
+    _dadosCarregados=true;
+    aplicarTemaColab();
     return true;
-  }catch(e){setStatus(false);return false;}
+  }catch(e){setSync(false);return false;}
 }
 
-// ── período ──
-function noPeriodo(iso){
-  const dstr=dataLocalStr(iso);
-  if(!dstr)return false;
-  if(_periodo==='hoje')return dstr===dataLocalStr(new Date());
-  if(_periodo==='mes')return mesLocalStr(iso)===mesLocalStr(new Date());
-  const t=new Date(iso).getTime();
-  return !isNaN(t)&&t>=Date.now()-7*86400000&&t<=Date.now()+60000;
+function aplicarTemaColab(){
+  if(!S.tema||!S.tema.primary)return;
+  const {primary,accent}=S.tema;
+  document.querySelector('.topbar').style.background=primary;
+  document.querySelectorAll('.btn-start').forEach(el=>el.style.background=accent);
+  document.querySelectorAll('.btn-confirmar').forEach(el=>el.style.background=accent);
+  document.querySelectorAll('.btn-confirmar-fin').forEach(el=>el.style.background=accent);
+  document.querySelectorAll('.btn-obs').forEach(el=>el.style.background=primary);
+  document.querySelectorAll('.btn-resume').forEach(el=>el.style.background=accent);
+  document.querySelectorAll('.add-card').forEach(el=>{el.style.borderColor=accent;el.style.color=accent;});
+  document.querySelectorAll('.sec-title').forEach(el=>el.style.borderBottomColor=primary);
+  document.documentElement.style.setProperty('--theme-primary',primary);
+  document.documentElement.style.setProperty('--theme-accent',accent);
+}
+// Salva de forma segura: lê o estado atual, mescla apontamentos e salva
+// Evita que saves simultâneos de colaboradores diferentes apaguem dados uns dos outros
+async function save(){
+  if(!_dadosCarregados){console.warn('save() bloqueado: dados ainda não carregados');return;}
+  try{
+    // 1. Lê estado atual do Firebase
+    const r=await fetch(DB_URL+'.json');
+    let servidor=null;
+    if(r.ok){
+      try{servidor=await r.json();}catch(e){}
+    }
+
+    // 2. Mescla apontamentos: une servidor + local (aceita array OU objeto do Firebase)
+    if(servidor&&servidor.apontamentos){
+      let aptsServidor=servidor.apontamentos;
+      if(!Array.isArray(aptsServidor)) aptsServidor=Object.values(aptsServidor).filter(x=>x!=null);
+      const localMap={};
+      S.apontamentos.forEach(a=>{if(!a)return;if(a&&a.id!=null)localMap[a.id]=a;});
+      // une servidor + local; em CONFLITO de id, mantém a versão MAIS RECENTE (_ts maior)
+      // isso evita que uma aba antiga reverta dados atualizados por outra pessoa
+      aptsServidor.forEach(a=>{
+        if(!a||a.id==null||_idsExcluidos.has(a.id))return;
+        const local=localMap[a.id];
+        if(!local){localMap[a.id]=a;}
+        else{
+          const tsLocal=local._ts||0, tsServidor=a._ts||0;
+          if(tsServidor>tsLocal) localMap[a.id]=a; // servidor mais novo vence
+        }
+      });
+      S.apontamentos=Object.values(localMap).sort((a,b)=>a.id-b.id);
+    }
+
+    // 2b. PROTEÇÃO: o colaborador NUNCA edita modelos/colaboradores/ops/config.
+    // Sempre preserva o que está no servidor para não apagar dados do supervisor
+    // (ex.: um modelo recém-cadastrado) com uma cópia local desatualizada.
+    if(servidor){
+      const toArr=(v)=>v===undefined||v===null?undefined:(Array.isArray(v)?v:Object.values(v).filter(x=>x!=null));
+      const mods=toArr(servidor.modelos); if(mods!==undefined)S.modelos=mods;
+      const cols=toArr(servidor.colaboradores); if(cols!==undefined)S.colaboradores=cols;
+      const ops=toArr(servidor.ops); if(ops!==undefined)S.ops=ops;
+      if(servidor.mfResponsaveis!==undefined)S.mfResponsaveis=servidor.mfResponsaveis;
+      if(servidor.mfResponsavel!==undefined)S.mfResponsavel=servidor.mfResponsavel;
+      if(servidor.tema!==undefined)S.tema=servidor.tema;
+      if(servidor.planoAcoes!==undefined)S.planoAcoes=servidor.planoAcoes; // plano de ação é do supervisor
+      if(servidor.expediente!==undefined)S.expediente=servidor.expediente; // horário de expediente é do supervisor
+    }
+
+    // 3. Atualiza nid para evitar colisão de IDs
+    if(servidor&&servidor.nid&&servidor.nid>S.nid) S.nid=servidor.nid+1;
+
+    // 4. Salva o estado mesclado
+    // PROTEÇÃO 3: trava de segurança contra perda de dados
+    // Se o servidor tem apontamentos e o local ficaria com menos da metade
+    // (e não foi exclusão intencional), aborta para não apagar dados
+    if(servidor&&servidor.apontamentos){
+      let nServidor=Array.isArray(servidor.apontamentos)?servidor.apontamentos.length:Object.keys(servidor.apontamentos).length;
+      const nLocal=S.apontamentos.length;
+      const exclusoesIntencionais=_idsExcluidos.size;
+      if(nServidor>5&&nLocal<(nServidor-exclusoesIntencionais)*0.5){
+        console.error('SAVE ABORTADO: tentativa de salvar '+nLocal+' apontamentos quando servidor tem '+nServidor+'. Recarregando dados.');
+        setSync(false);
+        await load();
+        return;
+      }
+    }
+    await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
+    setSync(true);
+  }catch(e){setSync(false);}
+}
+async function conectar(){
+  const url=document.getElementById('setupUrl').value.trim().replace(/\/$/,'');
+  if(!url||!url.startsWith('https://')){document.getElementById('setupErr').textContent='URL inválida.';return;}
+  document.getElementById('setupErr').textContent='Testando...';
+  // DB_URL é fixo, ignorando url digitada
+  const ok=await load();
+  if(ok){showSelect();}
+  else document.getElementById('setupErr').textContent='Não foi possível conectar.';
+}
+function showSelect(){
+  ['setupScreen','mainScreen'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('selectScreen').style.display='flex';
+  const g=document.getElementById('colabGrid');
+  if(!S.colaboradores.length){g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:#aaa;font-size:13px;padding:20px;">Nenhum colaborador cadastrado.</div>';return;}
+  g.innerHTML=S.colaboradores.map(c=>`<div class="colab-btn" onclick="selColab(${c.id})"><div class="c-avatar">${ini(c.nome)}</div><div class="c-nome">${c.nome}</div><div class="c-func">${c.funcao}</div></div>`).join('');
+}
+function selColab(id){
+  colab=S.colaboradores.find(c=>c&&c.id===id);if(!colab)return;
+  document.getElementById('selectScreen').style.display='none';
+  document.getElementById('mainScreen').style.display='block';
+  document.getElementById('uAvatar').textContent=ini(colab.nome);
+  document.getElementById('uName').textContent=colab.nome;
+  document.getElementById('uFunc').textContent=colab.funcao;
+  // show setor badge
+  const sb=document.getElementById('setorBadge');
+  if(sb){
+    const SETOR_COLORS={chapa:'background:#fff3e0;color:#b45309;border:1px solid #f0c060;',eletrica:'background:#EEF1FF;color:#3550B4;border:1px solid #a0a8e8;',mf:'background:#ede9fe;color:#7c3aed;border:1px solid #c4b5fd;',geral:'background:#f0f0f0;color:#555;border:1px solid #ddd;'};
+    const s=colab.setor||'eletrica';
+    const lbl={chapa:'🔧 Setor: Chapa',eletrica:'⚡ Setor: Montagem Elétrica',mf:'🔍 Setor: Montagem Final',geral:'🔀 Setor: Geral'}[s]||'⚡ Montagem Elétrica';
+    sb.innerHTML=`<span style="font-size:12px;font-weight:600;padding:4px 12px;border-radius:99px;${SETOR_COLORS[s]||SETOR_COLORS.eletrica}">${lbl}</span>`;
+  }
+  renderAll();
+}
+function trocar(){colab=null;finalizando=null;showSelect();}
+async function refresh(){
+  document.getElementById('syncTxt').textContent='atualizando...';
+  await load();
+  if(colab)colab=S.colaboradores.find(c=>c&&c.id===colab.id)||colab;
+  renderAll();toast('Atualizado!');
 }
 
-// ── produtividade por setor ──
-function calcSetorStats(){
-  const base={
-    chapa:{nome:'Chapa',icone:'🔧',cor:'#db2777'},
-    eletrica:{nome:'Montagem Elétrica',icone:'⚡',cor:'#EA580C'},
-    mf:{nome:'Montagem Final',icone:'🔍',cor:'#7c3aed'}
+/* ── FORM ADICIONAR QUADRO ── */
+function getSetorBannerHtml(){
+  const s=getColabSetor();
+  if(s==='chapa')return '<div style="background:#fff3e0;border:1px solid #f0c060;border-radius:8px;padding:8px 12px;font-size:12px;color:#b45309;margin-top:8px;">🔧 Setor <strong>Chapa</strong> — ao finalizar, avança para Montagem Elétrica</div>';
+  if(s==='eletrica')return '<div style="background:#EEF1FF;border:1px solid #a0a8e8;border-radius:8px;padding:8px 12px;font-size:12px;color:#3550B4;margin-top:8px;">⚡ Setor <strong>Montagem Elétrica</strong> — ao finalizar, vai para Montagem Final</div>';
+  return '';
+}
+function getSectorLabel(setor){
+  return {chapa:'🔧 Chapa',eletrica:'⚡ Montagem Elétrica',mf:'🔍 Mont. Final',geral:'🔀 Geral'}[setor]||'⚡ Montagem Elétrica';
+}
+function getColabSetor(){
+  if(!colab)return'eletrica';
+  return colab.setor||'eletrica';
+}
+
+function filtrarModelos(){
+  const busca=(document.getElementById('addModeloBusca')||{}).value||'';
+  const lista=document.getElementById('addModeloLista');
+  if(!lista)return;
+  const termo=busca.trim().toLowerCase();
+  const modelos=(S.modelos||[]).filter(m=>{
+    if(!termo)return true;
+    const cod=(m.codigo||'').toLowerCase();
+    const desc=(m.descricao||'').toLowerCase();
+    return cod.includes(termo)||desc.includes(termo);
+  });
+  if(!modelos.length){
+    lista.innerHTML='<div style="padding:10px 12px;font-size:13px;color:#999;">Nenhum modelo encontrado.</div>';
+    lista.style.display='block';
+    return;
+  }
+  lista.innerHTML=modelos.map(m=>
+    `<div class="modelo-opt" onclick="selecionarModelo(${m.id})" style="padding:10px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid #f0f0f0;">
+      <span style="font-weight:700;">${m.codigo}</span>${m.descricao?` <span style="color:#888;">— ${m.descricao}</span>`:''}
+    </div>`
+  ).join('');
+  lista.style.display='block';
+}
+function selecionarModelo(id){
+  const m=(S.modelos||[]).find(x=>x.id===id);
+  if(!m)return;
+  const hid=document.getElementById('addModelo');if(hid)hid.value=id;
+  const busca=document.getElementById('addModeloBusca');if(busca)busca.value=m.codigo+(m.descricao?' — '+m.descricao:'');
+  const lista=document.getElementById('addModeloLista');if(lista)lista.style.display='none';
+  const sel=document.getElementById('addModeloSel');if(sel)sel.textContent='✓ Modelo selecionado: '+m.codigo;
+}
+function mostrarFormAdicionar(){
+  const modelos=S.modelos||[];
+  const horaAtual=new Date().toTimeString().substring(0,5);
+
+  document.getElementById('addFormArea').innerHTML=`<div class="add-form">
+    <h4>📋 Qual quadro você vai iniciar?</h4>
+    ${getSetorBannerHtml()}
+
+    <label>Número da OP <span style="color:#A32D2D">*</span></label>
+    <input type="text" id="addOpNum" placeholder="Ex: 2025-001, OP-123..." autocomplete="off"/>
+    <div style="font-size:11px;color:#888;margin-top:3px;">Digite o número da ordem de produção do seu quadro</div>
+
+    <label>Modelo do quadro <span style="color:#A32D2D">*</span></label>
+    <input type="hidden" id="addModelo" value=""/>
+    <div style="position:relative;">
+      <input type="text" id="addModeloBusca" placeholder="🔍 Buscar modelo por código ou descrição..." autocomplete="off" oninput="filtrarModelos()" onfocus="filtrarModelos()"/>
+      <div id="addModeloLista" style="display:none;max-height:220px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;margin-top:4px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+    </div>
+    <div id="addModeloSel" style="font-size:12px;color:#1D9E75;margin-top:4px;font-weight:600;"></div>
+    ${modelos.length?'':'<div style="font-size:11px;color:#BA7517;margin-top:3px;">⚠ Aguarde o supervisor cadastrar os modelos</div>'}
+
+    <label>Horário de início</label>
+    <input type="time" id="addHora" value="${horaAtual}"/>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;">
+      <button class="btn" style="margin-top:0;background:#fff;color:#1a1a1a;border:1px solid #ddd;" onclick="cancelarAdicionar()">Cancelar</button>
+      <button class="btn" style="margin-top:0;" onclick="abrirConfirmacao()">Continuar →</button>
+    </div>
+    <div id="addFormConfirm"></div>
+  </div>`;
+}
+
+function cancelarAdicionar(){
+  _itensFaltando=null;_obsItens='';
+  document.getElementById('addFormArea').innerHTML=`<div class="add-card" onclick="mostrarFormAdicionar()">＋ Adicionar quadro para trabalhar</div>`;
+}
+
+function abrirConfirmacao(){
+  const opNum=document.getElementById('addOpNum').value.trim();
+  const modeloId=document.getElementById('addModelo').value;
+  const hora=document.getElementById('addHora').value;
+  if(!opNum){toast('Digite o número da OP.');return;}
+  if(!modeloId){toast('Selecione o modelo do quadro.');return;}
+  if(!hora){toast('Informe o horário de início.');return;}
+  const modelo=S.modelos.find(m=>m&&m.id==modeloId);
+  const modeloLabel=modelo?`${modelo.codigo}${modelo.descricao?' — '+modelo.descricao:''}`:'';
+
+
+  document.getElementById('addFormConfirm').innerHTML=`<div class="confirm-card">
+    <h4>⚠️ Confirmar início</h4>
+    <p>OP: <strong>${opNum}</strong><br>Modelo: <strong>${modeloLabel}</strong><br>Horário: <strong>${hora}</strong></p>
+    <div style="font-size:13px;font-weight:600;color:#1a1a1a;margin-bottom:8px;">Há algum item faltando no painel?</div>
+    <div class="radio-group">
+      <div class="radio-opt ${_itensFaltando===false?'sel':''}" onclick="selecionarItens(false)">
+        <div><div class="radio-label">✓ Não, todos os itens estão presentes</div><div class="radio-sub">Pode iniciar normalmente</div></div>
+      </div>
+      <div class="radio-opt ${_itensFaltando===true?'sel-bad':''}" onclick="selecionarItens(true)">
+        <div><div class="radio-label">⚠ Sim, há itens faltando</div><div class="radio-sub">Descreva o que está faltando</div></div>
+      </div>
+    </div>
+    ${_itensFaltando===true?`<label>Descreva os itens faltando</label><textarea id="obsItensInput" rows="3" placeholder="Ex: Faltando disjuntor 32A, cabo terra...">${_obsItens}</textarea>`:''}
+    ${_itensFaltando!==null?`
+      <button class="btn-confirmar" onclick="confirmarIniciar()">✓ Sim, iniciar quadro agora</button>
+      <button class="btn-cancelar" onclick="cancelarAdicionar()">Cancelar</button>
+    `:`<button class="btn-cancelar" onclick="cancelarAdicionar()" style="margin-top:10px;">Cancelar</button>`}
+  </div>`;
+}
+
+function selecionarItens(temFalta){
+  const obsEl=document.getElementById('obsItensInput');
+  if(obsEl)_obsItens=obsEl.value;
+  _itensFaltando=temFalta;
+  abrirConfirmacao();
+}
+
+let _confirmandoIniciar=false;
+async function confirmarIniciar(){
+  if(_confirmandoIniciar)return; // trava anti-duplo-clique
+  if(_itensFaltando===null){toast('Responda se há itens faltando.');return;}
+  const obsEl=document.getElementById('obsItensInput');
+  if(obsEl)_obsItens=obsEl.value.trim();
+  if(_itensFaltando&&!_obsItens){toast('Descreva os itens faltando.');return;}
+
+  const opNum=document.getElementById('addOpNum').value.trim();
+  const modeloId=document.getElementById('addModelo').value;
+  const hora=document.getElementById('addHora').value;
+
+  // VALIDAÇÕES: impedem cadastro de painéis incompletos/inválidos
+  if(!opNum){toast('Informe o número da OP.');return;}
+  if(!modeloId){toast('Selecione o modelo do quadro.');return;}
+  const modelo=S.modelos.find(m=>m&&m.id==modeloId);
+  if(!modelo){toast('Modelo inválido. Selecione novamente.');return;}
+
+  // PROTEÇÃO: impede cadastrar uma OP que já está em produção (evita 2 pedidos com a mesma OP)
+  // Uma OP está "ativa" se seu apontamento MAIS RECENTE não está concluído.
+  // (o registro da chapa fica em etapa 'eletrica' para sempre, então olhamos o estado mais recente)
+  const opNorm=opNum.toLowerCase();
+  const opAtiva=(apts)=>{
+    const doOp=apts.filter(a=>a&&a.opNum&&a.opNum.toLowerCase()===opNorm);
+    if(!doOp.length)return false;
+    let recente=doOp[0];
+    for(const a of doOp){if((a._ts||0)>(recente._ts||0))recente=a;}
+    return recente.etapa!=='concluido'; // ativa se o mais recente não foi concluído
   };
-  const out={};
-  for(const k in base)out[k]=Object.assign({},base[k],{somaPrev:0,somaReal:0,volume:0,emAndamento:0,somaLiq:0,somaBruto:0,temMeta:(k!=='mf')});
-  (S.apontamentos||[]).forEach(a=>{
-    if(!a||a.tipoRegistro==='sem_chapa')return;
-    // Chapa / Elétrica
-    if(a.setor==='chapa'||a.setor==='eletrica'||a.setor==='geral'){
-      const setor=(a.setor==='geral')?'eletrica':a.setor;
-      const o=out[setor];
-      if(o){
-        const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
-        const prev=tempoModeloSetor(m,setor);
-        if(a.fim&&noPeriodo(a.fim)){
-          // concluído: crédito total do previsto
-          const liq=tempoLiquido(a);
-          let pausaMin=0;(a.pausas||[]).forEach(p=>{if(p&&p.inicio&&p.fim){const dd=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(dd>0)pausaMin+=dd;}});
-          if(prev>0&&liq>0){o.somaPrev+=prev;o.somaReal+=liq;}
-          o.volume++;o.somaLiq+=liq;o.somaBruto+=liq+pausaMin;
-        } else if(_periodo==='hoje'&&!a.fim&&a.inicio&&a.etapa!=='montagem_final'&&a.etapa!=='concluido'){
-          // TEMPO REAL (só no "Hoje"): painel em andamento, crédito limitado ao decorrido
-          const liq=tempoLiquido(a);
-          if(prev>0&&liq>0){o.somaPrev+=Math.min(prev,liq);o.somaReal+=liq;}
-          o.emAndamento++;
+  if(opAtiva(S.apontamentos)){toast('⚠ Já existe um quadro ativo com a OP '+opNum+'. Não é possível cadastrar duplicado.');return;}
+  // verifica também no servidor (caso outra pessoa tenha acabado de cadastrar a mesma OP)
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(r.ok){
+      const d=await r.json();
+      if(d&&d.apontamentos){
+        let apts=d.apontamentos;
+        if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
+        if(opAtiva(apts)){
+          toast('⚠ A OP '+opNum+' já foi cadastrada por outra pessoa. Recarregando...');
+          await load();renderAll();cancelarAdicionar();
+          return;
         }
       }
     }
-    // Montagem Final: conta pela inspeção aprovada (mf.fim)
-    if(a.mf&&a.mf.fim&&noPeriodo(a.mf.fim)){
-      const o=out.mf;
-      const insp=(a.mf.inicioInspecao)?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):0;
-      o.volume++;o.somaLiq+=insp;o.somaBruto+=insp;
-    }
-  });
-  for(const k in out){
-    const o=out[k];
-    o.eficiencia=o.somaReal>0?Math.round(o.somaPrev/o.somaReal*100):null;
-    o.aproveitamento=o.somaBruto>0?Math.round(o.somaLiq/o.somaBruto*100):null;
-    o.tempoMedio=o.volume?Math.round(o.somaLiq/o.volume):0;
+  }catch(e){}
+
+  const hoje=dataLocalStr(new Date());
+  let inicioISO;
+  if(hora){
+    const d=new Date(`${hoje}T${hora}:00`);
+    inicioISO=isNaN(d.getTime())?new Date().toISOString():d.toISOString();
+  } else {
+    inicioISO=new Date().toISOString(); // sem hora informada: usa agora
   }
-  return out;
+
+  _confirmandoIniciar=true;
+  try{
+    // encerra o registro "sem chapa" (se estiver contando) — o tempo parado para aqui
+    encerrarSemChapa();
+
+    S.apontamentos.push({
+      id:uid(),
+      opNum,
+      modeloId:parseInt(modeloId),
+      modeloLabel:modelo?modelo.codigo:'',
+      colabId:colab.id,
+      setor:getColabSetor(),
+      _ts:Date.now(),
+      inicio:inicioISO,
+      fim:null,
+      pausas:[],
+      observacoes:[],
+      erros:[],
+      obsErro:'',
+      itensFaltando:_itensFaltando,
+      obsItensFaltando:_obsItens
+    });
+
+    _itensFaltando=null;_obsItens='';
+    // retorno visual IMEDIATO: fecha o formulário e atualiza antes do save
+    cancelarAdicionar();
+    renderAll();
+    toast('Quadro iniciado! ▶');
+    await save();
+    renderAll();
+  } finally {
+    _confirmandoIniciar=false;
+  }
 }
 
-// cor conforme a produtividade (semáforo)
-function corProd(pct){
-  if(pct==null)return {c:'#9ca3af',b:'#9ca3af'};
-  if(pct>=90)return {c:'#15803d',b:'#16a34a'};
-  if(pct>=70)return {c:'#b45309',b:'#f59e0b'};
-  return {c:'#b91c1c',b:'#dc2626'};
+/* ── RENDER ── */
+function renderAll(){
+  if(!colab)return;
+  renderOps();
+  renderPausasBadge();
+  renderSemChapa();
+  aplicarTemaColab();
+  const meusApts=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
+  meusApts.forEach(a=>bindRetrab(a.id));
+  // show MF tab only for the designated MF responsible
+  const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
+  const mfPendentes=isMfResp?S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)).length:0;
+  const tabs=document.getElementById('colTabs');
+  if(tabs)tabs.style.display=(isMfResp||meusApts.length)?'flex':'none';
+  const tabMf=document.getElementById('tab-mf');
+  if(tabMf)tabMf.style.display=isMfResp?'block':'none';
+  const badge=document.getElementById('mfBadge');
+  if(badge){badge.textContent=mfPendentes;badge.style.display=mfPendentes?'inline':'none';}
 }
-const fmtDur=(min)=>min>=60?Math.floor(min/60)+'h'+(min%60?' '+(min%60)+'min':''):min+'min';
 
-function render(){
-  const st=calcSetorStats();
+function renderFilaEletrica(){
+  const divFila=document.getElementById('filaEletricaDiv');
+  const setor=getColabSetor();
+  if(!divFila)return;
+  if(setor!=='eletrica'&&setor!=='geral'){divFila.innerHTML='';return;}
+  divFila.innerHTML='';
 
-  // produtividade geral = eficiência ponderada de Chapa + Elétrica
-  let gp=st.chapa.somaPrev+st.eletrica.somaPrev, gr=st.chapa.somaReal+st.eletrica.somaReal;
-  const geral=gr>0?Math.round(gp/gr*100):null;
-  const cg=corProd(geral);
-  document.getElementById('geralProd').textContent=geral==null?'—':geral+'%';
-  document.getElementById('geralProd').style.color=geral==null?'#9ca3af':(geral>=90?'#4ade80':geral>=70?'#fbbf24':'#f87171');
-  const volGeral=st.chapa.volume+st.eletrica.volume;
-  const emAndTotal=(st.chapa.emAndamento||0)+(st.eletrica.emAndamento||0);
-  const rt=_periodo==='hoje';
-  document.getElementById('geralSub').textContent=(rt?'⏱ tempo real · ':'')+volGeral+' prontos'+(rt&&emAndTotal?' · '+emAndTotal+' em andamento':'')+' · eficiência = previsto ÷ real';
-
-  const cont=document.getElementById('setores');
-  cont.innerHTML='';
-  ['chapa','eletrica','mf'].forEach(k=>{
-    const o=st[k];
+  const normOp=(s)=>String(s||'').trim().toLowerCase();
+  const chapaConcluidos=S.apontamentos.filter(a=>a&&a.etapa==='eletrica'&&a.tipoRegistro!=='sem_chapa');
+  // OPs que JÁ têm montagem elétrica registrada (por OP, tolerante a espaços/maiúsculas)
+  const opsComEletrica=new Set(S.apontamentos.filter(a=>a&&a.opNum&&a.tipoRegistro!=='sem_chapa'&&a.setor==='eletrica').map(a=>normOp(a.opNum)));
+  // OPs que já AVANÇARAM além da elétrica (chegaram na montagem final ou concluíram)
+  const opsAvancadas=new Set(S.apontamentos.filter(a=>a&&a.opNum&&(a.etapa==='montagem_final'||a.etapa==='concluido')).map(a=>normOp(a.opNum)));
+  const disponiveis=chapaConcluidos.filter(a=>{
+    if(a.eletricaIniciada)return false;                 // marcado no próprio apontamento (dados novos)
+    const op=normOp(a.opNum);
+    if(opsComEletrica.has(op))return false;             // já existe apontamento de elétrica p/ esta OP
+    if(opsAvancadas.has(op))return false;               // já passou da elétrica (MF/concluído)
+    return true;
+  });
+  if(!disponiveis.length)return;
+  const titulo=document.createElement('div');
+  titulo.className='sec-title';
+  titulo.style.cssText='color:#3550B4;border-bottom-color:#3550B4;margin-top:10px;';
+  titulo.textContent='⚡ Prontos para Montagem Elétrica ('+disponiveis.length+')';
+  divFila.appendChild(titulo);
+  disponiveis.forEach(a=>{
+    const m=S.modelos.find(x=>x.id===a.modeloId);
+    const autor=S.colaboradores.find(c=>c&&c.id===a.colabId);
     const card=document.createElement('div');
-    card.className='setor';
-    card.style.borderTopColor=o.cor;
-    if(o.temMeta){
-      const c=corProd(o.eficiencia);
-      const pct=o.eficiencia==null?0:Math.min(o.eficiencia,100);
-      card.innerHTML=`
-        <div class="cab" style="color:${o.cor};">${o.icone} ${o.nome}</div>
-        <div class="prodlbl">Produtividade</div>
-        <div class="prod" style="color:${c.c};">${o.eficiencia==null?'—':o.eficiencia+'%'}</div>
-        <div class="barra"><div style="width:${pct}%;background:${c.b};"></div></div>
-        <div class="linhas">
-          <div class="cel"><div class="n">${o.volume}</div><div class="t">${(_periodo==='hoje'&&o.emAndamento)?o.emAndamento+' em and.':'prontos'}</div></div>
-          <div class="cel"><div class="n">${o.tempoMedio?fmtDur(o.tempoMedio):'—'}</div><div class="t">tempo médio</div></div>
-          <div class="cel"><div class="n">${o.aproveitamento==null?'—':o.aproveitamento+'%'}</div><div class="t">aproveitamento</div></div>
-        </div>`;
-    } else {
-      // Montagem Final não tem meta de tempo → mostra throughput
-      card.innerHTML=`
-        <div class="cab" style="color:${o.cor};">${o.icone} ${o.nome}</div>
-        <div class="prodlbl">Inspecionados</div>
-        <div class="prod" style="color:#6d28d9;">${o.volume}</div>
-        <div class="barra"><div style="width:100%;background:#7c3aed;opacity:.25;"></div></div>
-        <div class="linhas">
-          <div class="cel"><div class="n">${o.volume}</div><div class="t">painéis</div></div>
-          <div class="cel"><div class="n">${o.tempoMedio?fmtDur(o.tempoMedio):'—'}</div><div class="t">insp. média</div></div>
-          <div class="cel"><div class="n" style="font-size:15px;color:#999;">sem meta<br>de tempo</div><div class="t">&nbsp;</div></div>
-        </div>`;
-    }
-    cont.appendChild(card);
+    card.className='qcard';
+    card.style.cssText='border-color:#3550B4;background:#EEF1FF;';
+    const header=document.createElement('div');
+    header.className='qh';
+    header.innerHTML=`<div>
+      <div style="font-size:14px;font-weight:700;">OP ${a.opNum||'—'}</div>
+      <div style="font-size:12px;color:#888;">${m?m.codigo:a.modeloLabel||'—'}</div>
+      <div style="font-size:11px;color:#aaa;margin-top:2px;">Chapa: ${autor?autor.nome:'—'}</div>
+    </div>
+    <span class="badge" style="background:#dbeafe;color:#1d4ed8;">✓ Chapa OK</span>`;
+    const btn=document.createElement('button');
+    btn.className='btn-start';
+    btn.style.background='#3550B4';
+    btn.style.marginTop='10px';
+    btn.textContent='⚡ Iniciar Montagem Elétrica';
+    btn.addEventListener('click',function(){iniciarEletrica(a.opNum,a.modeloId,a.modeloLabel||'',a.id);});
+    card.appendChild(header);
+    card.appendChild(btn);
+    divFila.appendChild(card);
   });
 }
 
-function setPeriodo(p){
-  _periodo=p;
-  document.querySelectorAll('.pbtn').forEach(b=>b.classList.toggle('ativo',b.dataset.p===p));
-  render();
-}
-function relogio(){
-  document.getElementById('relogio').textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-}
-function setStatus(ok){
-  const dot=document.getElementById('statusDot'),txt=document.getElementById('statusTxt');
-  if(dot)dot.className='dot'+(ok?'':' off');
-  if(txt)txt.textContent=ok?('atualizado às '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})):'sem conexão — tentando novamente…';
+let _iniciandoEletrica=false;
+async function iniciarEletrica(opNum,modeloId,modeloLabel,chapaAptId){
+  const normOp=(s)=>String(s||'').trim().toLowerCase();
+  // trava anti-duplo-clique: se já está processando um início, ignora cliques repetidos
+  if(_iniciandoEletrica)return;
+  // já existe montagem elétrica em aberto para esta OP?
+  if(S.apontamentos.find(a=>a&&a.setor==='eletrica'&&!a.fim&&normOp(a.opNum)===normOp(opNum))){
+    toast('Você já iniciou a montagem elétrica deste quadro.');return;
+  }
+  _iniciandoEletrica=true;
+  try{
+    const novoId=uid();
+    S.apontamentos.push({
+      id:novoId,opNum,modeloId,modeloLabel,colabId:colab.id,setor:'eletrica',_ts:Date.now(),
+      inicio:new Date().toISOString(),fim:null,pausas:[],observacoes:[],
+      erros:[],obsErro:'',itensFaltando:false,obsItensFaltando:''
+    });
+    // MARCA o apontamento da chapa: assim a fila não depende de casar opNum+modeloId
+    const chapaApt=S.apontamentos.find(a=>a&&a.id===chapaAptId)
+      ||S.apontamentos.find(a=>a&&a.etapa==='eletrica'&&normOp(a.opNum)===normOp(opNum));
+    if(chapaApt){chapaApt.eletricaIniciada=true;chapaApt.eletricaAptId=novoId;chapaApt._ts=Date.now();}
+    // retorno visual IMEDIATO: o painel sai da fila na hora (antes do save), evitando novo clique
+    renderAll();
+    toast('⚡ Montagem elétrica iniciada!');
+    await save();
+    renderAll();
+  } finally {
+    _iniciandoEletrica=false;
+  }
 }
 
-// inicialização
-(async()=>{
-  relogio();setInterval(relogio,1000);
-  await load();render();
-  // atualiza os dados a cada 20s (leve, só re-renderiza)
-  setInterval(async()=>{ if(document.hidden)return; await load(); render(); },20000);
-})();
+function renderOps(){
+  if(!colab)return; // guard: não renderiza sem colaborador selecionado
+  const div=document.getElementById('opsDiv');
+  const setor=getColabSetor();
+  const meusApts=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa');
+  const hoje=dataLocalStr(new Date());
+  const finHoje=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&a.fim&&dataLocalStr(a.fim)===hoje&&a.etapa==='concluido'&&a.tipoRegistro!=='sem_chapa');
+  const addArea=document.getElementById('addFormArea');
+  if(addArea)addArea.style.display=setor==='eletrica'?'none':'block';
+  renderFilaEletrica();
+  if(!meusApts.length&&!finHoje.length){
+    const setorMsg=setor==='eletrica'
+      ?'Nenhum quadro em andamento.<br><span style="font-size:12px;">Aguarde quadros liberados da Chapa acima.</span>'
+      :setor==='chapa'?'Nenhuma chapa em produção.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span>'
+      :'Nenhum quadro em andamento.<br><span style="font-size:12px;">Use o botão acima para adicionar.</span>';
+    div.innerHTML='<div class="sec-title" style="margin-top:20px;">Meus quadros</div><div class="empty" style="padding:16px 0;">'+setorMsg+'</div>';
+    return;
+  }
+
+  // render active apts
+  let html='';
+  if(meusApts.length){
+    html+='<div class="sec-title" style="margin-top:20px;">Em andamento ('+meusApts.length+')</div>';
+    meusApts.forEach(a=>{html+=renderQuadro(a);});
+  }
+  // show quadros waiting in MF queue
+  const mfMeus=S.apontamentos.filter(a=>a&&a.colabId===colab.id&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  if(mfMeus.length){
+    html+='<div class="sec-title" style="margin-top:20px;color:#7c3aed;border-bottom-color:#7c3aed;">🔍 Aguardando Montagem Final ('+mfMeus.length+')</div>';
+    mfMeus.forEach(a=>{
+      const m2=S.modelos.find(x=>x.id===a.modeloId);
+      html+=`<div class="qcard" style="border-color:#7c3aed;background:#faf5ff;opacity:.85;"><div class="qh"><span class="qnum">OP ${a.opNum||'—'}</span><span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span></div><div style="font-size:13px;font-weight:600;margin-bottom:4px;">${m2?m2.codigo:a.modeloLabel||'—'}</div><div style="font-size:12px;color:#888;">Aguardando inspeção do responsável</div></div>`;
+    });
+  }
+  if(finHoje.length){
+    html+='<div class="sec-title" style="margin-top:20px;">Finalizados hoje ('+finHoje.length+')</div>';
+    finHoje.forEach(a=>{
+      const temErro=a.erros&&a.erros.length>0;
+      const liq=tempoLiquido(a);
+      const mFin=S.modelos.find(x=>x.id===a.modeloId);
+      const prevFin=tempoPrevistoApt(a,mFin);
+      const temPrev=prevFin>0;
+      const acima=temPrev&&liq>prevFin;
+      const corTempo=!temPrev?'#1a1a1a':acima?'#A32D2D':'#1D9E75';
+      html+=`<div class="qcard ${temErro?'feito-erro':'feito'}"><div class="qh"><span class="qnum">OP ${a.opNum||''} — ${a.modeloLabel||''}</span>${temErro?'<span class="badge bbad">⚠ Com erros</span>':'<span class="badge bok">✓ Finalizado</span>'}</div><div class="hora-row"><div class="hora-item">Início: <span>${fmtH(a.inicio)}</span></div><div class="hora-item">Fim: <span>${fmtH(a.fim)}</span></div><div class="hora-item">Tempo: <span style="color:${corTempo};font-weight:700;">${liq}min</span>${temPrev?` <span style="font-size:10px;color:#999;">/ ${prevFin}min</span>`:''}</div></div>${temErro?`<div class="feito-msg erro">⚠ ${a.erros.join(', ')}</div>`:'<div class="feito-msg">✓ Concluído</div>'}${a.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${a.obsItensFaltando}</div>`:''}</div>`;
+    });
+  }
+  div.innerHTML=html;
+  meusApts.forEach(a=>{if(!estaPausado(a))startTimer(a.id,a);});
+  if(finalizando){const p=document.getElementById(`fin-${finalizando.id}`);if(p)renderFinPanel(finalizando.id);}
+}
+
+function tempoPrevistoApt(apt,m){
+  // tempo previsto do modelo conforme o SETOR do apontamento (chapa vs elétrica)
+  if(!m||!apt)return 0;
+  if(apt.setor==='chapa')return m.tempoChapa||0;
+  return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
+}
+function renderProgressBar(apt){
+  const m=S.modelos.find(x=>x.id===apt.modeloId);
+  const prev=tempoPrevistoApt(apt,m);
+  if(!prev)return'';
+  const liq=tempoLiquido(apt);
+  const pct=Math.min(Math.round((liq/prev)*100),200);
+  const atrasado=liq>prev;
+  const restante=prev-liq;
+  const cor=atrasado?'#A32D2D':'#1D9E75';
+  const bg=atrasado?'#FCEBEB':'#EAF3DE';
+  const barPct=Math.min(pct,100);
+  return`<div style="background:${bg};border-radius:9px;padding:10px 14px;margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
+      <span style="font-size:13px;font-weight:700;color:${cor};">${atrasado?'⚠ Acima do tempo previsto':'⏱ Dentro do prazo'}</span>
+      <span style="font-size:12px;color:${cor};font-weight:600;">${liq}min / ${prev}min</span>
+    </div>
+    <div style="height:8px;background:rgba(0,0,0,0.1);border-radius:99px;overflow:hidden;">
+      <div style="height:100%;width:${barPct}%;background:${cor};border-radius:99px;transition:width .3s;"></div>
+    </div>
+    <div style="font-size:11px;color:${cor};margin-top:5px;">
+      ${atrasado?`Excedeu em <strong>${Math.abs(restante)}min</strong>`:`Restam <strong>${restante}min</strong> no prazo`}
+    </div>
+  </div>`;
+}
+
+function renderQuadro(apt){
+  const outros=S.apontamentos.filter(a=>a&&a.modeloId===apt.modeloId&&a.opNum===apt.opNum&&a.colabId!==colab.id&&!a.fim);
+  const outrosHtml=outros.length?`<div class="outros">Também trabalhando: ${outros.map(a=>{const c=S.colaboradores.find(x=>x.id===a.colabId);return c?(c.nome||'').split(' ')[0]:'?';}).join(', ')}</div>`:'';
+
+  const modeloCompleto=S.modelos.find(m=>m&&m.id===apt.modeloId);
+  const modeloDesc=modeloCompleto&&modeloCompleto.descricao?`<div class="modelo-desc">${modeloCompleto.descricao}</div>`:'';
+
+  if(estaPausado(apt)){
+    const ultima=(apt.pausas||[]).slice(-1)[0];
+    const liq=tempoLiquido(apt);
+    const tipoInfo={
+      intervalo:{cor:'#BA7517',bg:'#FFF3E0',borda:'#f0c060'},
+      atividade:{cor:'#3550B4',bg:'#EEF1FF',borda:'#a0a8e8'},
+      almoco:{cor:'#c0357a',bg:'#FFF0F5',borda:'#e8a0c0'},
+      fimdia:{cor:'#555',bg:'#F0F0F5',borda:'#c0c0d8'},
+    };
+    const tInfo=tipoInfo[ultima.tipo]||{cor:'#3550B4',bg:'#EEF1FF',borda:'#3550B4'};
+    const tObj=TIPOS_PAUSA.find(t=>t.id===ultima.tipo)||{icon:'⏸',label:'Pausado'};
+    return`<div class="qcard pausado">
+      <div class="qh"><span class="qnum">OP ${apt.opNum}</span>
+        <span class="badge" style="background:${tInfo.bg};color:${tInfo.cor};border:1px solid ${tInfo.borda};">${tObj.icon} ${tObj.label}</span>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">${apt.modeloLabel||''}${modeloDesc}</div>
+      <div class="pause-box" style="background:${tInfo.bg};border:1.5px solid ${tInfo.borda};">
+        <div class="pause-icon">${tObj.icon}</div>
+        <div class="pause-info">
+          <div class="pause-txt" style="color:${tInfo.cor};">${tObj.label}</div>
+          <div class="pause-sub">Pausado às ${fmtH(ultima.inicio)} · ${liq}min trabalhados</div>
+        </div>
+      </div>
+      ${renderProgressBar(apt)}
+      ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
+      ${outrosHtml}
+      ${renderObsLista(apt)}${renderObsInput(apt.id)}
+      ${renderRetrabCard(apt.id)}
+      <button class="btn-resume" onclick="retomar(${apt.id})">▶ Retomar produção</button>
+    </div>`;
+  }
+
+  return`<div class="qcard andamento">
+    <div class="qh"><span class="qnum">OP ${apt.opNum}</span><span class="badge bwarn">▶ Em andamento</span></div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px;">${apt.modeloLabel||''}${modeloDesc}</div>
+    <div class="timer-box">
+      <div><div class="timer-txt" id="tmr-${apt.id}">calculando...</div><div class="timer-liq">Tempo líquido</div></div>
+      <div style="font-size:11px;color:#888;">Início: ${fmtH(apt.inicio)}</div>
+    </div>
+    ${renderProgressBar(apt)}
+    ${apt.itensFaltando?`<div class="itens-falt">⚠ Itens faltando: ${apt.obsItensFaltando}</div>`:''}
+    ${outrosHtml}
+    ${renderObsLista(apt)}${renderObsInput(apt.id)}
+    ${renderRetrabCard(apt.id)}
+    <div class="acoes-grid">
+      <button class="btn-pause" onclick="abrirSeletorPausa(${apt.id})">⏸ Pausar</button>
+    <div id="pausa-sel-${apt.id}"></div>
+      <button class="btn-end" onclick="abrirFinalizar(${apt.id})">⏹ Finalizar</button>
+    </div>
+    <div id="fin-${apt.id}"></div>
+  </div>`;
+}
+
+function renderObsLista(apt){
+  const obs=apt.observacoes||[];
+  if(!obs.length)return'';
+  return`<div class="obs-section"><h5>💬 Observações (${obs.length})</h5><div>${obs.map(o=>`<div class="obs-item"><div class="obs-hora">${fmtD(o.hora)} ${fmtH(o.hora)}</div>${o.texto}</div>`).join('')}</div></div>`;
+}
+function renderObsInput(aptId){
+  return`<div class="obs-section"><h5>📝 Observação</h5><div class="obs-input-row"><textarea id="obs-${aptId}" placeholder="Registre um problema ou observação..." rows="2"></textarea><button class="btn-obs" onclick="adicionarObs(${aptId})">Registrar</button></div></div>`;
+}
+
+function renderRetrabCard(aptId){
+  const estado=_retrabAtivo[aptId]||{ativo:false,setores:[],obs:''};
+  const SETORES=[
+    {id:'mecanica',  label:'Mecânica',       icon:'ti-settings-2'},
+    {id:'chapa',     label:'Chapa',          icon:'ti-cut'},
+    {id:'cabos',     label:'Prep. de cabos', icon:'ti-cable'},
+    {id:'eletrica',  label:'Mont. elétrica', icon:'ti-bolt'},
+  ];
+  const setoresSel=estado.setores||[];
+  const setoresHtml=estado.ativo?`<div class="retrab-body">
+    <div class="retrab-label">Setor responsável</div>
+    <div class="setores-grid" id="setores-grid-${aptId}">
+      ${SETORES.map(s=>`<div class="setor-btn ${setoresSel.includes(s.id)?'sel':''}" id="setor-${aptId}-${s.id}" data-apt="${aptId}" data-setor="${s.id}">
+        <div class="setor-icon"><i class="ti ${s.icon}" aria-hidden="true"></i></div>
+        ${s.label}
+      </div>`).join('')}
+    </div>
+    <div class="retrab-obs">
+      <label>Descreva o retrabalho</label>
+      <textarea id="retrab-obs-${aptId}" rows="2" placeholder="Ex: Furação incorreta na chapa, necessário refazer...">${estado.obs||''}</textarea>
+    </div>
+  </div>`:'';
+
+  return`<div class="retrab-card ${estado.ativo?'ativo':''}" id="retrab-card-${aptId}">
+    <div class="retrab-header">
+      <div class="retrab-header-info">
+        <div class="retrab-title"><i class="ti ti-tools" aria-hidden="true"></i> Apontar retrabalho</div>
+        <div class="retrab-sub">${estado.ativo?`${setoresSel.length} setor(es) selecionado(s)`:'Ative se precisou refazer alguma etapa'}</div>
+      </div>
+      <div class="toggle-wrap">
+        <button class="toggle-btn ${estado.ativo?'on':''}" id="toggle-retrab-${aptId}" aria-label="Ativar retrabalho">
+          <div class="toggle-knob"></div>
+        </button>
+      </div>
+    </div>
+    ${setoresHtml}
+  </div>`;
+}
+
+function bindRetrab(aptId){
+  // toggle
+  const tog=document.getElementById('toggle-retrab-'+aptId);
+  if(tog){
+    tog.addEventListener('click',function(){
+      if(!_retrabAtivo[aptId])_retrabAtivo[aptId]={ativo:false,setores:[],obs:''};
+      _retrabAtivo[aptId].ativo=!_retrabAtivo[aptId].ativo;
+      const card=document.getElementById('retrab-card-'+aptId);
+      if(card){
+        const newHtml=renderRetrabCard(aptId);
+        const tmp=document.createElement('div');
+        tmp.innerHTML=newHtml;
+        card.replaceWith(tmp.firstChild);
+        bindRetrab(aptId);
+      }
+    });
+  }
+  // setores
+  const grid=document.getElementById('setores-grid-'+aptId);
+  if(grid){
+    grid.querySelectorAll('.setor-btn').forEach(btn=>{
+      btn.addEventListener('click',function(){
+        const sid=this.getAttribute('data-setor');
+        if(!_retrabAtivo[aptId])_retrabAtivo[aptId]={ativo:true,setores:[],obs:''};
+        const arr=_retrabAtivo[aptId].setores;
+        const idx=arr.indexOf(sid);
+        if(idx>=0)arr.splice(idx,1);else arr.push(sid);
+        // update visual without full re-render
+        grid.querySelectorAll('.setor-btn').forEach(b=>{
+          b.classList.toggle('sel',arr.includes(b.getAttribute('data-setor')));
+        });
+        // update subtitle
+        const sub=document.querySelector('#retrab-card-'+aptId+' .retrab-sub');
+        if(sub)sub.textContent=arr.length+' setor(es) selecionado(s)';
+      });
+    });
+    // save obs on blur
+    const obsEl=document.getElementById('retrab-obs-'+aptId);
+    if(obsEl){
+      obsEl.addEventListener('blur',function(){
+        if(_retrabAtivo[aptId])_retrabAtivo[aptId].obs=this.value;
+      });
+      obsEl.addEventListener('input',function(){
+        if(_retrabAtivo[aptId])_retrabAtivo[aptId].obs=this.value;
+      });
+    }
+  }
+}
+async function adicionarObs(aptId){
+  const el=document.getElementById(`obs-${aptId}`);if(!el)return;
+  const texto=el.value.trim();if(!texto){toast('Digite uma observação.');return;}
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt)return;
+  if(!apt.observacoes)apt.observacoes=[];
+  apt.observacoes.push({hora:new Date().toISOString(),texto});
+  apt._ts=Date.now();
+  await save();toast('Observação registrada!');renderAll();
+}
+let _tipoPausa=null;
+
+const TIPOS_PAUSA=[
+  {id:'intervalo',  icon:'☕', label:'Intervalo',          sub:'Café, banheiro, descanso rápido'},
+  {id:'atividade',  icon:'📋', label:'Atividade interna',  sub:'Palestra, reunião, treinamento'},
+  {id:'almoco',     icon:'🍽️', label:'Almoço',             sub:'Intervalo de almoço'},
+  {id:'fimdia',     icon:'🌙', label:'Fim do dia',         sub:'Retorno amanhã'},
+];
+
+function abrirSeletorPausa(aptId){
+  const div=document.getElementById('pausa-sel-'+aptId);
+  if(!div)return;
+
+  // monta via DOM para evitar problemas com onclick inline
+  div.innerHTML='';
+  const wrap=document.createElement('div');
+  wrap.className='pausa-selector';
+
+  const titulo=document.createElement('h5');
+  titulo.textContent='⏸ Motivo da pausa';
+  wrap.appendChild(titulo);
+
+  const lista=document.createElement('div');
+  lista.className='pausa-tipos';
+
+  TIPOS_PAUSA.forEach(t=>{
+    const item=document.createElement('div');
+    item.className='pausa-tipo'+(_tipoPausa===t.id?' sel':'');
+    item.innerHTML=`<span class="pausa-tipo-icon">${t.icon}</span>
+      <div><div class="pausa-tipo-label">${t.label}</div><div class="pausa-tipo-sub">${t.sub}</div></div>`;
+    item.addEventListener('click',function(){
+      _tipoPausa=t.id;
+      // atualiza visual sem re-renderizar tudo
+      div.querySelectorAll('.pausa-tipo').forEach(el=>el.classList.remove('sel'));
+      item.classList.add('sel');
+    });
+    lista.appendChild(item);
+  });
+  wrap.appendChild(lista);
+
+  const btnConf=document.createElement('button');
+  btnConf.className='btn-confirmar-pausa';
+  btnConf.textContent='Confirmar pausa';
+  btnConf.addEventListener('click',function(){ confirmarPausa(aptId); });
+
+  const btnCanc=document.createElement('button');
+  btnCanc.className='btn-cancel-pausa';
+  btnCanc.textContent='Cancelar';
+  btnCanc.addEventListener('click',function(){
+    _tipoPausa=null;
+    div.innerHTML='';
+  });
+
+  wrap.appendChild(btnConf);
+  wrap.appendChild(btnCanc);
+  div.appendChild(wrap);
+}
+
+function cancelarSeletorPausa(aptId){
+  _tipoPausa=null;
+  const div=document.getElementById('pausa-sel-'+aptId);
+  if(div)div.innerHTML='';
+}
+
+async function confirmarPausa(aptId){
+  if(!_tipoPausa){toast('Selecione o motivo da pausa.');return;}
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
+  if(!apt.pausas)apt.pausas=[];
+  const tipo=TIPOS_PAUSA.find(t=>t.id===_tipoPausa);
+  apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:_tipoPausa,tipoLabel:tipo?tipo.label:''});
+  apt._ts=Date.now();
+  _tipoPausa=null;
+  await save();renderAll();toast('Pausado: '+(tipo?tipo.label:'')+'  ⏸');
+}
+
+async function pausar(aptId){
+  // mantido para compatibilidade
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
+  if(!apt.pausas)apt.pausas=[];
+  apt.pausas.push({inicio:new Date().toISOString(),fim:null,tipo:'intervalo',tipoLabel:'Intervalo'});
+  await save();renderAll();toast('Pausado ⏸');
+}
+async function retomar(aptId){
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
+  const p=apt.pausas||[];
+  // fecha a última pausa que estiver ABERTA (manual ou automática)
+  for(let i=p.length-1;i>=0;i--){if(p[i]&&p[i].inicio&&!p[i].fim){p[i].fim=new Date().toISOString();break;}}
+  apt._ts=Date.now();
+  await save();renderAll();toast('Retomado ▶');
+}
+
+let semChapaTimerIv=null;
+function semChapaAtivo(){
+  if(!colab)return null;
+  return S.apontamentos.find(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colab.id&&!a.fim)||null;
+}
+function semChapaMinutosMes(colabId,mesStr){
+  return S.apontamentos.filter(a=>a&&a.tipoRegistro==='sem_chapa'&&a.colabId===colabId&&a.inicio&&mesLocalStr(a.inicio)===mesStr)
+    .reduce((tot,a)=>{
+      const ini=new Date(a.inicio).getTime();
+      const fim=a.fim?new Date(a.fim).getTime():Date.now();
+      const min=Math.round((fim-ini)/60000);
+      return tot+(min>0?min:0);
+    },0);
+}
+async function alternarSemChapa(){
+  if(!colab)return;
+  const ativo=semChapaAtivo();
+  if(ativo){
+    ativo.fim=new Date().toISOString();ativo._ts=Date.now();
+    await save();renderAll();toast('⏹ Registro "sem chapa" encerrado');
+  }else{
+    S.apontamentos.push({id:uid(),colabId:colab.id,setor:'chapa',tipoRegistro:'sem_chapa',inicio:new Date().toISOString(),fim:null,_ts:Date.now()});
+    await save();renderAll();toast('⏱ Contando tempo sem chapa...');
+  }
+}
+function encerrarSemChapa(){
+  const ativo=semChapaAtivo();
+  if(ativo){ativo.fim=new Date().toISOString();ativo._ts=Date.now();return true;}
+  return false;
+}
+function renderSemChapa(){
+  const div=document.getElementById('semChapaArea');
+  if(!div||!colab){if(div)div.innerHTML='';return;}
+  if(semChapaTimerIv){clearInterval(semChapaTimerIv);semChapaTimerIv=null;}
+  if(getColabSetor()!=='chapa'){div.innerHTML='';return;}
+  const ativo=semChapaAtivo();
+  const mesAtual=mesLocalStr(new Date());
+  const totalMes=semChapaMinutosMes(colab.id,mesAtual);
+  const fmtT=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
+  if(ativo){
+    const calc=()=>Math.round((Date.now()-new Date(ativo.inicio).getTime())/60000);
+    div.innerHTML=`<div style="background:#FCEBEB;border:1.5px solid #A32D2D;border-radius:10px;padding:12px 14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#A32D2D;">⏱ SEM CHAPA — contando</div>
+          <div style="font-size:22px;font-weight:800;color:#A32D2D;" id="semChapaCronometro">${fmtT(calc())}</div>
+        </div>
+        <button onclick="alternarSemChapa()" style="background:#A32D2D;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;">⏹ Encerrar</button>
+      </div>
+      <div style="font-size:11px;color:#A32D2D;margin-top:6px;">Encerra sozinho quando você iniciar um painel. Total do mês: ${fmtT(totalMes)}</div>
+    </div>`;
+    semChapaTimerIv=setInterval(()=>{
+      const el=document.getElementById('semChapaCronometro');
+      if(!el){clearInterval(semChapaTimerIv);semChapaTimerIv=null;return;}
+      el.textContent=fmtT(calc());
+    },1000);
+  }else{
+    div.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid #e5e5e5;border-radius:10px;padding:10px 14px;">
+      <div style="font-size:12px;color:#666;">Parado esperando material? Registre o tempo.<div style="font-size:11px;color:#999;">Total sem chapa no mês: <strong>${fmtT(totalMes)}</strong></div></div>
+      <button onclick="alternarSemChapa()" style="background:#BA7517;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;">⏱ SEM CHAPA</button>
+    </div>`;
+  }
+}
+function renderPausasBadge(){
+  const div=document.getElementById('pausasBadge');
+  if(!div||!colab)return;
+  const cfg=colab.horarios;
+  const defs=[
+    {key:'cafeManha',icon:'☕',nome:'Café da manhã',cfg:cfg&&cfg.cafeManha},
+    {key:'almoco',icon:'🍽️',nome:'Almoço',cfg:cfg&&cfg.almoco},
+    {key:'cafeTarde',icon:'☕',nome:'Café da tarde',cfg:cfg&&cfg.cafeTarde}
+  ];
+  const configurados=defs.filter(d=>d.cfg&&d.cfg.inicio&&d.cfg.fim);
+  if(!configurados.length){
+    div.innerHTML='<div style="background:#f5f5f5;border:1px dashed #ccc;border-radius:8px;padding:7px 12px;font-size:11px;color:#999;">⏰ Nenhum horário de pausa automática configurado para você</div>';
+    return;
+  }
+  const agora=new Date();
+  const hhmm=agora.toTimeString().slice(0,5);
+  // determina: em pausa agora? próxima pausa?
+  let emPausa=null,proxima=null;
+  for(const d of configurados){
+    if(hhmm>=d.cfg.inicio&&hhmm<d.cfg.fim){emPausa=d;break;}
+  }
+  if(!emPausa){
+    const futuras=configurados.filter(d=>hhmm<d.cfg.inicio).sort((a,b)=>a.cfg.inicio.localeCompare(b.cfg.inicio));
+    proxima=futuras[0]||null;
+  }
+  // pills com todos os horários
+  const pills=configurados.map(d=>{
+    const ativa=emPausa&&emPausa.key===d.key;
+    const prox=proxima&&proxima.key===d.key;
+    const passou=hhmm>=d.cfg.fim;
+    let bg='#eef1ff',cor='#3550B4',bd='#c3ccf5';
+    if(ativa){bg='#FFF3E0';cor='#BA7517';bd='#f0c060;';}
+    else if(passou){bg='#f0f0f0';cor='#aaa';bd='#e0e0e0';}
+    else if(prox){bg='#EAF3DE';cor='#3B6D11';bd='#a8cf7a';}
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:${bg};color:${cor};border:1px solid ${bd};border-radius:99px;padding:3px 9px;font-size:11px;font-weight:600;${passou?'text-decoration:line-through;opacity:.7;':''}">${d.icon} ${d.cfg.inicio}–${d.cfg.fim}${prox?' ◀ próxima':''}${ativa?' ● agora':''}</span>`;
+  }).join(' ');
+
+  let statusLinha='';
+  if(emPausa){
+    statusLinha=`<div style="font-size:12px;font-weight:700;color:#BA7517;margin-top:5px;">${emPausa.icon} Em ${emPausa.nome} — retorno automático às ${emPausa.cfg.fim}</div>`;
+  }else if(proxima){
+    statusLinha=`<div style="font-size:12px;color:#555;margin-top:5px;">Próxima pausa: <strong>${proxima.icon} ${proxima.nome}</strong> às <strong>${proxima.cfg.inicio}</strong></div>`;
+  }else{
+    statusLinha=`<div style="font-size:12px;color:#888;margin-top:5px;">✓ Todas as pausas de hoje já passaram</div>`;
+  }
+
+  div.innerHTML=`<div style="background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:8px 12px;">
+    <div style="font-size:11px;color:#888;margin-bottom:5px;">⏰ Pausas automáticas de hoje</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">${pills}</div>
+    ${statusLinha}
+  </div>`;
+}
+
+// ── PAUSA/RETOMADA AUTOMÁTICA (café e almoço) ──
+// Pausa e retoma sozinho os quadros ativos do colaborador nos horários que o supervisor definiu.
+// Se o quadro já estiver pausado manualmente quando chega o horário, não faz nada.
+// Motor de pausas automáticas — RETROATIVO, e desenhado para dois princípios:
+//  (1) REDE DE SEGURANÇA: se o operador esqueceu de pausar, o sistema desconta a
+//      parte da janela de pausa em que ele não estava pausado.
+//  (2) FLEXIBILIDADE: se o operador RETOMOU manualmente dentro da janela, ele
+//      escolheu trabalhar — dali em diante o sistema não pausa de novo.
+// Preenche apenas as LACUNAS (partes não cobertas) da janela, nunca sobrepõe.
+function aplicarPausasAuto(colaborador){
+  if(!colaborador)return false;
+  const cfg=colaborador.horarios||{};
+  const defs=[
+    {key:'cafeManha',tipo:'intervalo',label:'☕ Café da manhã',cfg:cfg.cafeManha},
+    {key:'almoco',   tipo:'almoco',   label:'🍽️ Almoço',       cfg:cfg.almoco},
+    {key:'cafeTarde',tipo:'intervalo',label:'☕ Café da tarde', cfg:cfg.cafeTarde}
+  ];
+  const now=new Date();
+  const y=now.getFullYear(),mo=now.getMonth(),d=now.getDate();
+  const dataStr=`${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const mkMs=(hhmm)=>{const pr=String(hhmm).split(':');return new Date(y,mo,d,parseInt(pr[0])||0,parseInt(pr[1])||0,0,0).getTime();};
+  const nowMs=now.getTime();
+  const ativos=S.apontamentos.filter(a=>a&&a.colabId===colaborador.id&&!a.fim&&a.tipoRegistro!=='sem_chapa');
+  let mudou=false;
+  for(const apt of ativos){
+    if(!apt.pausas)apt.pausas=[];
+    const aptStart=apt.inicio?new Date(apt.inicio).getTime():null;
+    if(aptStart==null||isNaN(aptStart))continue;
+    for(const b of defs){
+      if(!b.cfg||!b.cfg.inicio||!b.cfg.fim)continue;
+      const bStart=mkMs(b.cfg.inicio),bEnd=mkMs(b.cfg.fim);
+      if(!(bEnd>bStart))continue;   // configuração inválida
+      if(nowMs<=bStart)continue;    // a janela ainda não começou
+      if(aptStart>=bEnd)continue;   // o painel só começou depois da pausa
+      const breakKey=dataStr+'_'+b.key;
+
+      // (0) O operador registrou MANUALMENTE uma pausa do mesmo tipo perto desta janela?
+      //     (até 30min antes ou depois). Então ele NÃO esqueceu — só pausou em horário
+      //     diferente. Essa pausa manual é a real: não cria a automática e remove a que
+      //     porventura já tenha sido criada, evitando contar o café/almoço duas vezes.
+      const GRACE_PAUSA=30*60000;
+      const temManualPerto=apt.pausas.some(p=>{
+        if(!p||p.auto||!p.inicio||p.tipo!==b.tipo)return false;
+        const s=new Date(p.inicio).getTime();
+        return !isNaN(s)&&s>=bStart-GRACE_PAUSA&&s<=bEnd+GRACE_PAUSA;
+      });
+      if(temManualPerto){
+        const antes=apt.pausas.length;
+        apt.pausas=apt.pausas.filter(p=>!(p&&p.auto&&p._breakKey===breakKey));
+        if(apt.pausas.length!==antes){apt._ts=Date.now();mudou=true;}
+        continue;
+      }
+
+      // (a) fecha no horário certo uma pausa automática deste intervalo que ficou aberta
+      if(nowMs>=bEnd){
+        const abertaAuto=apt.pausas.find(p=>p&&p.auto&&p._breakKey===breakKey&&!p.fim);
+        if(abertaAuto){abertaAuto.fim=new Date(bEnd).toISOString();apt._ts=Date.now();mudou=true;}
+      }
+
+      const janIni=Math.max(bStart,aptStart);
+      const limite=Math.min(bEnd,nowMs);   // nunca cria pausa no futuro
+      if(limite<=janIni)continue;
+
+      // (b) o operador RETOMOU manualmente dentro da janela? então dali em diante ele
+      //     optou por trabalhar: só preenchemos até esse instante.
+      let retomada=null;
+      apt.pausas.forEach(p=>{
+        if(!p||!p.fim)return;
+        const f=new Date(p.fim).getTime();
+        if(!isNaN(f)&&f>bStart&&f<bEnd){if(retomada===null||f>retomada)retomada=f;}
+      });
+      const fimPreenchivel=(retomada!==null)?Math.min(retomada,limite):limite;
+      if(fimPreenchivel<=janIni)continue;
+
+      // (c) cobertura atual das pausas existentes, recortada à região preenchível
+      const cob=[];
+      apt.pausas.forEach(p=>{
+        if(!p||!p.inicio)return;
+        let s=new Date(p.inicio).getTime();
+        if(isNaN(s))return;
+        let e=p.fim?new Date(p.fim).getTime():nowMs;
+        if(isNaN(e))e=nowMs;
+        s=Math.max(s,janIni);e=Math.min(e,fimPreenchivel);
+        if(e>s)cob.push([s,e]);
+      });
+      cob.sort((x,z)=>x[0]-z[0]);
+
+      // (d) lacunas = região preenchível − cobertura → cria pausa automática em cada lacuna
+      const lacunas=[];
+      let cursor=janIni;
+      for(const par of cob){
+        if(par[0]>cursor)lacunas.push([cursor,par[0]]);
+        if(par[1]>cursor)cursor=par[1];
+      }
+      if(cursor<fimPreenchivel)lacunas.push([cursor,fimPreenchivel]);
+
+      for(const g of lacunas){
+        const s=g[0],e=g[1];
+        if(e-s<60000)continue; // ignora lacunas menores que 1 minuto
+        // se ainda estamos dentro da janela e ninguém retomou, a pausa fica ABERTA (ao vivo)
+        const aberta=(retomada===null&&nowMs<bEnd&&e>=limite);
+        apt.pausas.push({inicio:new Date(s).toISOString(),fim:aberta?null:new Date(e).toISOString(),tipo:b.tipo,tipoLabel:b.label,auto:true,_breakKey:breakKey});
+        apt._ts=Date.now();mudou=true;
+      }
+    }
+    // ── FIM DO DIA (rede de segurança) ──
+    // Fora do horário de expediente, se o painel continua aberto e sem nenhuma pausa
+    // em curso, cria uma pausa "🌙 Fim do dia" começando no fim do expediente.
+    // Fica ABERTA até o colaborador retomar manualmente (sem retomada automática).
+    const _exp=(typeof S!=='undefined'&&S&&S.expediente)?S.expediente:null;
+    if(_exp&&_exp.fim){
+      const fimMs=mkMs(_exp.fim);
+      const iniMs=_exp.inicio?mkMs(_exp.inicio):null;
+      let refFim=null;
+      if(!isNaN(fimMs)&&nowMs>=fimMs){refFim=fimMs;}                       // à noite: fim de hoje
+      else if(iniMs!=null&&!isNaN(iniMs)&&nowMs<iniMs){refFim=fimMs-86400000;} // madrugada: fim de ontem
+      if(refFim!=null){
+        // já existe pausa "fim do dia" para este ponto (aberta OU já retomada pelo colaborador)?
+        // se ele já retomou, NÃO recria — o painel segue de onde ele voltou (evita re-pausar quem entra cedo)
+        const jaTemFimDia=apt.pausas.some(p=>p&&p.tipo==='fimdia'&&p.inicio&&Math.abs(new Date(p.inicio).getTime()-refFim)<60000);
+        const pausadoAgora=apt.pausas.some(p=>p&&!p.fim);
+        if(!jaTemFimDia&&!pausadoAgora&&aptStart<refFim){
+          apt.pausas.push({inicio:new Date(refFim).toISOString(),fim:null,tipo:'fimdia',tipoLabel:'🌙 Fim do dia',auto:true,_breakKey:dataStr+'_fimdia'});
+          apt._ts=Date.now();mudou=true;
+        }
+      }
+    }
+    // ordena as pausas por início (o cálculo de tempo depende disso)
+    apt.pausas.sort((x,z)=>((x&&x.inicio?new Date(x.inicio).getTime():0)-(z&&z.inicio?new Date(z.inicio).getTime():0)));
+  }
+  return mudou;
+}
+// ── FECHA PAUSAS MANUAIS ESQUECIDAS EM ABERTO ──
+// Se o colaborador aperta pausar e esquece de voltar, a pausa fecha sozinha
+// após a duração padrão do tipo: intervalo/café = 15min, almoço = 60min.
+// Atividade interna e fim do dia têm duração variável e NÃO são limitadas.
+const PAUSA_MAX_MIN={intervalo:15,almoco:60};
+function fecharPausasEsquecidas(){
+  let mudou=false;
+  const nowMs=Date.now();
+  (S.apontamentos||[]).forEach(apt=>{
+    if(!apt||apt.fim||apt.tipoRegistro==='sem_chapa')return;
+    (apt.pausas||[]).forEach(p=>{
+      if(!p||!p.inicio||p.fim||p.auto)return;       // só pausas MANUAIS que estão ABERTAS
+      const max=PAUSA_MAX_MIN[p.tipo];
+      if(!max)return;                                // tipo sem limite (atividade, fim do dia)
+      const ini=new Date(p.inicio).getTime();
+      if(isNaN(ini))return;
+      const limite=ini+max*60000;
+      if(nowMs>=limite){                             // passou da duração padrão → fecha no limite
+        p.fim=new Date(limite).toISOString();
+        p.autoFechada=true;                          // marca que o sistema fechou (não o operador)
+        apt._ts=Date.now();
+        mudou=true;
+      }
+    });
+  });
+  return mudou;
+}
+async function autoPausas(){
+  if(!colab)return;
+  let mudou=aplicarPausasAuto(colab);
+  if(fecharPausasEsquecidas())mudou=true;
+  if(mudou){await save();renderAll();}
+}
+function abrirFinalizar(aptId){
+  finalizando={id:aptId};_semErro=false;_errosSel=[];_obsErro='';
+  _erroProjeto=null;_obsErroProjeto='';
+  const c=document.getElementById(`fin-${aptId}`);if(c)renderFinPanel(aptId);
+}
+function renderFinPanel(aptId){
+  const c=document.getElementById(`fin-${aptId}`);if(!c)return;
+  const _apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  const _m=_apt?S.modelos.find(x=>x.id===_apt.modeloId):null;
+  const _liq=_apt?tempoLiquido(_apt):0;
+  const _temPrev=tempoPrevistoApt(_apt,_m);
+  const _acima=_temPrev>0&&_liq>_temPrev;
+  const _corT=!_temPrev?'#1a1a1a':_acima?'#A32D2D':'#1D9E75';
+  const _bgT=!_temPrev?'#f5f5f5':_acima?'#FCEBEB':'#EAF3DE';
+  c.innerHTML=`<div class="fin-panel">
+    ${_temPrev?`<div style="background:${_bgT};border-radius:9px;padding:10px 14px;margin-bottom:14px;"><div style="font-size:14px;font-weight:700;color:${_corT};">⏱ Tempo: ${_liq}min</div><div style="font-size:12px;color:${_corT};margin-top:3px;">Previsto: ${_temPrev}min ${_acima?'· Excedeu em '+(_liq-_temPrev)+'min':'· Dentro do previsto'}</div></div>`:''}
+    <h4>Como foi a montagem?</h4>
+    <div class="radio-group">
+      <div class="radio-opt ${_semErro?'sel':''}" onclick="selSemErro(${aptId})"><div><div class="radio-label">✓ Nenhum erro</div><div class="radio-sub">Montagem concluída corretamente</div></div></div>
+      <div class="radio-opt ${!_semErro&&_errosSel.length?'sel-bad':''}" onclick="selComErro(${aptId})"><div><div class="radio-label">⚠ Houve erros</div><div class="radio-sub">Selecione os tipos abaixo</div></div></div>
+    </div>
+    ${!_semErro?`<div>
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">Tipo de erro:</div>
+      <div class="chips">${TIPOS_ERRO.map(e=>`<span class="chip ${_errosSel.includes(e)?'ativo':''}" onclick="toggleErro(${aptId},'${e}')">${e}</span>`).join('')}</div>
+      <label>Descreva (opcional)</label>
+      <textarea id="obsErroFin-${aptId}" rows="2" placeholder="Ex: disjuntor com defeito...">${_obsErro}</textarea>
+    </div>`:''}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #eee;">
+      <h4 style="margin-bottom:10px;">Houve erro de projeto?</h4>
+      <div class="radio-group">
+        <div class="radio-opt ${_erroProjeto===false?'sel':''}" onclick="selErroProjeto(${aptId},false)"><div><div class="radio-label">✓ Não</div><div class="radio-sub">Projeto sem problemas</div></div></div>
+        <div class="radio-opt ${_erroProjeto===true?'sel-bad':''}" onclick="selErroProjeto(${aptId},true)"><div><div class="radio-label">⚠ Sim, houve erro de projeto</div><div class="radio-sub">Descreva o erro abaixo</div></div></div>
+      </div>
+      ${_erroProjeto===true?`<div style="margin-top:10px;">
+        <label>Qual erro de projeto?</label>
+        <textarea id="obsErroProjeto-${aptId}" rows="2" placeholder="Ex: furação fora de medida, componente especificado errado...">${_obsErroProjeto}</textarea>
+      </div>`:''}
+    </div>
+    <button class="btn-confirmar-fin" onclick="confirmarFin(${aptId})">Confirmar finalização</button>
+    <button class="btn-cancel-fin" onclick="cancelarFin(${aptId})">Cancelar</button>
+  </div>`;
+}
+function selSemErro(id){_semErro=true;_errosSel=[];_obsErro='';renderFinPanel(id);}
+function selComErro(id){_semErro=false;renderFinPanel(id);}
+function toggleErro(id,tipo){
+  _semErro=false;
+  const el=document.getElementById(`obsErroFin-${id}`);if(el)_obsErro=el.value;
+  const i=_errosSel.indexOf(tipo);if(i>=0)_errosSel.splice(i,1);else _errosSel.push(tipo);
+  renderFinPanel(id);
+}
+function selErroProjeto(id,houve){
+  // guarda o que já foi digitado antes de re-renderizar
+  const el=document.getElementById(`obsErroFin-${id}`);if(el)_obsErro=el.value;
+  const elp=document.getElementById(`obsErroProjeto-${id}`);if(elp)_obsErroProjeto=elp.value;
+  _erroProjeto=houve;
+  if(!houve)_obsErroProjeto='';
+  renderFinPanel(id);
+}
+function cancelarFin(id){finalizando=null;const c=document.getElementById(`fin-${id}`);if(c)c.innerHTML='';}
+async function estadoServidor(aptId){
+  // busca o estado ATUAL de um apontamento no servidor (sem alterar nada)
+  // usado para evitar que uma aba obsoleta sobrescreva dados já avançados por outra pessoa
+  try{
+    const r=await fetch(DB_URL+'.json');
+    if(!r.ok)return null;
+    const d=await r.json();
+    if(!d||!d.apontamentos)return null;
+    let apts=d.apontamentos;
+    if(!Array.isArray(apts))apts=Object.values(apts).filter(x=>x!=null);
+    return apts.find(a=>a&&a.id===aptId)||null;
+  }catch(e){return null;}
+}
+
+let _finalizandoAcao=false;
+async function confirmarFin(aptId){
+  if(_finalizandoAcao)return; // trava anti-duplo-clique
+  if(!_semErro&&!_errosSel.length){toast('Selecione "Nenhum erro" ou indique o tipo.');return;}
+  // valida resposta sobre erro de projeto
+  if(_erroProjeto===null){toast('Indique se houve erro de projeto.');return;}
+  const elProj=document.getElementById(`obsErroProjeto-${aptId}`);
+  const obsErroProjeto=elProj?elProj.value.trim():'';
+  if(_erroProjeto===true&&!obsErroProjeto){toast('Descreva qual foi o erro de projeto.');return;}
+  const el=document.getElementById(`obsErroFin-${aptId}`);
+  const obsErro=el?el.value.trim():'';
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt||apt.fim)return;
+  _finalizandoAcao=true;
+  try{
+
+  // PROTEÇÃO: verifica se outra pessoa já avançou este painel
+  const srvApt=await estadoServidor(aptId);
+  if(srvApt&&(srvApt.fim||srvApt.etapa==='montagem_final'||srvApt.etapa==='concluido'||srvApt.etapa==='eletrica')){
+    toast('⚠ Este painel já foi atualizado por outra pessoa. Recarregando...');
+    finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
+    await load();renderAll();
+    return;
+  }
+
+  if(estaPausado(apt)){const u=(apt.pausas||[]).slice(-1)[0];if(u&&!u.fim)u.fim=new Date().toISOString();}
+  apt.fim=new Date().toISOString();
+  apt.erros=_semErro?[]:_errosSel;
+  apt.obsErro=_semErro?'':obsErro;
+  apt.erroProjeto=_erroProjeto===true;
+  apt.obsErroProjeto=_erroProjeto===true?obsErroProjeto:'';
+
+  // salva retrabalho se ativo
+  const retrab=_retrabAtivo[aptId];
+  if(retrab&&retrab.ativo&&retrab.setores.length>0){
+    const obsEl2=document.getElementById('retrab-obs-'+aptId);
+    apt.retrabalho={setores:retrab.setores,obs:obsEl2?obsEl2.value.trim():retrab.obs||''};
+  } else {
+    apt.retrabalho=null;
+  }
+  delete _retrabAtivo[aptId];
+  finalizando=null;_semErro=false;_errosSel=[];_obsErro='';
+  // roteamento por setor
+  const aptSetor=apt.setor||getColabSetor();
+  if(aptSetor==='chapa'){
+    apt.etapa='eletrica';
+    apt._ts=Date.now();
+    await save();renderAll();
+    toast('✓ Chapa finalizada! Liberado para Montagem Elétrica');
+  } else {
+    apt.etapa='montagem_final';
+    apt.mf={checklist:{},obs:'',resultado:null,inicio:new Date().toISOString()};
+    apt._ts=Date.now();
+    await save();renderAll();renderMF();
+    const isMfResp2=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
+    toast('Enviado para Montagem Final 🔍');
+    if(isMfResp2)switchTab('mf');
+  }
+
+  } finally {
+    _finalizandoAcao=false;
+  }
+}
+function startTimer(aptId,apt){
+  if(timerIv)clearInterval(timerIv);
+  timerIv=setInterval(()=>{
+    const el=document.getElementById(`tmr-${aptId}`);if(!el){clearInterval(timerIv);return;}
+    const liq=tempoLiquido(apt);
+    el.textContent=liq>=60?`${Math.floor(liq/60)}h ${liq%60}min`:`${liq}min trabalhados`;
+  },15000);
+  const el=document.getElementById(`tmr-${aptId}`);
+  if(el){const liq=tempoLiquido(apt);el.textContent=`${liq}min trabalhados`;}
+}
+const MF_CHECKLIST=[
+  {id:'inspecao_visual', label:'Feita a inspeção visual geral?', icon:'👁️'},
+  {id:'medidas_chicote', label:'Todas as medidas do chicote de força/comando estavam OK?', icon:'📏'},
+  {id:'limpeza_aspirador', label:'Feita a limpeza do painel com aspirador?', icon:'🧹'},
+  {id:'carcaca', label:'Carcaça sem arranhado, defeito de pintura ou furação errada?', icon:'🔲'},
+  {id:'furacoes_pintadas', label:'Todas as furações estão pintadas?', icon:'🎨'},
+  {id:'fixacao', label:'Possui os elementos de fixação em bom estado? (arruela, parafuso e porca)', icon:'🔩'},
+  {id:'erro_ligacao', label:'Sem erro de ligação?', icon:'🔌'},
+  {id:'bitolas', label:'Cabos (bitolas) atendem a carga (corrente) a que são submetidos?', icon:'⚡'},
+  {id:'neutros', label:'Todos os neutros foram reconectados após a bipagem?', icon:'🔗'},
+  {id:'checklists_preenchidos', label:'Todos os checklists estavam corretamente preenchidos?', icon:'📋'},
+  {id:'protecoes_acrilico', label:'Foram colocadas as proteções de acrílico onde necessário?', icon:'🛡️'},
+  {id:'contatos', label:'Verificado se há contato invertido ou mal encaixado?', icon:'🔍'},
+  {id:'duplo_check', label:'Duplo check (CPU, módulo, contatos auxiliares, régua de borne e relés)', icon:'✔️'},
+  {id:'ops_apontadas', label:'OPs foram apontadas?', icon:'📝'},
+  {id:'obs_revisadas', label:'Todas as observações foram revisadas?', icon:'📄'},
+];
+
+let _mfEstado={};
+let _mfIniciado=new Set(); // {aptId: {checklist:{id:true/false}, obs}}
+
+async function iniciarMontagemFinal(aptId){
+  _mfIniciado.add(aptId);
+  if(!_mfEstado[aptId])_mfEstado[aptId]={checklist:{},obs:''};
+  // grava o horário de início da INSPEÇÃO (persistido, só se ainda não houver)
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  if(apt){
+    if(!apt.mf)apt.mf={};
+    if(!apt.mf.inicioInspecao){
+      apt.mf.inicioInspecao=new Date().toISOString();
+      apt._ts=Date.now();
+      await save();
+    }
+  }
+  renderMF();
+}
+// ══════════ PAINÉIS INCOMPLETOS na Montagem Final ══════════
+let _mfMarcandoInc=new Set();
+let _marcandoIncompleto=false;
+let _resolvendoIncompleto=false;
+async function confirmarIncompleto(aptId){
+  if(_marcandoIncompleto)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  if(!apt)return;
+  const ta=document.getElementById('mfIncObs-'+aptId);
+  const obs=ta?ta.value.trim():'';
+  _marcandoIncompleto=true;
+  try{
+    apt.mf=Object.assign({},apt.mf,{incompleto:true,obsIncompleto:obs,marcadoIncompletoEm:new Date().toISOString(),marcadoIncompletoPor:colab.id});
+    apt._ts=Date.now();
+    _mfMarcandoInc.delete(aptId);
+    renderAll();
+    toast('Painel movido para incompletos ⚠');
+    await save();
+    renderAll();
+  } finally { _marcandoIncompleto=false; }
+}
+async function resolverIncompleto(aptId){
+  if(_resolvendoIncompleto)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  if(!apt||!apt.mf)return;
+  _resolvendoIncompleto=true;
+  try{
+    apt.mf.incompleto=false;
+    apt._ts=Date.now();
+    renderAll();
+    toast('Painel voltou para a inspeção ✅');
+    await save();
+    renderAll();
+  } finally { _resolvendoIncompleto=false; }
+}
+function renderMfIncompletos(incompletos,div){
+  if(!incompletos||!incompletos.length)return;
+  const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const sec=document.createElement('div');
+  sec.style.cssText='margin-top:18px;border-top:2px solid #fed7aa;padding-top:14px;';
+  sec.innerHTML='<div style="font-size:15px;font-weight:800;color:#c2410c;margin-bottom:4px;">⚠ Painéis incompletos ('+incompletos.length+')</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px;">Aguardando o item que falta. Quando o item chegar, toque em "Item chegou" para o painel voltar à fila de inspeção.</div>';
+  div.appendChild(sec);
+  incompletos.forEach(apt=>{
+    const m=S.modelos.find(x=>x&&x.id===apt.modeloId);
+    const autor=S.colaboradores.find(x=>x&&x.id===apt.colabId);
+    const card=document.createElement('div');
+    card.className='mf-card';
+    card.style.cssText='border-left:4px solid #ea580c;';
+    card.innerHTML='<div class="mf-header"><div><div class="mf-title">OP '+(apt.opNum||'—')+'</div>'
+      +'<div style="font-size:12px;color:#888;">'+(m?m.codigo:apt.modeloLabel||'—')+'</div>'
+      +'<div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: '+(autor?autor.nome:'—')+'</div></div>'
+      +'<span class="badge" style="background:#ffedd5;color:#c2410c;">⚠ Incompleto</span></div>'
+      +((apt.mf&&apt.mf.obsIncompleto)?'<div style="font-size:13px;color:#9a3412;background:#fff7ed;border-radius:6px;padding:8px 10px;margin-top:8px;"><strong>Falta:</strong> '+esc(apt.mf.obsIncompleto)+'</div>':'');
+    const btn=document.createElement('button');
+    btn.className='btn-start';btn.style.cssText='background:#16a34a;margin-top:12px;';
+    btn.textContent='✅ Item chegou — voltar para inspeção';
+    btn.addEventListener('click',function(){resolverIncompleto(apt.id);});
+    card.appendChild(btn);
+    sec.appendChild(card);
+  });
+}
+
+function renderMF(){
+  const div=document.getElementById('mfLista');
+  if(!div)return;
+  const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
+  if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
+  // SOMENTE quadros em montagem final aguardando inspeção
+  const mfApts=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)&&!(a.mf&&a.mf.incompleto));
+  const incompletos=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&a.mf&&a.mf.incompleto&&!a.mf.resultado);
+  const badge=document.getElementById('mfBadge');
+  const tabs=document.getElementById('colTabs');
+  if(tabs)tabs.style.display=mfApts.length||incompletos.length||S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
+  if(badge){const nb=mfApts.length+incompletos.length;badge.textContent=nb;badge.style.display=nb?'inline':'none';}
+  if(!mfApts.length&&!incompletos.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
+  div.innerHTML='';
+  if(!mfApts.length){const _p=document.createElement('p');_p.className='empty';_p.style.cssText='padding:10px 0;';_p.textContent='Nenhum quadro aguardando inspeção.';div.appendChild(_p);}
+  mfApts.forEach(apt=>{
+    const m=S.modelos.find(x=>x.id===apt.modeloId);
+    const autor=S.colaboradores.find(x=>x.id===apt.colabId);
+    const iniciado=_mfIniciado.has(apt.id)||(apt.mf&&apt.mf.inicioInspecao&&!apt.mf.fim);
+    const card=document.createElement('div');
+    card.className='mf-card';
+    card.id='mf-card-'+apt.id;
+
+    if(!iniciado){
+      // ── CARD FECHADO: só cabeçalho + botão Iniciar Montagem Final ──
+      card.innerHTML=`<div class="mf-header">
+        <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
+          <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
+        <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Aguardando inspeção</span>
+      </div>`;
+      const btn=document.createElement('button');
+      btn.className='btn-start';
+      btn.style.cssText='background:#7c3aed;margin-top:12px;';
+      btn.textContent='🔍 Iniciar Montagem Final';
+      btn.addEventListener('click',function(){iniciarMontagemFinal(apt.id);});
+      card.appendChild(btn);
+      if(_mfMarcandoInc.has(apt.id)){
+        const box=document.createElement('div');
+        box.style.cssText='margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;';
+        box.innerHTML='<label style="font-size:12px;color:#9a3412;font-weight:600;">O que está faltando neste painel?</label>';
+        const ta=document.createElement('textarea');
+        ta.id='mfIncObs-'+apt.id;
+        ta.style.cssText='width:100%;min-height:52px;margin-top:4px;padding:8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;box-sizing:border-box;';
+        ta.placeholder='Ex.: falta disjuntor, borne, etiqueta...';
+        box.appendChild(ta);
+        const linha=document.createElement('div');linha.style.cssText='display:flex;gap:8px;margin-top:8px;';
+        const conf=document.createElement('button');conf.className='btn-start';conf.style.cssText='background:#ea580c;flex:1;margin-top:0;';conf.textContent='⚠ Mover para incompletos';
+        conf.addEventListener('click',function(){confirmarIncompleto(apt.id);});
+        const canc=document.createElement('button');canc.style.cssText='background:#eee;color:#333;border:none;border-radius:8px;padding:0 16px;cursor:pointer;';canc.textContent='Cancelar';
+        canc.addEventListener('click',function(){_mfMarcandoInc.delete(apt.id);renderMF();});
+        linha.append(conf,canc);box.appendChild(linha);
+        card.appendChild(box);
+      } else {
+        const btnInc=document.createElement('button');
+        btnInc.style.cssText='width:100%;margin-top:8px;background:#fff;color:#ea580c;border:1px solid #ea580c;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;';
+        btnInc.textContent='⚠ Item faltando (incompleto)';
+        btnInc.addEventListener('click',function(){_mfMarcandoInc.add(apt.id);renderMF();});
+        card.appendChild(btnInc);
+      }
+      div.appendChild(card);
+      return;
+    }
+
+    // ── CARD ABERTO: checklist + observações + aprovar/reprovar ──
+    if(!_mfEstado[apt.id])_mfEstado[apt.id]={checklist:{},obs:''};
+    const est=_mfEstado[apt.id];
+    card.innerHTML=`<div class="mf-header">
+      <div><div class="mf-title">OP ${apt.opNum||'—'}</div>
+        <div style="font-size:12px;color:#888;">${m?m.codigo:apt.modeloLabel||'—'}</div>
+        <div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: ${autor?autor.nome:'—'}</div></div>
+      <span class="badge" style="background:#ede9fe;color:#7c3aed;">🔍 Em inspeção</span>
+    </div>
+    ${apt.mf&&apt.mf.inicioInspecao?`<div style="font-size:12px;color:#7c3aed;font-weight:600;margin-bottom:8px;">⏱ Em inspeção há ${Math.max(0,Math.round((Date.now()-new Date(apt.mf.inicioInspecao))/60000))}min (desde ${new Date(apt.mf.inicioInspecao).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})})</div>`:''}
+    <div style="font-size:12px;color:#888;margin-bottom:12px;">Verifique cada item antes de aprovar o quadro</div>`;
+
+    const cl=document.createElement('div');cl.className='checklist';
+    MF_CHECKLIST.forEach(item=>{
+      const row=document.createElement('div');
+      const val=est.checklist[item.id];
+      row.className='check-item'+(val===true?' ok':val===false?' nok':'');
+      row.innerHTML=`<span class="check-icon">${item.icon}</span>
+        <span class="check-label">${item.label}</span>
+        <span class="check-status">${val===true?'✓ OK':val===false?'✗ NOK':'—'}</span>`;
+      row.addEventListener('click',function(){
+        const cur=est.checklist[item.id];
+        est.checklist[item.id]=cur===true?false:cur===false?undefined:true;
+        renderMF();
+      });
+      cl.appendChild(row);
+    });
+    card.appendChild(cl);
+
+    const obsDiv=document.createElement('div');obsDiv.className='mf-obs';
+    obsDiv.innerHTML='<label>Observações (opcional)</label>';
+    const ta=document.createElement('textarea');
+    ta.rows=2;ta.placeholder='Registre observações da inspeção...';ta.value=est.obs||'';
+    ta.style.cssText='width:100%;font-size:13px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-family:inherit;';
+    ta.addEventListener('input',function(){est.obs=this.value;});
+    obsDiv.appendChild(ta);
+    card.appendChild(obsDiv);
+
+    const btns=document.createElement('div');btns.style.cssText='margin-top:12px;';
+    const btnAp=document.createElement('button');btnAp.className='btn-aprovar';btnAp.textContent='✓ Finalizar inspeção';
+    btnAp.style.width='100%';
+    btnAp.addEventListener('click',function(){finalizarMF(apt.id);});
+    btns.append(btnAp);
+    card.appendChild(btns);
+    div.appendChild(card);
+  });
+  renderMfIncompletos(incompletos,div);
+}
+
+async function finalizarMF(aptId){
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);if(!apt)return;
+  // PROTEÇÃO: se o servidor já tem uma decisão para este painel, não sobrescreve
+  const srvApt=await estadoServidor(aptId);
+  if(srvApt&&srvApt.mf&&srvApt.mf.resultado){
+    toast('⚠ Este painel já foi finalizado por outra pessoa. Recarregando...');
+    await load();renderAll();renderMF();
+    return;
+  }
+  const est=_mfEstado[aptId]||{checklist:{},obs:''};
+  // itens marcados como NOK ficam REGISTRADOS no checklist (o responsável corrige e aprova mesmo assim)
+  const nok=MF_CHECKLIST.filter(i=>est.checklist[i.id]===false).map(i=>i.label);
+  if(!apt.mf)apt.mf={};
+  apt.mf.checklist=est.checklist;
+  apt.mf.obs=est.obs;
+  apt.mf.itensCorrigidos=nok;           // guarda o que estava NOK e foi corrigido na própria MF
+  apt.mf.resultado='aprovado';          // sempre aprovado — o retrabalho é feito na própria MF
+  apt.mf.fim=new Date().toISOString();
+  apt.etapa='concluido';
+  apt._ts=Date.now();
+  _mfIniciado.delete(aptId);
+  await save();renderAll();renderMF();
+  toast(nok.length?('✓ Finalizado! '+nok.length+' item(ns) corrigido(s) na inspeção'):'✓ Quadro aprovado na inspeção!');
+}
+
+function switchTab(tab){
+  const prod=document.getElementById('opsDiv');
+  const mf=document.getElementById('mfDiv');
+  const t1=document.getElementById('tab-producao');
+  const t2=document.getElementById('tab-mf');
+  if(tab==='producao'){
+    if(prod)prod.style.display='block';
+    if(mf)mf.style.display='none';
+    if(t1){t1.style.background='#1a1a1a';t1.style.color='#fff';t1.style.border='none';}
+    if(t2){t2.style.background='#fff';t2.style.color='#7c3aed';t2.style.border='1px solid #7c3aed';}
+  } else {
+    if(prod)prod.style.display='none';
+    if(mf)mf.style.display='block';
+    if(t1){t1.style.background='#fff';t1.style.color='#1a1a1a';t1.style.border='1px solid #ddd';}
+    if(t2){t2.style.background='#7c3aed';t2.style.color='#fff';t2.style.border='none';}
+    renderMF();
+  }
+}
+
+function abrirSupervisor(){
+  const url=window.location.href.replace(/colaborador[^/]*\.html.*/,'supervisor.html');
+  window.open(url,'_blank');
+}
+
+async function init(){
+  const ok=await load();
+  if(ok)showSelect();
+  else{
+    document.getElementById('setupScreen').style.display='flex';
+  }
+  let ultimaDigitacao=0;
+  document.addEventListener('keydown',()=>ultimaDigitacao=Date.now());
+
+  setInterval(async()=>{
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const tempoDigitando=Date.now()-ultimaDigitacao;
+    // pausa se estiver digitando E tiver digitado algo nos últimos 2 minutos
+    if(colab&&!finalizando&&!(digitando&&tempoDigitando<120000)){
+      await load();renderAll();
+      try{await autoPausas();}catch(e){}
+    }
+  },12000);
+
+  // ── AUTO-RELOAD A CADA 30 MINUTOS ──
+  // Recarrega a página inteira para evitar que abas abertas o dia todo
+  // acumulem estado velho. Só recarrega quando é SEGURO (ninguém no meio de uma ação).
+  const RELOAD_INTERVAL=30*60*1000; // 30 minutos
+  let _proximoReload=Date.now()+RELOAD_INTERVAL;
+  setInterval(async()=>{
+    if(Date.now()<_proximoReload)return; // ainda não deu 30 min
+    // verifica se é seguro recarregar
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const tempoDigitando=Date.now()-ultimaDigitacao;
+    const painelAberto=!!finalizando||!!_tipoPausa||document.querySelector('.fin-panel')||document.querySelector('.add-form');
+    // só recarrega se NÃO estiver digitando, finalizando, com painel aberto, etc.
+    if(digitando&&tempoDigitando<120000)return; // está digitando agora, espera
+    if(painelAberto)return; // tem um painel/formulário aberto, espera
+    if(finalizando)return; // está finalizando, espera
+    // seguro: sincroniza uma última vez e recarrega
+    try{await load();}catch(e){}
+    location.reload();
+  },60000); // checa a cada 1 minuto se já é hora e se é seguro
+
+  // ── RELOAD AO VOLTAR PARA A ABA ──
+  // Quando o usuário volta para a aba (depois de trocar de aba/minimizar),
+  // recarrega a página automaticamente (como F5) para garantir dados atualizados.
+  // Só recarrega se ficou fora por pelo menos alguns segundos e não está no meio de uma ação.
+  let _saiuEm=0;
+  document.addEventListener('visibilitychange',async()=>{
+    if(document.hidden){
+      _saiuEm=Date.now();
+      return;
+    }
+    // voltou para a aba
+    const foraPor=Date.now()-_saiuEm;
+    if(_saiuEm===0||foraPor<3000)return; // ignorou saídas muito rápidas (<3s)
+    // verifica se é seguro recarregar (não atrapalha quem está no meio de algo)
+    const ativo=document.activeElement;
+    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
+    const painelAberto=!!finalizando||!!_tipoPausa||document.querySelector('.fin-panel')||document.querySelector('.add-form');
+    if(digitando||painelAberto||finalizando){
+      // não recarrega para não perder o que está sendo feito; só sincroniza
+      try{await load();renderAll();}catch(e){}
+      return;
+    }
+    location.reload();
+  });
+}
+
+init();
 </script>
 </body>
 </html>

@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v67</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v71</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1568,19 +1568,84 @@ async function iniciarMontagemFinal(aptId){
   }
   renderMF();
 }
+// ══════════ PAINÉIS INCOMPLETOS na Montagem Final ══════════
+let _mfMarcandoInc=new Set();
+let _marcandoIncompleto=false;
+let _resolvendoIncompleto=false;
+async function confirmarIncompleto(aptId){
+  if(_marcandoIncompleto)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  if(!apt)return;
+  const ta=document.getElementById('mfIncObs-'+aptId);
+  const obs=ta?ta.value.trim():'';
+  _marcandoIncompleto=true;
+  try{
+    apt.mf=Object.assign({},apt.mf,{incompleto:true,obsIncompleto:obs,marcadoIncompletoEm:new Date().toISOString(),marcadoIncompletoPor:colab.id});
+    apt._ts=Date.now();
+    _mfMarcandoInc.delete(aptId);
+    renderAll();
+    toast('Painel movido para incompletos ⚠');
+    await save();
+    renderAll();
+  } finally { _marcandoIncompleto=false; }
+}
+async function resolverIncompleto(aptId){
+  if(_resolvendoIncompleto)return;
+  const apt=S.apontamentos.find(a=>a&&a.id===aptId);
+  if(!apt||!apt.mf)return;
+  _resolvendoIncompleto=true;
+  try{
+    apt.mf.incompleto=false;
+    apt._ts=Date.now();
+    renderAll();
+    toast('Painel voltou para a inspeção ✅');
+    await save();
+    renderAll();
+  } finally { _resolvendoIncompleto=false; }
+}
+function renderMfIncompletos(incompletos,div){
+  if(!incompletos||!incompletos.length)return;
+  const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const sec=document.createElement('div');
+  sec.style.cssText='margin-top:18px;border-top:2px solid #fed7aa;padding-top:14px;';
+  sec.innerHTML='<div style="font-size:15px;font-weight:800;color:#c2410c;margin-bottom:4px;">⚠ Painéis incompletos ('+incompletos.length+')</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px;">Aguardando o item que falta. Quando o item chegar, toque em "Item chegou" para o painel voltar à fila de inspeção.</div>';
+  div.appendChild(sec);
+  incompletos.forEach(apt=>{
+    const m=S.modelos.find(x=>x&&x.id===apt.modeloId);
+    const autor=S.colaboradores.find(x=>x&&x.id===apt.colabId);
+    const card=document.createElement('div');
+    card.className='mf-card';
+    card.style.cssText='border-left:4px solid #ea580c;';
+    card.innerHTML='<div class="mf-header"><div><div class="mf-title">OP '+(apt.opNum||'—')+'</div>'
+      +'<div style="font-size:12px;color:#888;">'+(m?m.codigo:apt.modeloLabel||'—')+'</div>'
+      +'<div style="font-size:11px;color:#aaa;margin-top:2px;">Montado por: '+(autor?autor.nome:'—')+'</div></div>'
+      +'<span class="badge" style="background:#ffedd5;color:#c2410c;">⚠ Incompleto</span></div>'
+      +((apt.mf&&apt.mf.obsIncompleto)?'<div style="font-size:13px;color:#9a3412;background:#fff7ed;border-radius:6px;padding:8px 10px;margin-top:8px;"><strong>Falta:</strong> '+esc(apt.mf.obsIncompleto)+'</div>':'');
+    const btn=document.createElement('button');
+    btn.className='btn-start';btn.style.cssText='background:#16a34a;margin-top:12px;';
+    btn.textContent='✅ Item chegou — voltar para inspeção';
+    btn.addEventListener('click',function(){resolverIncompleto(apt.id);});
+    card.appendChild(btn);
+    sec.appendChild(card);
+  });
+}
+
 function renderMF(){
   const div=document.getElementById('mfLista');
   if(!div)return;
   const isMfResp=((S.mfResponsaveis&&S.mfResponsaveis.includes(colab.id))||(S.mfResponsavel&&S.mfResponsavel===colab.id));
   if(!isMfResp){div.innerHTML='<p class="empty">Você não é o responsável pela Montagem Final.</p>';return;}
   // SOMENTE quadros em montagem final aguardando inspeção
-  const mfApts=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado));
+  const mfApts=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)&&!(a.mf&&a.mf.incompleto));
+  const incompletos=S.apontamentos.filter(a=>a&&a.etapa==='montagem_final'&&a.mf&&a.mf.incompleto&&!a.mf.resultado);
   const badge=document.getElementById('mfBadge');
   const tabs=document.getElementById('colTabs');
-  if(tabs)tabs.style.display=mfApts.length||S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
-  if(badge){badge.textContent=mfApts.length;badge.style.display=mfApts.length?'inline':'none';}
-  if(!mfApts.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
+  if(tabs)tabs.style.display=mfApts.length||incompletos.length||S.apontamentos.filter(a=>a&&a.colabId===colab.id&&!a.fim&&a.etapa!=='montagem_final'&&a.tipoRegistro!=='sem_chapa').length?'flex':'none';
+  if(badge){const nb=mfApts.length+incompletos.length;badge.textContent=nb;badge.style.display=nb?'inline':'none';}
+  if(!mfApts.length&&!incompletos.length){div.innerHTML='<p class="empty" style="padding:20px 0;">Nenhum quadro aguardando inspeção.</p>';return;}
   div.innerHTML='';
+  if(!mfApts.length){const _p=document.createElement('p');_p.className='empty';_p.style.cssText='padding:10px 0;';_p.textContent='Nenhum quadro aguardando inspeção.';div.appendChild(_p);}
   mfApts.forEach(apt=>{
     const m=S.modelos.find(x=>x.id===apt.modeloId);
     const autor=S.colaboradores.find(x=>x.id===apt.colabId);
@@ -1603,6 +1668,29 @@ function renderMF(){
       btn.textContent='🔍 Iniciar Montagem Final';
       btn.addEventListener('click',function(){iniciarMontagemFinal(apt.id);});
       card.appendChild(btn);
+      if(_mfMarcandoInc.has(apt.id)){
+        const box=document.createElement('div');
+        box.style.cssText='margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px;';
+        box.innerHTML='<label style="font-size:12px;color:#9a3412;font-weight:600;">O que está faltando neste painel?</label>';
+        const ta=document.createElement('textarea');
+        ta.id='mfIncObs-'+apt.id;
+        ta.style.cssText='width:100%;min-height:52px;margin-top:4px;padding:8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;box-sizing:border-box;';
+        ta.placeholder='Ex.: falta disjuntor, borne, etiqueta...';
+        box.appendChild(ta);
+        const linha=document.createElement('div');linha.style.cssText='display:flex;gap:8px;margin-top:8px;';
+        const conf=document.createElement('button');conf.className='btn-start';conf.style.cssText='background:#ea580c;flex:1;margin-top:0;';conf.textContent='⚠ Mover para incompletos';
+        conf.addEventListener('click',function(){confirmarIncompleto(apt.id);});
+        const canc=document.createElement('button');canc.style.cssText='background:#eee;color:#333;border:none;border-radius:8px;padding:0 16px;cursor:pointer;';canc.textContent='Cancelar';
+        canc.addEventListener('click',function(){_mfMarcandoInc.delete(apt.id);renderMF();});
+        linha.append(conf,canc);box.appendChild(linha);
+        card.appendChild(box);
+      } else {
+        const btnInc=document.createElement('button');
+        btnInc.style.cssText='width:100%;margin-top:8px;background:#fff;color:#ea580c;border:1px solid #ea580c;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;';
+        btnInc.textContent='⚠ Item faltando (incompleto)';
+        btnInc.addEventListener('click',function(){_mfMarcandoInc.add(apt.id);renderMF();});
+        card.appendChild(btnInc);
+      }
       div.appendChild(card);
       return;
     }
@@ -1653,6 +1741,7 @@ function renderMF(){
     card.appendChild(btns);
     div.appendChild(card);
   });
+  renderMfIncompletos(incompletos,div);
 }
 
 async function finalizarMF(aptId){

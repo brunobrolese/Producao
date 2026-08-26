@@ -25,7 +25,7 @@ body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size
 .ok{color:#1D9E75!important;} .warn{color:#BA7517!important;} .bad{color:#A32D2D!important;}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:12px;}
 .card h3{font-size:13px;font-weight:600;color:#666;margin-bottom:12px;}
-.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-abottom:10px;}
 .frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
 label{font-size:12px;color:#666;display:block;margin-bottom:4px;}
 input,select{width:100%;font-size:13px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;outline:none;}
@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v71</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v72</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3753,7 +3753,8 @@ function parsePedidos(rows){
     let mes=_pMesDe(iMes>=0?row[iMes]:null); if(mes==null)mes=_pMesData(dataRef);
     let ano=(iAno>=0&&row[iAno])?parseInt(row[iAno]):null; if(!ano)ano=_pAnoData(dataRef);
     const cand=[];[op,chic].forEach(v=>{if(v==null)return;const ms=String(v).match(/\d{4,}/g);if(ms)ms.forEach(n=>{if(cand.indexOf(n)<0)cand.push(n);});});
-    out.push({pedido:(iPed>=0&&row[iPed]!=null)?row[iPed]:'',op:op==null?'':op,chicotes:chic==null?'':chic,status,bucket:_pBucket(status),mes,ano,desc:iDesc>=0?String(row[iDesc]||''):'',cand});
+    const _ent=(iEntrega>=0?row[iEntrega]:null);const _entD=(_ent instanceof Date)?_ent:(_ent!=null&&_ent!==''?new Date(_ent):null);const entrega=(_entD&&!isNaN(_entD))?_entD.getTime():null;
+    out.push({pedido:(iPed>=0&&row[iPed]!=null)?row[iPed]:'',op:op==null?'':op,chicotes:chic==null?'':chic,status,bucket:_pBucket(status),mes,ano,entrega,desc:iDesc>=0?String(row[iDesc]||''):'',cand});
   }
   return out;
 }
@@ -3804,10 +3805,12 @@ function renderPedidos(){
     const b={pronto:0,producao:0,pendente:0,cancelado:0};arr.forEach(p=>b[p.bucket]++);
     const nProd=arr.filter(prod).length;
     const bcor={pronto:['#15803d','#f0fdf4'],producao:['#b45309','#fffbeb'],pendente:['#3550B4','#eef2ff'],cancelado:['#b91c1c','#fef2f2']};
+    arr.sort((a,b)=>{const ea=(a.entrega==null?Infinity:a.entrega),eb=(b.entrega==null?Infinity:b.entrega);return ea-eb;});
     const linhas=arr.map(p=>{
       const bc=bcor[p.bucket]||['#666','#f5f5f5'];const pz=prod(p);
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 4px;border-bottom:1px solid #f2f2f2;flex-wrap:wrap;">'
         +'<div style="min-width:0;"><span style="font-size:13px;font-weight:700;">OP '+esc(p.op||'—')+'</span> <span style="font-size:12px;color:#999;">· ped '+esc(p.pedido||'—')+'</span>'
+        +(p.entrega?('<span style="font-size:12px;font-weight:700;margin-left:6px;color:'+((p.entrega<Date.now()&&p.bucket!=='pronto'&&p.bucket!=='cancelado')?'#b91c1c':'#2563eb')+';">📅 '+new Date(p.entrega).toLocaleDateString('pt-BR')+'</span>'):'')
         +'<div style="font-size:11px;color:#aaa;overflow:hidden;text-overflow:ellipsis;max-width:360px;white-space:nowrap;">'+esc((p.desc||'').substring(0,70))+'</div></div>'
         +'<div style="display:flex;align-items:center;gap:6px;">'+(pz?badge('✓ produzido','#15803d','#dcfce7'):'')+badge(esc(p.status||'—'),bc[0],bc[1])+'</div></div>';
     }).join('');

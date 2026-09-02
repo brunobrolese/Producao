@@ -25,7 +25,7 @@ body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;font-size
 .ok{color:#1D9E75!important;} .warn{color:#BA7517!important;} .bad{color:#A32D2D!important;}
 .card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:14px 16px;margin-bottom:12px;}
 .card h3{font-size:13px;font-weight:600;color:#666;margin-bottom:12px;}
-.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-abottom:10px;}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
 .frow3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px;}
 label{font-size:12px;color:#666;display:block;margin-bottom:4px;}
 input,select{width:100%;font-size:13px;padding:7px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;outline:none;}
@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v72</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v74</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2685,7 +2685,7 @@ function calcProdStats(apts){
     if(!a||a.tipoRegistro==='sem_chapa')return; // registros de tempo parado nunca entram na produtividade
     const c=S.colaboradores.find(x=>x.id===a.colabId);
     if(!c)return;
-    if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaEfic:0,nEfic:0};
+    if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaPrev:0,somaReal:0};
     const s=stats[c.id];
     const liq=tempoLiquido(a);
     let pausaMin=0;
@@ -2693,10 +2693,10 @@ function calcProdStats(apts){
     s.volume++;s.somaLiquido+=liq;s.somaBruto+=liq+pausaMin;
     const m=S.modelos.find(x=>x.id===a.modeloId);
     const prev=tempoModeloSetor(m,a.setor);
-    if(prev>0&&liq>0){s.somaEfic+=(prev/liq)*100;s.nEfic++;}
+    if(prev>0&&liq>0){s.somaPrev+=prev;s.somaReal+=liq;}
   });
   Object.values(stats).forEach(s=>{
-    s.eficiencia=s.nEfic?Math.round(s.somaEfic/s.nEfic):null;
+    s.eficiencia=s.somaReal>0?Math.round(s.somaPrev/s.somaReal*100):null;
     s.aproveitamento=s.somaBruto>0?Math.round((s.somaLiquido/s.somaBruto)*100):null;
     s.tempoMedio=s.volume?Math.round(s.somaLiquido/s.volume):0;
   });
@@ -3738,12 +3738,15 @@ function carregarSheetJS(){
 function _pMesDe(v){if(v==null||v==='')return null;if(v instanceof Date)return v.getMonth()+1;const n=parseInt(v);return isNaN(n)?null:(n>=1&&n<=12?n:null);}
 function _pMesData(v){if(!v)return null;const d=(v instanceof Date)?v:new Date(v);return isNaN(d)?null:d.getMonth()+1;}
 function _pAnoData(v){if(!v)return null;const d=(v instanceof Date)?v:new Date(v);return isNaN(d)?null:d.getFullYear();}
+function _tipoProd(v){const s=String(v==null?'':v).trim().toLowerCase();if(!s)return null;if(s.indexOf('recorrente')>=0)return 'recorrente';const m=s.match(/(\d+)\s*ª?\s*produ/);if(m)return parseInt(m[1])<=1?'primeira':'recorrente';return null;}
+function _dataMsDe(v){const d=(v instanceof Date)?v:(v!=null&&v!==''?new Date(v):null);return (d&&!isNaN(d))?d.getTime():null;}
 function _pBucket(s){s=String(s).trim().toUpperCase();if(s==='FATURADO'||s==='EXPEDIÇÃO')return 'pronto';if(s.indexOf('MONTAGEM')>=0||s==='TESTE')return 'producao';if(s==='CANCELADO')return 'cancelado';return 'pendente';}
 function parsePedidos(rows){
   if(!rows||!rows.length)return[];
   const header=rows[0].map(h=>String(h==null?'':h).trim().toUpperCase());
   const idx=n=>header.indexOf(n);
   const iOP=idx('OP'),iChic=idx('CHICOTES'),iStatus=idx('STATUS'),iMes=idx('MÊS'),iAno=idx('ANO'),iDesc=idx('DESCRIÇÃO'),iPed=idx('PEDIDO'),iEnvio=idx('DATA ENVIO'),iEntrega=idx('DATA ENTREGA');
+  const iProd=header.findIndex(h=>h.indexOf('PRODU')>=0&&h.indexOf('Nº')>=0)>=0?header.findIndex(h=>h.indexOf('PRODU')>=0&&h.indexOf('Nº')>=0):header.findIndex(h=>h.indexOf('PRODU')>=0);
   const out=[];
   for(let r=1;r<rows.length;r++){
     const row=rows[r];if(!row)continue;
@@ -3753,8 +3756,10 @@ function parsePedidos(rows){
     let mes=_pMesDe(iMes>=0?row[iMes]:null); if(mes==null)mes=_pMesData(dataRef);
     let ano=(iAno>=0&&row[iAno])?parseInt(row[iAno]):null; if(!ano)ano=_pAnoData(dataRef);
     const cand=[];[op,chic].forEach(v=>{if(v==null)return;const ms=String(v).match(/\d{4,}/g);if(ms)ms.forEach(n=>{if(cand.indexOf(n)<0)cand.push(n);});});
-    const _ent=(iEntrega>=0?row[iEntrega]:null);const _entD=(_ent instanceof Date)?_ent:(_ent!=null&&_ent!==''?new Date(_ent):null);const entrega=(_entD&&!isNaN(_entD))?_entD.getTime():null;
-    out.push({pedido:(iPed>=0&&row[iPed]!=null)?row[iPed]:'',op:op==null?'':op,chicotes:chic==null?'':chic,status,bucket:_pBucket(status),mes,ano,entrega,desc:iDesc>=0?String(row[iDesc]||''):'',cand});
+    const entrega=_dataMsDe(iEntrega>=0?row[iEntrega]:null);
+    const envio=_dataMsDe(iEnvio>=0?row[iEnvio]:null);
+    const tipoProd=_tipoProd(iProd>=0?row[iProd]:null);
+    out.push({pedido:(iPed>=0&&row[iPed]!=null)?row[iPed]:'',op:op==null?'':op,chicotes:chic==null?'':chic,status,bucket:_pBucket(status),mes,ano,entrega,envio,tipoProd,desc:iDesc>=0?String(row[iDesc]||''):'',cand});
   }
   return out;
 }
@@ -3811,6 +3816,8 @@ function renderPedidos(){
       return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 4px;border-bottom:1px solid #f2f2f2;flex-wrap:wrap;">'
         +'<div style="min-width:0;"><span style="font-size:13px;font-weight:700;">OP '+esc(p.op||'—')+'</span> <span style="font-size:12px;color:#999;">· ped '+esc(p.pedido||'—')+'</span>'
         +(p.entrega?('<span style="font-size:12px;font-weight:700;margin-left:6px;color:'+((p.entrega<Date.now()&&p.bucket!=='pronto'&&p.bucket!=='cancelado')?'#b91c1c':'#2563eb')+';">📅 '+new Date(p.entrega).toLocaleDateString('pt-BR')+'</span>'):'')
+        +(p.envio?('<span style="font-size:12px;color:#6b7280;margin-left:6px;">🚚 saída '+new Date(p.envio).toLocaleDateString('pt-BR')+'</span>'):'')
+        +(p.tipoProd==='primeira'?'<span style="display:inline-block;margin-left:6px;background:#ede9fe;color:#6d28d9;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:700;">🆕 1ª produção</span>':(p.tipoProd==='recorrente'?'<span style="display:inline-block;margin-left:6px;background:#f1f5f9;color:#475569;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600;">🔁 recorrente</span>':''))
         +'<div style="font-size:11px;color:#aaa;overflow:hidden;text-overflow:ellipsis;max-width:360px;white-space:nowrap;">'+esc((p.desc||'').substring(0,70))+'</div></div>'
         +'<div style="display:flex;align-items:center;gap:6px;">'+(pz?badge('✓ produzido','#15803d','#dcfce7'):'')+badge(esc(p.status||'—'),bc[0],bc[1])+'</div></div>';
     }).join('');

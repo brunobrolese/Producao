@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v74</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v75</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -393,7 +393,12 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <!-- CONFIG -->
     <!-- PRODUTIVIDADE -->
     <div id="page-prod" class="page">
-      <div style="font-size:13px;color:#666;margin-bottom:14px;">Ranking de produtividade dos colaboradores no período selecionado (use o filtro de data no topo).</div>
+      <div style="font-size:13px;color:#666;margin-bottom:10px;">Ranking de produtividade dos colaboradores no período selecionado (use o filtro de data no topo).</div>
+      <div class="card" style="padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:13px;color:#555;font-weight:600;">🕐 Horas disponíveis por dia por montador:</span>
+        <input id="prodHorasDia" type="number" min="1" max="24" step="0.5" onchange="setHorasDia(this.value)" style="width:74px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;"/>
+        <span style="font-size:12px;color:#999;">base do cálculo da produtividade real</span>
+      </div>
       <div id="prod-setores"></div>
       <div id="prod-conteudo"></div>
     </div>
@@ -2679,14 +2684,17 @@ function prodFiltroRapido(tipo){
   renderProdutividade();
 }
 // calcula métricas por colaborador para um conjunto de apontamentos (usado no período atual e no anterior p/ tendência)
+function getHorasDia(){const h=S&&S.expediente&&S.expediente.horasDia;return (h&&h>0)?h:8;}
 function calcProdStats(apts){
   const stats={};
   apts.forEach(a=>{
     if(!a||a.tipoRegistro==='sem_chapa')return; // registros de tempo parado nunca entram na produtividade
     const c=S.colaboradores.find(x=>x.id===a.colabId);
     if(!c)return;
-    if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaPrev:0,somaReal:0};
+    if(!stats[c.id])stats[c.id]={id:c.id,nome:c.nome,setor:c.setor,volume:0,somaLiquido:0,somaBruto:0,somaPrev:0,somaReal:0,dias:new Set()};
     const s=stats[c.id];
+    if(a.inicio)s.dias.add(dataLocalStr(a.inicio));
+    if(a.fim)s.dias.add(dataLocalStr(a.fim));
     const liq=tempoLiquido(a);
     let pausaMin=0;
     (a.pausas||[]).forEach(p=>{if(p.inicio&&p.fim){const d=Math.round((new Date(p.fim)-new Date(p.inicio))/60000);if(d>0)pausaMin+=d;}});
@@ -2699,6 +2707,9 @@ function calcProdStats(apts){
     s.eficiencia=s.somaReal>0?Math.round(s.somaPrev/s.somaReal*100):null;
     s.aproveitamento=s.somaBruto>0?Math.round((s.somaLiquido/s.somaBruto)*100):null;
     s.tempoMedio=s.volume?Math.round(s.somaLiquido/s.volume):0;
+    s.diasAtivos=s.dias?s.dias.size:0; delete s.dias;
+    const _disp=s.diasAtivos*getHorasDia()*60;
+    s.prodReal=(_disp>0&&s.somaPrev>0)?Math.round(s.somaPrev/_disp*100):null;
   });
   return stats;
 }
@@ -3834,8 +3845,10 @@ function renderPedidos(){
   div.innerHTML=html;
 }
 
+function setHorasDia(v){const n=parseFloat(v);if(!n||n<=0||n>24)return;if(!S.expediente)S.expediente={};S.expediente.horasDia=n;save();renderProdutividade();}
 function renderProdutividade(){
   renderProdSetores();
+  const _hd=document.getElementById('prodHorasDia'); if(_hd&&document.activeElement!==_hd)_hd.value=getHorasDia();
   const div=document.getElementById('prod-conteudo');
   if(!div)return;
   const fmtMin=(m)=>m>=60?Math.floor(m/60)+'h '+(m%60)+'min':m+'min';
@@ -3890,6 +3903,8 @@ function renderProdutividade(){
   const tempoMedioElet=qElet?Math.round(tempoElet/qElet):0;
   const eficsValidas=lista.filter(s=>s.eficiencia!=null);
   const eficMedia=eficsValidas.length?Math.round(eficsValidas.reduce((s,x)=>s+x.eficiencia,0)/eficsValidas.length):null;
+  const prodValidas=lista.filter(s=>s.prodReal!=null);
+  const prodRealMedia=prodValidas.length?Math.round(prodValidas.reduce((s,x)=>s+x.prodReal,0)/prodValidas.length):null;
   const destaque=eficsValidas.slice().sort((a,b)=>b.eficiencia-a.eficiencia)[0];
   const card=(icon,valor,label,cor)=>`<div style="flex:1;min-width:150px;background:#fff;border:1px solid #eee;border-radius:12px;padding:14px 16px;">
     <div style="font-size:24px;font-weight:800;color:${cor};line-height:1;">${valor}</div>
@@ -3900,6 +3915,7 @@ function renderProdutividade(){
     ${card('🔎',tempoMedioMF==null?'—':fmtMin(tempoMedioMF),'Tempo médio inspeção (MF)','#7c3aed')}
     ${card('⏱',fmtMin(tempoMedioElet),'Tempo médio/quadro (elétrica)','#BA7517')}
     ${card('📈',eficMedia==null?'—':eficMedia+'%','Eficiência média','#1D9E75')}
+    ${card('🎯',prodRealMedia==null?'—':prodRealMedia+'%','Produtividade real ('+getHorasDia()+'h/dia)','#3550B4')}
     ${destaque?card('🏆',(destaque.nome||'').split(' ')[0],'Destaque ('+destaque.eficiencia+'%)','#1D9E75'):''}
   </div>`;
 
@@ -3917,20 +3933,22 @@ function renderProdutividade(){
     const maxVol=Math.max(...arr.map(s=>s.volume),1);
     const barra=(pct,cor)=>`<div style="height:6px;background:#eee;border-radius:99px;overflow:hidden;margin-top:3px;"><div style="height:100%;width:${Math.min(pct,100)}%;background:${cor};"></div></div>`;
     const corEfic=v=>v>=100?'#1D9E75':v>=80?'#BA7517':'#A32D2D';
+    const corProd=v=>v==null?'#bbb':v>=80?'#1D9E75':v>=50?'#BA7517':'#A32D2D';
     const medalha=(i)=>i===0?'🥇':i===1?'🥈':i===2?'🥉':`<span style="color:#bbb;font-weight:600;font-size:12px;">${i+1}º</span>`;
-    const linhas=arr.sort((a,b)=>(b.eficiencia||0)-(a.eficiencia||0)).map((s,i)=>{
-      const ef=s.eficiencia;
+    const linhas=arr.sort((a,b)=>(b.prodReal||0)-(a.prodReal||0)).map((s,i)=>{
+      const pr=s.prodReal;
       return `<div style="padding:9px 10px;border-bottom:1px solid #f2f2f2;${i<3?'background:#fafbff;':''}">
         <div style="display:flex;align-items:center;gap:8px;">
           <div style="width:26px;text-align:center;">${medalha(i)}</div>
           <div style="flex:1;font-size:13px;font-weight:600;">${s.nome}</div>
-          <div style="font-size:14px;font-weight:700;color:${ef==null?'#bbb':corEfic(ef)};">${ef==null?'—':ef+'%'} ${tendencia(s.id,'eficiencia')}</div>
+          <div style="font-size:14px;font-weight:700;color:${corProd(pr)};">${pr==null?'—':pr+'%'} ${tendencia(s.id,'prodReal')}</div>
         </div>
-        ${ef==null?'':barra(ef,corEfic(ef))}
-        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#888;">
-          <span>📦 ${s.volume} quadros ${tendencia(s.id,'volume')}</span>
+        ${pr==null?'':barra(pr,corProd(pr))}
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#888;flex-wrap:wrap;gap:4px;">
+          <span>📦 ${s.volume} quadros</span>
+          <span>📅 ${s.diasAtivos||0} dias</span>
           <span>⏱ ${fmtMin(s.tempoMedio)}/quadro</span>
-          <span>Aprov. ${s.aproveitamento==null?'—':s.aproveitamento+'%'}</span>
+          <span>⚡ ritmo ${s.eficiencia==null?'—':s.eficiencia+'%'}</span>
         </div>
       </div>`;
     }).join('');
@@ -3963,8 +3981,8 @@ function renderProdutividade(){
 
   div.innerHTML=filtrosHtml+cardsHtml+rankingsHtml+semChapaHtml+`
     <div style="font-size:11px;color:#999;margin-top:4px;">
-      <strong>Eficiência</strong> = tempo previsto ÷ tempo real (acima de 100% = mais rápido). As setas ▲▼ comparam com o período anterior de mesma duração.<br>
-      Rankings separados por setor para comparação justa. <strong>Aprov.</strong> = % do tempo que foi trabalho (fora pausas).
+      <strong>Produtividade real</strong> = horas de quadro produzidas (tempo previsto) ÷ horas disponíveis no período (dias trabalhados × horas/dia). Mostra o quanto da capacidade do dia virou produção.<br>
+      <strong>Ritmo</strong> = tempo previsto ÷ tempo real (acima de 100% = mais rápido que o previsto quando estava trabalhando). As setas ▲▼ comparam com o período anterior de mesma duração. Rankings separados por setor para comparação justa.
     </div>`;
 }
 

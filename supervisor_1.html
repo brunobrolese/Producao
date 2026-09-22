@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v75</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v76</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3944,9 +3944,9 @@ function renderProdutividade(){
           <div style="font-size:14px;font-weight:700;color:${corProd(pr)};">${pr==null?'—':pr+'%'} ${tendencia(s.id,'prodReal')}</div>
         </div>
         ${pr==null?'':barra(pr,corProd(pr))}
+        ${pr==null?'':`<div style="margin-top:6px;padding:6px 8px;background:#eef2ff;border-radius:6px;font-size:12px;color:#3550B4;font-weight:600;">🎯 ${(s.somaPrev/60).toFixed(1)}h produzidas ÷ ${(s.diasAtivos*getHorasDia()).toFixed(0)}h disponíveis <span style="color:#7c8ab8;font-weight:400;">(${s.diasAtivos} ${s.diasAtivos===1?'dia trabalhado':'dias trabalhados'} × ${getHorasDia()}h)</span></div>`}
         <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:11px;color:#888;flex-wrap:wrap;gap:4px;">
           <span>📦 ${s.volume} quadros</span>
-          <span>📅 ${s.diasAtivos||0} dias</span>
           <span>⏱ ${fmtMin(s.tempoMedio)}/quadro</span>
           <span>⚡ ritmo ${s.eficiencia==null?'—':s.eficiencia+'%'}</span>
         </div>

@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v76</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v77</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2685,7 +2685,7 @@ function prodFiltroRapido(tipo){
 }
 // calcula métricas por colaborador para um conjunto de apontamentos (usado no período atual e no anterior p/ tendência)
 function getHorasDia(){const h=S&&S.expediente&&S.expediente.horasDia;return (h&&h>0)?h:8;}
-function calcProdStats(apts){
+function calcProdStats(apts,diasPool,filtroDia){
   const stats={};
   apts.forEach(a=>{
     if(!a||a.tipoRegistro==='sem_chapa')return; // registros de tempo parado nunca entram na produtividade
@@ -2703,6 +2703,18 @@ function calcProdStats(apts){
     const prev=tempoModeloSetor(m,a.setor);
     if(prev>0&&liq>0){s.somaPrev+=prev;s.somaReal+=liq;}
   });
+  if(diasPool){
+    const _gate=filtroDia||(()=>true);
+    const _dm={};
+    diasPool.forEach(a=>{
+      if(!a||a.colabId==null)return;
+      let set=_dm[a.colabId]; if(!set){set=_dm[a.colabId]=new Set();}
+      const add=(ts)=>{ if(ts&&_gate(ts))set.add(dataLocalStr(ts)); };
+      add(a.inicio); add(a.fim);
+      (a.pausas||[]).forEach(p=>{ if(p){add(p.inicio);add(p.fim);} });
+    });
+    Object.values(stats).forEach(s=>{ const extra=_dm[s.id]; if(extra)extra.forEach(d=>s.dias.add(d)); });
+  }
   Object.values(stats).forEach(s=>{
     s.eficiencia=s.somaReal>0?Math.round(s.somaPrev/s.somaReal*100):null;
     s.aproveitamento=s.somaBruto>0?Math.round((s.somaLiquido/s.somaBruto)*100):null;
@@ -3868,7 +3880,8 @@ function renderProdutividade(){
     div.innerHTML=filtrosHtml+'<p class="empty" style="padding:20px 0;">Nenhum quadro de Chapa ou Elétrica finalizado no período selecionado.</p>';
     return;
   }
-  const stats=calcProdStats(finalizados);
+  const _poolAtiv=S.apontamentos.filter(a=>a&&(a.setor==='chapa'||a.setor==='eletrica')&&((a.inicio&&dentroFiltro(a.inicio))||(a.fim&&dentroFiltro(a.fim))));
+  const stats=calcProdStats(finalizados,_poolAtiv,dentroFiltro);
   const lista=Object.values(stats);
 
   // tendência: métricas do período anterior
@@ -3876,7 +3889,9 @@ function renderProdutividade(){
   const ant=periodoAnterior();
   if(ant){
     const aptsAnt=S.apontamentos.filter(a=>a&&a.fim&&dataLocalStr(a.fim)>=ant.de&&dataLocalStr(a.fim)<=ant.ate&&(a.setor==='chapa'||a.setor==='eletrica')&&a.tipoRegistro!=='sem_chapa');
-    statsAnt=calcProdStats(aptsAnt);
+    const _filtroAnt=(ts)=>{const d=dataLocalStr(ts);return d>=ant.de&&d<=ant.ate;};
+    const _poolAnt=S.apontamentos.filter(a=>a&&(a.setor==='chapa'||a.setor==='eletrica')&&((a.inicio&&_filtroAnt(a.inicio))||(a.fim&&_filtroAnt(a.fim))));
+    statsAnt=calcProdStats(aptsAnt,_poolAnt,_filtroAnt);
   }
   const tendencia=(id,campo)=>{
     const at=stats[id]&&stats[id][campo];
@@ -3927,7 +3942,8 @@ function renderProdutividade(){
     });
     // recalcula stats por colaborador SÓ com apontamentos desse setor
     const aptsSetor=finalizados.filter(a=>a.setor===setorKey);
-    const st=calcProdStats(aptsSetor);
+    const _poolSetor=S.apontamentos.filter(a=>a&&a.setor===setorKey&&((a.inicio&&dentroFiltro(a.inicio))||(a.fim&&dentroFiltro(a.fim))));
+    const st=calcProdStats(aptsSetor,_poolSetor,dentroFiltro);
     const arr=Object.values(st);
     if(!arr.length)return '';
     const maxVol=Math.max(...arr.map(s=>s.volume),1);

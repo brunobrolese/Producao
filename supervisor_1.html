@@ -100,7 +100,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v77</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v78</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -301,6 +301,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         <div class="frow">
           <div><label>OP</label><input id="filtOp" placeholder="Digite a OP..." oninput="renderApt()"/></div>
           <div><label>Colaborador</label><select id="filtColab" onchange="renderApt()"><option value="">Todos</option></select></div>
+          <div><label>Modelo</label><select id="filtModelo" onchange="renderApt()"><option value="">Todos</option></select></div>
         </div>
       </div>
       <div id="apt-lista"></div>
@@ -1514,11 +1515,19 @@ function renderApt(){
     const cur=sel.value;
     sel.innerHTML='<option value="">Todos</option>'+S.colaboradores.map(c=>`<option value="${c.id}" ${cur==c.id?'selected':''}>${c.nome}</option>`).join('');
   }
+  const selM=document.getElementById('filtModelo');
+  if(selM){
+    const curM=selM.value;
+    const mods=[...(S.modelos||[])].filter(m=>m).sort((a,b)=>String(a.codigo||'').localeCompare(String(b.codigo||'')));
+    selM.innerHTML='<option value="">Todos</option>'+mods.map(m=>`<option value="${m.id}" ${curM==m.id?'selected':''}>${(m.codigo||'—')}</option>`).join('');
+  }
   const filtOp=(document.getElementById('filtOp')||{}).value||'';
   const filtColabId=parseInt((document.getElementById('filtColab')||{}).value)||0;
+  const filtModeloId=parseInt((document.getElementById('filtModelo')||{}).value)||0;
   let apts=S.apontamentos.filter(a=>a&&a.opNum&&noFiltro(a));
   if(filtOp)apts=apts.filter(a=>a.opNum.toLowerCase().includes(filtOp.toLowerCase()));
   if(filtColabId)apts=apts.filter(a=>a.colabId===filtColabId);
+  if(filtModeloId)apts=apts.filter(a=>a.modeloId===filtModeloId);
   apts=[...apts].sort((a,b)=>(b.inicio||'').localeCompare(a.inicio||''));
 
   const div=document.getElementById('apt-lista');if(!div)return;
@@ -1572,7 +1581,35 @@ function renderApt(){
     </tr>`;
   }).join('');
 
-  div.innerHTML=`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''} · ${periodoLabel()}</h3>
+  let resumoModelo='';
+  if(filtModeloId){
+    const _m=S.modelos.find(x=>x&&x.id===filtModeloId);
+    const _fmt=(mn)=>mn>=60?Math.floor(mn/60)+'h'+(mn%60?' '+(mn%60)+'min':''):Math.round(mn)+'min';
+    const _fin=apts.filter(a=>a.fim);
+    const _porSetor={};
+    _fin.forEach(a=>{const s=(a.setor==='geral')?'eletrica':(a.setor||'geral');const t=tempoLiquido(a);if(t>0){(_porSetor[s]=_porSetor[s]||[]).push(t);}});
+    const _nome={chapa:'🔧 Chapa',eletrica:'⚡ Elétrica',mf:'🔍 Montagem Final',geral:'Geral'};
+    const _prev=(s)=>s==='chapa'?(_m&&_m.tempoChapa||0):s==='eletrica'?(_m&&_m.tempoEletrica||0):0;
+    const _cards=Object.keys(_porSetor).map(s=>{
+      const arr=_porSetor[s].slice().sort((x,y)=>x-y);
+      const med=Math.round(arr.reduce((x,y)=>x+y,0)/arr.length);
+      const min=arr[0],max=arr[arr.length-1];
+      const prev=_prev(s);
+      const dentro=prev?arr.filter(t=>t<=prev).length:0;
+      const corMed=!prev?'#1a1a1a':(med<=prev?'#1D9E75':'#A32D2D');
+      return `<div style="flex:1;min-width:200px;background:#fafbff;border:1px solid #e5e5e5;border-radius:10px;padding:12px;">
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">${_nome[s]||s} <span style="color:#999;font-weight:400;">· ${arr.length} quadro${arr.length>1?'s':''}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span style="color:#666;">Média real</span><strong style="color:${corMed};">${_fmt(med)}</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:2px;"><span>Menor / Maior</span><span>${_fmt(min)} — ${_fmt(max)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:2px;"><span>Previsto</span><span>${prev?_fmt(prev):'—'}</span></div>
+        ${prev?`<div style="display:flex;justify-content:space-between;font-size:12px;color:#666;"><span>Dentro do previsto</span><span>${dentro}/${arr.length} (${Math.round(dentro/arr.length*100)}%)</span></div>`:''}
+      </div>`;
+    }).join('');
+    resumoModelo=`<div class="card" style="border-top:3px solid #2563eb;"><h3>⏱ Comparativo de tempos — ${(_m&&_m.codigo)||'modelo'}</h3>
+      <div style="font-size:12px;color:#888;margin-bottom:10px;">Tempos reais dos quadros finalizados deste modelo no período (líquido, sem pausas).</div>
+      ${_cards?`<div style="display:flex;gap:12px;flex-wrap:wrap;">${_cards}</div>`:'<p class="empty" style="padding:6px 0;">Nenhum quadro finalizado deste modelo no período.</p>'}</div>`;
+  }
+  div.innerHTML=resumoModelo+`<div class="card"><h3>📋 ${apts.length} apontamento${apts.length>1?'s':''} · ${periodoLabel()}</h3>
     <div style="overflow-x:auto;"><table><thead><tr>
       <th>OP</th><th>Modelo</th><th>Colaborador</th><th>Início</th><th>Fim / Status</th>
       <th>T. realizado</th><th>T. previsto</th><th>Pausas</th><th>Retrabalho</th><th>Itens</th><th>Observações</th><th>Erros</th><th>Erro de Projeto</th><th></th>

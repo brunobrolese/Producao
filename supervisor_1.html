@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v81</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v82</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -4068,6 +4068,8 @@ function renderGDRegistrar(cont){
   if(_gdRascunhoAtivo)h+=`<div style="background:#fffbeb;border:1px solid #f5d9a8;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#b45309;display:flex;justify-content:space-between;align-items:center;gap:10px;">💾 Rascunho recuperado — nada foi perdido.<button onclick="gdDescartarRascunho()" style="background:none;border:none;color:#b45309;cursor:pointer;font-weight:600;white-space:nowrap;">Descartar e começar novo</button></div>`;
   h+='<div class="card gd-scope" oninput="gdSalvarRascunho()">';
   h+=`<div class="sec-title" style="margin-bottom:14px;">Data</div><div class="field"><label>Data</label>${inp('data',f.data,'date')}</div>`;
+  h+=`<button class="btn" style="background:#0e7490;width:100%;margin:2px 0 6px;" onclick="gdPuxarDados()">⚡ Puxar dados do dia do programa</button>`;
+  h+=`<div style="font-size:11px;color:#999;margin-bottom:8px;">Preenche montagem elétrica, prontos (teste), backlog, incompletos, retrabalho e falta de material a partir dos apontamentos reais. Você revisa e ajusta antes de salvar.</div>`;
   // Segurança
   h+=`<div class="sec-title" style="margin-top:8px;">Segurança</div>
     <div class="toggle-row"><span class="toggle-label">Status do dia</span><div class="toggle-btns">
@@ -4155,6 +4157,29 @@ function gdAplicarPcpSug(){
   if(sug.paineisMontagem){_gdForm.paineisMontagem=String(sug.paineisMontagem);const el=document.getElementById('gd_paineisMontagem');if(el)el.value=sug.paineisMontagem;}
   if(sug.backlogTeste){_gdForm.backlogTeste=String(sug.backlogTeste);const el=document.getElementById('gd_backlogTeste');if(el)el.value=sug.backlogTeste;}
   gdSalvarRascunho();toast('Sugestões do PCP aplicadas.');
+}
+function gdPuxarDados(){
+  if(!_gdForm)return;
+  const data=(document.getElementById('gd_data')||{}).value||_gdForm.data||gdHoje();
+  _gdForm=gdColheForm();
+  const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+  const noDia=iso=>iso&&dataLocalStr(iso)===data;
+  const eletFeita=apts.filter(a=>a.setor==='eletrica'&&a.fim&&noDia(a.fim)).length;
+  const prontosTeste=apts.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&noDia(a.mf.fim)).length;
+  const backlog=apts.filter(a=>a.etapa==='montagem_final'&&(!a.mf||!a.mf.resultado)&&!(a.mf&&a.mf.incompleto)).length;
+  const incompletos=apts.filter(a=>a&&a.mf&&a.mf.incompleto).length;
+  const retrabApts=apts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length&&a.fim&&noDia(a.fim));
+  const faltaApts=apts.filter(a=>a.itensFaltando&&((a.inicio&&noDia(a.inicio))||(a.fim&&noDia(a.fim))));
+  _gdForm.paineisMontagem=String(eletFeita);
+  _gdForm.paineisTesteQtd=String(prontosTeste);
+  _gdForm.backlogTeste=String(backlog);
+  _gdForm.quadrosIncompletos=String(incompletos);
+  const SET_LBL={mecanica:'Mecânica',chapa:'Chapa',cabos:'Prep. cabos',eletrica:'Elétrica'};
+  if(retrabApts.length){_gdForm.retrabalho='sim';const setores=[];retrabApts.forEach(a=>a.retrabalho.setores.forEach(s=>{if(setores.indexOf(s)<0)setores.push(s);}));_gdForm.retrabalhoDetalhe=retrabApts.length+' retrabalho(s) no dia: '+setores.map(s=>SET_LBL[s]||s).join(', ');}
+  if(faltaApts.length){_gdForm.faltaMaterial='sim';const obs=faltaApts.map(a=>(a.obsItensFaltando||'').trim()).filter(Boolean);_gdForm.faltaMaterialDetalhe=obs.length?obs.join(' | '):faltaApts.length+' painel(is) com item faltando';}
+  renderGDRegistrar(document.getElementById('gd-conteudo'));
+  gdSalvarRascunho();
+  toast('Dados do dia: '+eletFeita+' elétrica · '+prontosTeste+' prontos · '+backlog+' no teste · '+incompletos+' incompletos');
 }
 function gdDescartarRascunho(){gdLimparRascunho();_gdForm=null;_gdEditData=null;_gdRascunhoAtivo=false;renderGD();}
 function gdSalvarRegistro(){

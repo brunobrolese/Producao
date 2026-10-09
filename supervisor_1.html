@@ -91,6 +91,44 @@ body.telao .live-tempo{font-size:23px!important;}
 body.telao .live-toggle{display:none!important;}
 body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;top:16px;right:16px;z-index:99999;background:#dc2626;color:#fff;border:none;padding:11px 18px;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;}
 .hide{display:none!important;}
+
+/* ===== GD DIÁRIO (escopado) ===== */
+#page-gd{--text:#1a1a1a;--text2:#666;--text3:#999;--surface:#fff;--surface2:#fafafa;--border:#eee;--border2:#ddd;--ok:#1D9E75;--ok-bg:#e9f7f1;--ok-border:#b8e6d5;--warn:#BA7517;--warn-bg:#fff8ec;--warn-border:#f5d9a8;--danger:#A32D2D;--danger-bg:#fdecec;--danger-border:#f3c4c4;--accent:#2563eb;--r:8px;}
+#page-gd .gd-subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;border-bottom:1px solid #eee;padding-bottom:10px;}
+#page-gd .gd-stab{padding:8px 14px;font-size:13px;font-weight:600;border:1px solid #ddd;border-radius:8px;background:#fff;color:#666;cursor:pointer;}
+#page-gd .gd-stab.active{background:#2563eb;color:#fff;border-color:#2563eb;}
+#page-gd .sec-title{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:12px}
+#page-gd .field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+#page-gd .field label{font-size:12px;font-weight:600;color:var(--text2)}
+#page-gd .field input,#page-gd .field select,#page-gd .field textarea{font-size:14px;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--r);background:var(--surface2);color:var(--text);width:100%;box-sizing:border-box;}
+#page-gd .field input:focus,#page-gd .field select:focus,#page-gd .field textarea:focus{outline:none;border-color:var(--accent)}
+#page-gd .field textarea{resize:vertical;min-height:64px}
+#page-gd .field-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+#page-gd .toggle-row{display:flex;align-items:flex-start;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--border);gap:12px}
+#page-gd .toggle-label{font-size:14px;padding-top:2px}
+#page-gd .toggle-btns{display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+#page-gd .tbtn{padding:5px 13px;font-size:12px;font-weight:500;border:1px solid var(--border2);border-radius:var(--r);background:transparent;cursor:pointer;color:var(--text2);}
+#page-gd .tbtn.aok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-border)}
+#page-gd .tbtn.awarn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-border)}
+#page-gd .tbtn.abad{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border)}
+#page-gd .detail-box{margin:4px 0 8px;padding:8px 10px;background:var(--surface2);border-radius:var(--r);border:1px solid var(--border)}
+#page-gd .detail-box textarea{background:transparent;border:none;padding:0;font-size:13px;width:100%;box-sizing:border-box;min-height:48px;resize:vertical;}
+#page-gd .detail-box textarea:focus{outline:none}
+#page-gd .pchip{padding:8px 14px;font-size:13px;font-weight:500;border:1px solid var(--ok-border);border-radius:20px;background:var(--ok-bg);color:var(--ok);cursor:pointer;user-select:none}
+#page-gd .pchip.ausente{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border);text-decoration:line-through}
+#page-gd .presenca-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+#page-gd .presenca-resumo{font-size:13px;font-weight:600;padding:8px 0}
+#page-gd .echip{padding:7px 13px;font-size:13px;font-weight:500;border:1px solid var(--border2);border-radius:20px;background:var(--surface2);color:var(--text2);cursor:pointer;user-select:none}
+#page-gd .echip.sel{background:var(--danger-bg);color:var(--danger);border-color:var(--danger-border);font-weight:600}
+#page-gd .submit-btn{width:100%;padding:12px;font-size:14px;font-weight:600;background:#2563eb;color:#fff;border:none;border-radius:var(--r);cursor:pointer;margin-top:12px;}
+#page-gd .hist-table{width:100%;border-collapse:collapse;font-size:13px}
+#page-gd .hist-table th{font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+#page-gd .hist-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
+#page-gd .hist-table tr:last-child td{border-bottom:none}
+#page-gd .badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600}
+#page-gd .badge.ok{background:var(--ok-bg);color:var(--ok)}
+#page-gd .badge.bad{background:var(--danger-bg);color:var(--danger)}
+#page-gd .badge.warn{background:var(--warn-bg);color:var(--warn)}
 </style>
 </head>
 <body>
@@ -100,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v78</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v79</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -161,6 +199,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('ana',this)">🔎 Análise de Erros</button>
     <button onclick="nav('analise',this)">📈 Análise do Mês</button>
     <button onclick="nav('pedidos',this)">📦 Pedidos</button>
+    <button onclick="nav('gd',this)">📋 GD Diário</button>
     <button onclick="nav('cfg',this)">⚙ Config</button>
   </div>
 
@@ -432,6 +471,13 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         </div>
         <div id="ia-output" style="margin-top:12px;"></div>
       </div>
+    </div>
+
+    <!-- GD DIÁRIO -->
+    <div id="page-gd" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">Gerenciamento Diário (GD) — registro diário de produção, qualidade, segurança e pessoas. Sincronizado no Firebase, separado dos apontamentos.</div>
+      <div id="gd-subnav" class="gd-subnav"></div>
+      <div id="gd-conteudo"></div>
     </div>
 
     <!-- PEDIDOS -->
@@ -1237,6 +1283,7 @@ function nav(id,btn){
   if(id==='ana')popularAnaMeses();
   if(id==='analise'){popularAnaliseMeses();renderAnaliseMes();}
   if(id==='pedidos')renderPedidos();
+  if(id==='gd'){gdLoad().then(renderGD);}
 }
 
 /* ── APONTAMENTOS LIVRES ── */
@@ -3895,6 +3942,275 @@ function renderPedidos(){
 }
 
 function setHorasDia(v){const n=parseFloat(v);if(!n||n<=0||n>24)return;if(!S.expediente)S.expediente={};S.expediente.horasDia=n;save();renderProdutividade();}
+// ═══════════════════════ GD DIÁRIO (módulo) ═══════════════════════
+const GD_URL='https://producao-200d2-default-rtdb.firebaseio.com/gd';
+let _gd={entries:[],n2:{},equipe:[],errosCat:[],lembretes:[],metaMes:{}};
+let _gdForm=null, _gdView='registrar', _gdEditData=null, _gdLoaded=false;
+
+function _gdEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function gdDefaultForm(){return {data:gdHoje(),seguranca:'ok',segurancaNota:'',kaizen:'nao',kaizenDetalhe:'',scrap:'nao',scrapDetalhe:'',retrabalho:'nao',retrabalhoDetalhe:'',horasNaoPlanejadas:'',horasNaoPlanejadasDetalhe:'',faltaMaterial:'nao',faltaMaterialDetalhe:'',erroprojeto:'nao',erroprojetoDetalhe:'',errosProjetoTipos:[],erroprojetoModelo:'',metaPaineis:'',paineisMontagem:'',paineisTesteQtd:'',quadrosIncompletos:'',tipoPainel:'facil',paineisFaceis:'',modeloFacil:'',paineisDificeis:'',modeloDificil:'',pedidosEmbalados:'',pedidosParaEmbalar:'nao',paineisReprovados:'nao',paineisReprovadosDetalhe:'',equipePrevista:'',presentes:'',ausentes:[],materialRisco:'nao',materialRiscoDetalhe:'',backlogTeste:'',pedidoRisco:'nao',pedidoRiscoDetalhe:'',firstPassDiario:'',firstPassMensal:''};}
+function gdHoje(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function gdFmtData(iso){if(!iso)return'—';const p=String(iso).split('-');if(p.length!==3)return iso;return p[2]+'/'+p[1]+'/'+p[0];}
+function gdSemQual(e){if(!e||e.firstPassDiario==='')return'amarelo';const v=Number(e.firstPassDiario);return v>=85?'verde':v>=70?'amarelo':'vermelho';}
+function gdSemPessoas(e){if(!e||!Number(e.equipePrevista))return'amarelo';const abs=1-Number(e.presentes)/Number(e.equipePrevista);return abs<=0.05?'verde':abs<=0.15?'amarelo':'vermelho';}
+
+async function gdLoad(){
+  try{
+    const r=await fetch(GD_URL+'.json');
+    if(!r.ok)throw new Error();
+    const d=await r.json();
+    if(d){
+      _gd.entries=Array.isArray(d.entries)?d.entries.filter(x=>x&&typeof x==='object'):(d.entries&&typeof d.entries==='object'?Object.values(d.entries).filter(x=>x&&typeof x==='object'):[]);
+      _gd.n2=(d.n2&&typeof d.n2==='object'&&!Array.isArray(d.n2))?d.n2:{};
+      _gd.equipe=Array.isArray(d.equipe)?d.equipe:(d.equipe&&typeof d.equipe==='object'?Object.values(d.equipe):[]);
+      _gd.errosCat=Array.isArray(d.errosCat)?d.errosCat:(d.errosCat&&typeof d.errosCat==='object'?Object.values(d.errosCat):[]);
+      _gd.lembretes=Array.isArray(d.lembretes)?d.lembretes:(d.lembretes&&typeof d.lembretes==='object'?Object.values(d.lembretes):[]);
+      _gd.metaMes=(d.metaMes&&typeof d.metaMes==='object')?d.metaMes:{};
+    }
+    _gdLoaded=true;return true;
+  }catch(e){return false;}
+}
+async function gdSave(){
+  try{
+    await fetch(GD_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_gd)});
+    return true;
+  }catch(e){toast('Erro ao salvar GD (sem internet?)');return false;}
+}
+
+// ── navegação interna do GD ──
+function gdNavView(v){_gdView=v;if(v!=='registrar')_gdEditData=null;renderGD();}
+function renderGD(){
+  const page=document.getElementById('page-gd');if(!page)return;
+  const sub=document.getElementById('gd-subnav');
+  if(sub){
+    const tabs=[['registrar','📝 Registrar'],['historico','📜 Histórico'],['equipe','⚙ Equipe e erros'],['importar','📥 Importar']];
+    sub.innerHTML=tabs.map(([k,l])=>`<button class="gd-stab${_gdView===k?' active':''}" onclick="gdNavView('${k}')">${l}</button>`).join('');
+  }
+  const cont=document.getElementById('gd-conteudo');if(!cont)return;
+  if(_gdView==='registrar')renderGDRegistrar(cont);
+  else if(_gdView==='historico')renderGDHistorico(cont);
+  else if(_gdView==='equipe')renderGDEquipe(cont);
+  else if(_gdView==='importar')renderGDImportar(cont);
+}
+
+// ── FORMULÁRIO DE REGISTRO ──
+function _gdTF(field,label,ph){
+  const v=_gdForm[field]||'nao';
+  return `<div class="toggle-row"><span class="toggle-label">${label}</span><div class="toggle-btns">
+    <button id="gdb_${field}_nao" class="tbtn${v==='nao'?' aok':''}" onclick="gdToggle('${field}','nao')">Não</button>
+    <button id="gdb_${field}_sim" class="tbtn${v==='sim'?' abad':''}" onclick="gdToggle('${field}','sim')">Sim</button>
+  </div></div>
+  <div class="detail-box" id="gdd_${field}" style="${v==='sim'?'':'display:none;'}"><textarea id="gd_${field}Detalhe" placeholder="${_gdEsc(ph)}">${_gdEsc(_gdForm[field+'Detalhe'])}</textarea></div>`;
+}
+function gdToggle(field,val){
+  _gdForm[field]=val;
+  const box=document.getElementById('gdd_'+field);if(box)box.style.display=(val==='sim')?'':'none';
+  const bn=document.getElementById('gdb_'+field+'_nao'),bs=document.getElementById('gdb_'+field+'_sim');
+  if(bn)bn.className='tbtn'+(val==='nao'?' aok':'');
+  if(bs)bs.className='tbtn'+(val==='sim'?' abad':'');
+  if(field==='erroprojeto'){const ec=document.getElementById('gd-erro-extra');if(ec)ec.style.display=(val==='sim')?'':'none';}
+}
+function gdSeg(val){
+  _gdForm.seguranca=val;
+  ['ok','observacao','acidente'].forEach(o=>{const b=document.getElementById('gdseg_'+o);if(b)b.className='tbtn'+(val===o?(o==='ok'?' aok':o==='acidente'?' abad':' awarn'):'');});
+  const box=document.getElementById('gdd_seguranca');if(box)box.style.display=(val==='ok')?'none':'';
+}
+function gdToggleAusente(nome){
+  const a=_gdForm.ausentes||[];
+  _gdForm.ausentes=a.includes(nome)?a.filter(x=>x!==nome):[...a,nome];
+  _gdRenderPresenca();
+}
+function gdToggleErroTipo(t){
+  const a=_gdForm.errosProjetoTipos||[];
+  _gdForm.errosProjetoTipos=a.includes(t)?a.filter(x=>x!==t):[...a,t];
+  const b=document.getElementById('gdet_'+_gdSlug(t));if(b)b.className='echip'+(_gdForm.errosProjetoTipos.includes(t)?' sel':'');
+}
+function _gdSlug(s){return String(s).replace(/[^a-zA-Z0-9]/g,'_');}
+function _gdRenderPresenca(){
+  const wrap=document.getElementById('gd-presenca');if(!wrap)return;
+  const eq=(_gd.equipe||[]).filter(n=>n&&n.trim());
+  if(!eq.length)return;
+  const aus=_gdForm.ausentes||[];
+  const chips=eq.map(n=>`<button class="pchip${aus.includes(n)?' ausente':''}" onclick="gdToggleAusente('${_gdEsc(n).replace(/'/g,"\\'")}')">${_gdEsc(n)}</button>`).join('');
+  const nAus=aus.length,pres=eq.length-nAus,absPct=Math.round(nAus/eq.length*100);
+  const cor=absPct<=5?'#1D9E75':absPct<=15?'#BA7517':'#A32D2D';
+  wrap.innerHTML=`<div style="font-size:12px;color:#666;margin-bottom:10px;">Toque em quem faltou hoje (todos presentes por padrão):</div>
+    <div class="presenca-chips">${chips}</div>
+    <div class="presenca-resumo" style="color:${cor};">${pres}/${eq.length} presentes — ${absPct}% absenteísmo${nAus>0?' ('+aus.map(_gdEsc).join(', ')+')':''}</div>`;
+}
+function renderGDRegistrar(cont){
+  if(!_gdForm)_gdForm=_gdEditData?Object.assign(gdDefaultForm(),(_gd.entries.find(e=>e&&e.data===_gdEditData)||{})):gdDefaultForm();
+  const f=_gdForm;
+  const eq=(_gd.equipe||[]).filter(n=>n&&n.trim());
+  const errosCat=(_gd.errosCat||[]).filter(n=>n&&n.trim());
+  const editing=!!_gdEditData;
+  const inp=(id,val,type,extra)=>`<input id="gd_${id}" type="${type||'text'}" value="${_gdEsc(val)}" ${extra||''}/>`;
+  let h='';
+  if(editing)h+=`<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#2563eb;font-weight:600;display:flex;justify-content:space-between;align-items:center;">✎ Editando registro de ${gdFmtData(_gdEditData)}<button onclick="_gdEditData=null;_gdForm=null;gdNavView('historico')" style="background:none;border:none;color:#2563eb;cursor:pointer;font-weight:600;">Cancelar</button></div>`;
+  h+='<div class="card gd-scope">';
+  h+=`<div class="sec-title" style="margin-bottom:14px;">Data</div><div class="field"><label>Data</label>${inp('data',f.data,'date')}</div>`;
+  // Segurança
+  h+=`<div class="sec-title" style="margin-top:8px;">Segurança</div>
+    <div class="toggle-row"><span class="toggle-label">Status do dia</span><div class="toggle-btns">
+      <button id="gdseg_ok" class="tbtn${f.seguranca==='ok'?' aok':''}" onclick="gdSeg('ok')">Tudo OK</button>
+      <button id="gdseg_observacao" class="tbtn${f.seguranca==='observacao'?' awarn':''}" onclick="gdSeg('observacao')">Observação</button>
+      <button id="gdseg_acidente" class="tbtn${f.seguranca==='acidente'?' abad':''}" onclick="gdSeg('acidente')">🚨 Acidente</button>
+    </div></div>
+    <div class="detail-box" id="gdd_seguranca" style="${f.seguranca==='ok'?'display:none;':''}margin-top:6px;"><textarea id="gd_segurancaNota" placeholder="Descreva a ocorrência...">${_gdEsc(f.segurancaNota)}</textarea></div>`;
+  // Ocorrências
+  h+=`<div class="sec-title" style="margin-top:16px;">Ocorrências</div>`;
+  h+=_gdTF('kaizen','Tivemos Kaizen?','Qual e em qual setor?');
+  h+=_gdTF('scrap','Scrap de material?','Detalhes do scrap...');
+  h+=_gdTF('retrabalho','Retrabalho?','Quais materiais / detalhes?');
+  h+=`<div class="field"><label>Horas não planejadas (nº de horas)</label>${inp('horasNaoPlanejadas',f.horasNaoPlanejadas,'number','min=0 step=0.5 placeholder="Ex: 2.5"')}</div>`;
+  h+=`<div class="field"><label>Observações das horas não planejadas</label><textarea id="gd_horasNaoPlanejadasDetalhe" placeholder="O que gerou? (parada, espera, ajuste...)">${_gdEsc(f.horasNaoPlanejadasDetalhe)}</textarea></div>`;
+  h+=_gdTF('faltaMaterial','Falta de material?','Quais materiais faltaram?');
+  h+=_gdTF('materialRisco','Material em risco de faltar?','Quais itens e em quantos dias acaba?');
+  // Erro de projeto (especial)
+  h+=`<div class="toggle-row"><span class="toggle-label">Erro de projeto?</span><div class="toggle-btns">
+      <button id="gdb_erroprojeto_nao" class="tbtn${f.erroprojeto==='nao'?' aok':''}" onclick="gdToggle('erroprojeto','nao')">Não</button>
+      <button id="gdb_erroprojeto_sim" class="tbtn${f.erroprojeto==='sim'?' abad':''}" onclick="gdToggle('erroprojeto','sim')">Sim</button>
+    </div></div>
+    <div class="detail-box" id="gd-erro-extra" style="${f.erroprojeto==='sim'?'':'display:none;'}">`;
+  if(errosCat.length){
+    h+=`<div style="font-size:12px;color:#666;margin-bottom:8px;">Toque nos erros que aconteceram hoje:</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">`;
+    h+=errosCat.map(t=>`<button id="gdet_${_gdSlug(t)}" class="echip${(f.errosProjetoTipos||[]).includes(t)?' sel':''}" onclick="gdToggleErroTipo('${_gdEsc(t).replace(/'/g,"\\'")}')">${_gdEsc(t)}</button>`).join('');
+    h+=`</div>`;
+  }else{
+    h+=`<div style="font-size:12px;color:#999;margin-bottom:8px;">Dica: cadastre os tipos de erro na aba ⚙ Equipe e erros para apontar com um toque.</div>`;
+  }
+  h+=`<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:600;color:#666;display:block;margin-bottom:5px;">Modelo do quadro com erro</label>${inp('erroprojetoModelo',f.erroprojetoModelo,'text','placeholder="Ex: QGBT-100, CCM-480..."')}</div>
+    <textarea id="gd_erroprojetoDetalhe" placeholder="Detalhes adicionais...">${_gdEsc(f.erroprojetoDetalhe)}</textarea></div>`;
+  // Produção
+  h+=`<div class="sec-title" style="margin-top:16px;">Produção</div>`;
+  h+=`<div class="field-row"><div class="field"><label>Meta de painéis (dia)</label>${inp('metaPaineis',f.metaPaineis,'number','min=0')}</div><div class="field"><label>Painéis montagem elétrica</label>${inp('paineisMontagem',f.paineisMontagem,'number','min=0')}</div></div>`;
+  h+=`<div class="field-row"><div class="field"><label>Entregues para teste</label>${inp('paineisTesteQtd',f.paineisTesteQtd,'number','min=0')}</div><div class="field"><label>Entregues incompletos</label>${inp('quadrosIncompletos',f.quadrosIncompletos,'number','min=0')}</div></div>`;
+  h+=`<div class="sec-title" style="margin-top:14px;margin-bottom:10px;">Tipos de painel produzidos</div>`;
+  h+=`<div class="field-row"><div class="field"><label>Painéis fáceis (qtd)</label>${inp('paineisFaceis',f.paineisFaceis,'number','min=0')}</div><div class="field"><label>Modelo do painel fácil</label>${inp('modeloFacil',f.modeloFacil,'text','placeholder="Ex: QGBT-100"')}</div></div>`;
+  h+=`<div class="field-row"><div class="field"><label>Painéis difíceis (qtd)</label>${inp('paineisDificeis',f.paineisDificeis,'number','min=0')}</div><div class="field"><label>Modelo do painel difícil</label>${inp('modeloDificil',f.modeloDificil,'text','placeholder="Ex: CCM-480"')}</div></div>`;
+  h+=`<div class="field"><label>Pedidos embalados</label>${inp('pedidosEmbalados',f.pedidosEmbalados,'number','min=0')}</div>`;
+  h+=`<div class="field"><label>Pedidos para embalar?</label><select id="gd_pedidosParaEmbalar"><option value="nao"${f.pedidosParaEmbalar==='nao'?' selected':''}>Não</option><option value="sim"${f.pedidosParaEmbalar==='sim'?' selected':''}>Sim</option></select></div>`;
+  h+=_gdTF('paineisReprovados','Painéis reprovados no teste?','Painel e motivo...');
+  // First Pass
+  h+=`<div class="sec-title" style="margin-top:16px;">First Pass</div>`;
+  h+=`<div class="field-row"><div class="field"><label>First Pass diário (%)</label>${inp('firstPassDiario',f.firstPassDiario,'number','min=0 max=100')}</div><div class="field"><label>First Pass mensal (%)</label>${inp('firstPassMensal',f.firstPassMensal,'number','min=0 max=100')}</div></div>`;
+  // Pessoas
+  h+=`<div class="sec-title" style="margin-top:16px;">Pessoas (presença)</div>`;
+  if(eq.length){
+    h+=`<div id="gd-presenca"></div>`;
+  }else{
+    h+=`<div style="font-size:12px;color:#666;margin-bottom:10px;">Cadastre a equipe na aba ⚙ para marcar presença com um toque. Ou informe os números:</div>
+      <div class="field-row"><div class="field"><label>Equipe prevista</label>${inp('equipePrevista',f.equipePrevista,'number','min=0')}</div><div class="field"><label>Presentes</label>${inp('presentes',f.presentes,'number','min=0')}</div></div>`;
+  }
+  // Antecipação
+  h+=`<div class="sec-title" style="margin-top:16px;">Antecipação / Riscos (próximos dias)</div>`;
+  h+=`<div class="field"><label>Backlog aguardando teste (painéis parados)</label>${inp('backlogTeste',f.backlogTeste,'number','min=0')}</div>`;
+  h+=_gdTF('pedidoRisco','Pedido com risco de atraso?','Qual pedido e qual o prazo em risco?');
+  h+=`<button class="submit-btn" onclick="gdSalvarRegistro()">${editing?'Atualizar registro':'Salvar registro'}</button>`;
+  if(editing)h+=`<button onclick="gdExcluir('${_gdEditData}')" style="width:100%;padding:11px;font-size:13px;font-weight:500;background:none;color:#A32D2D;border:1px solid #f3c4c4;border-radius:8px;cursor:pointer;margin-top:8px;">Excluir este registro</button>`;
+  h+='</div>';
+  cont.innerHTML=h;
+  if(eq.length)_gdRenderPresenca();
+}
+function gdSalvarRegistro(){
+  const f=Object.assign({},_gdForm);
+  const txt=['data','segurancaNota','horasNaoPlanejadas','horasNaoPlanejadasDetalhe','metaPaineis','paineisMontagem','paineisTesteQtd','quadrosIncompletos','paineisFaceis','modeloFacil','paineisDificeis','modeloDificil','pedidosEmbalados','firstPassDiario','firstPassMensal','backlogTeste','erroprojetoModelo','equipePrevista','presentes'];
+  txt.forEach(k=>{const el=document.getElementById('gd_'+k);if(el)f[k]=el.value;});
+  ['kaizen','scrap','retrabalho','faltaMaterial','materialRisco','paineisReprovados','pedidoRisco','erroprojeto','seguranca'].forEach(k=>{const el=document.getElementById('gd_'+k+'Detalhe');if(el)f[k+'Detalhe']=el.value;});
+  const segN=document.getElementById('gd_segurancaNota');if(segN)f.segurancaNota=segN.value;
+  const pe=document.getElementById('gd_pedidosParaEmbalar');if(pe)f.pedidosParaEmbalar=pe.value;
+  if(!f.data){toast('Informe a data.');return;}
+  const eq=(_gd.equipe||[]).filter(n=>n&&n.trim());
+  if(eq.length){f.equipePrevista=String(eq.length);f.presentes=String(eq.length-(f.ausentes||[]).length);}
+  if(!Array.isArray(_gd.entries))_gd.entries=[];
+  if(_gdEditData&&_gdEditData!==f.data)_gd.entries=_gd.entries.filter(e=>e&&e.data!==_gdEditData);
+  _gd.entries=_gd.entries.filter(e=>e&&e.data!==f.data);
+  _gd.entries.push(f);
+  _gd.entries.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  _gdEditData=null;_gdForm=null;
+  gdSave();
+  toast('Registro salvo! 📋');
+  gdNavView('historico');
+}
+
+// ── HISTÓRICO ──
+function renderGDHistorico(cont){
+  const entries=(_gd.entries||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  if(!entries.length){cont.innerHTML='<div class="card gd-scope"><p class="empty" style="padding:16px 0;">Nenhum registro ainda. Vá em 📝 Registrar para começar.</p></div>';return;}
+  const badge=(cls,txt)=>`<span class="badge ${cls}" style="font-size:10px;margin-right:3px;">${txt}</span>`;
+  const rows=entries.map(e=>{
+    let oc='';
+    if(e.seguranca==='acidente')oc+=badge('bad','🚨 Acid.');
+    if(e.kaizen==='sim')oc+=badge('ok','Kaizen');
+    if(e.scrap==='sim')oc+=badge('warn','Scrap');
+    if(e.retrabalho==='sim')oc+=badge('bad','Retrab.');
+    if(e.paineisReprovados==='sim')oc+=badge('bad','Reprov.');
+    if(e.erroprojeto==='sim')oc+=badge('bad','Projeto');
+    if(e.seguranca==='observacao')oc+=badge('warn','Seg.');
+    return `<tr><td style="font-weight:600;">${gdFmtData(e.data)}</td><td>${e.paineisMontagem||'—'}</td><td>${e.paineisTesteQtd||'—'}</td><td>${e.firstPassDiario?e.firstPassDiario+'%':'—'}</td><td>${oc||'—'}</td>
+      <td style="text-align:right;white-space:nowrap;"><button title="Editar" onclick="gdEditar('${e.data}')" style="background:none;border:none;cursor:pointer;color:#2563eb;font-size:15px;padding:2px 6px;">✎</button><button title="Excluir" onclick="gdExcluir('${e.data}')" style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:15px;padding:2px 6px;">🗑</button></td></tr>`;
+  }).join('');
+  cont.innerHTML=`<div class="card gd-scope" style="padding:0;overflow:hidden;"><div style="overflow-x:auto;"><table class="hist-table"><thead><tr><th>Data</th><th>Montagem</th><th>Teste</th><th>First Pass</th><th>Ocorrências</th><th></th></tr></thead><tbody>${rows}</tbody></table></div></div>
+    <div style="font-size:12px;color:#888;margin-top:8px;">${entries.length} registro${entries.length>1?'s':''} no GD.</div>`;
+}
+function gdEditar(data){_gdEditData=data;_gdForm=null;gdNavView('registrar');}
+function gdExcluir(data){
+  if(!confirm('Excluir o registro de '+gdFmtData(data)+'?\n\nEsta ação não pode ser desfeita.'))return;
+  _gd.entries=(_gd.entries||[]).filter(e=>e&&e.data!==data);
+  _gdEditData=null;_gdForm=null;
+  gdSave();toast('Registro excluído.');gdNavView('historico');
+}
+
+// ── EQUIPE E ERROS ──
+function renderGDEquipe(cont){
+  const eq=_gd.equipe||[];const ec=_gd.errosCat||[];
+  let h='<div class="card gd-scope"><h3>👥 Equipe (para marcar presença)</h3><div style="font-size:12px;color:#666;margin-bottom:10px;">Cadastre os nomes uma vez. No registro diário, você só toca em quem faltou.</div>';
+  h+='<div id="gd-eq-lista">'+eq.map((n,i)=>`<div class="equipe-item" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><input value="${_gdEsc(n)}" onchange="gdUpdPessoa(${i},this.value)" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:8px;"/><button onclick="gdDelPessoa(${i})" style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:18px;">×</button></div>`).join('')+'</div>';
+  h+='<button class="btn" onclick="gdAddPessoa()" style="margin-top:6px;">+ Adicionar pessoa</button>';
+  h+=`<div style="font-size:12px;color:#888;margin-top:8px;">${eq.filter(n=>n&&n.trim()).length} pessoas cadastradas</div></div>`;
+  h+='<div class="card gd-scope"><h3>⚠ Tipos de erro de projeto</h3><div style="font-size:12px;color:#666;margin-bottom:10px;">Cadastre os erros recorrentes para apontar com um toque no registro diário.</div>';
+  h+='<div id="gd-ec-lista">'+ec.map((n,i)=>`<div class="equipe-item" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><input value="${_gdEsc(n)}" onchange="gdUpdErroCat(${i},this.value)" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:8px;"/><button onclick="gdDelErroCat(${i})" style="background:none;border:none;cursor:pointer;color:#A32D2D;font-size:18px;">×</button></div>`).join('')+'</div>';
+  h+='<button class="btn" onclick="gdAddErroCat()" style="margin-top:6px;">+ Adicionar tipo de erro</button></div>';
+  cont.innerHTML=h;
+}
+function gdAddPessoa(){if(!Array.isArray(_gd.equipe))_gd.equipe=[];_gd.equipe.push('');renderGD();}
+function gdUpdPessoa(i,v){_gd.equipe[i]=v;gdSave();}
+function gdDelPessoa(i){_gd.equipe.splice(i,1);gdSave();renderGD();}
+function gdAddErroCat(){if(!Array.isArray(_gd.errosCat))_gd.errosCat=[];_gd.errosCat.push('');renderGD();}
+function gdUpdErroCat(i,v){_gd.errosCat[i]=v;gdSave();}
+function gdDelErroCat(i){_gd.errosCat.splice(i,1);gdSave();renderGD();}
+
+// ── IMPORTAR BACKUP ──
+function renderGDImportar(cont){
+  cont.innerHTML=`<div class="card gd-scope"><h3>📥 Importar backup do GD</h3>
+    <div style="font-size:13px;color:#666;margin-bottom:12px;">Suba aqui o arquivo <strong>GD_backup_*.json</strong> exportado do seu GD antigo. Os registros, N2 e equipe vão para o Firebase e passam a ficar sincronizados. Isso <strong>mescla</strong> com o que já existe (registros da mesma data são substituídos pelo importado).</div>
+    <label class="btn" style="cursor:pointer;">📤 Escolher arquivo JSON<input type="file" accept=".json" onchange="gdImportarBackup(this)" style="display:none;"/></label>
+    <div id="gd-import-status" style="font-size:13px;margin-top:10px;color:#666;"></div></div>`;
+}
+function gdImportarBackup(input){
+  const file=input&&input.files&&input.files[0];if(!file)return;
+  const st=document.getElementById('gd-import-status');
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      let nE=0,nN2=0;
+      if(Array.isArray(d.entries)){
+        if(!Array.isArray(_gd.entries))_gd.entries=[];
+        const byData={};_gd.entries.forEach(e=>{if(e&&e.data)byData[e.data]=e;});
+        d.entries.forEach(e=>{if(e&&e.data){byData[e.data]=e;nE++;}});
+        _gd.entries=Object.values(byData).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+      }
+      if(d.n2&&typeof d.n2==='object'){if(!_gd.n2)_gd.n2={};Object.keys(d.n2).forEach(k=>{_gd.n2[k]=d.n2[k];nN2++;});}
+      if(Array.isArray(d.equipe)&&d.equipe.length&&!(_gd.equipe||[]).filter(n=>n&&n.trim()).length)_gd.equipe=d.equipe;
+      gdSave();
+      if(st)st.innerHTML=`<span style="color:#15803d;">✓ Importado: ${nE} registros e ${nN2} dias de N2. Agora estão sincronizados no Firebase.</span>`;
+      toast('Backup importado! '+nE+' registros.');
+    }catch(err){if(st)st.innerHTML='<span style="color:#A32D2D;">Erro ao ler o arquivo. Confirme que é o JSON do GD.</span>';}
+  };
+  reader.readAsText(file);
+}
+
 function renderProdutividade(){
   renderProdSetores();
   const _hd=document.getElementById('prodHorasDia'); if(_hd&&document.activeElement!==_hd)_hd.value=getHorasDia();

@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v82</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v83</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3952,7 +3952,7 @@ let _gd={entries:[],n2:{},equipe:[],errosCat:[],lembretes:[],metaMes:{},pcp:null
 let _gdForm=null, _gdView='dashboard', _gdEditData=null, _gdLoaded=false, _gdRascunhoAtivo=false;
 
 function _gdEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function gdDefaultForm(){return {data:gdHoje(),seguranca:'ok',segurancaNota:'',kaizen:'nao',kaizenDetalhe:'',scrap:'nao',scrapDetalhe:'',retrabalho:'nao',retrabalhoDetalhe:'',horasNaoPlanejadas:'',horasNaoPlanejadasDetalhe:'',faltaMaterial:'nao',faltaMaterialDetalhe:'',erroprojeto:'nao',erroprojetoDetalhe:'',errosProjetoTipos:[],erroprojetoModelo:'',metaPaineis:'',paineisMontagem:'',paineisTesteQtd:'',quadrosIncompletos:'',tipoPainel:'facil',paineisFaceis:'',modeloFacil:'',paineisDificeis:'',modeloDificil:'',pedidosEmbalados:'',pedidosParaEmbalar:'nao',paineisReprovados:'nao',paineisReprovadosDetalhe:'',equipePrevista:'',presentes:'',ausentes:[],materialRisco:'nao',materialRiscoDetalhe:'',backlogTeste:'',pedidoRisco:'nao',pedidoRiscoDetalhe:'',firstPassDiario:'',firstPassMensal:''};}
+function gdDefaultForm(){return {data:gdHoje(),seguranca:'ok',segurancaNota:'',kaizen:'nao',kaizenDetalhe:'',scrap:'nao',scrapDetalhe:'',retrabalho:'nao',retrabalhoDetalhe:'',horasNaoPlanejadas:'',horasNaoPlanejadasDetalhe:'',faltaMaterial:'nao',faltaMaterialDetalhe:'',erroprojeto:'nao',erroprojetoDetalhe:'',errosProjetoTipos:[],erroprojetoModelo:'',metaPaineis:'',paineisMontagem:'',paineisTesteQtd:'',quadrosIncompletos:'',tipoPainel:'facil',paineisFaceis:'',modeloFacil:'',paineisDificeis:'',modeloDificil:'',pedidosEmbalados:'',pedidosParaEmbalar:'nao',paineisReprovados:'nao',paineisReprovadosDetalhe:'',equipePrevista:'',presentes:'',ausentes:[],materialRisco:'nao',materialRiscoDetalhe:'',backlogTeste:'',pedidoRisco:'nao',pedidoRiscoDetalhe:'',firstPassDiario:'',firstPassMensal:'',modelosOps:''};}
 function gdHoje(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function gdFmtData(iso){if(!iso)return'—';const p=String(iso).split('-');if(p.length!==3)return iso;return p[2]+'/'+p[1]+'/'+p[0];}
 function gdSemQual(e){if(!e||e.firstPassDiario==='')return'amarelo';const v=Number(e.firstPassDiario);return v>=85?'verde':v>=70?'amarelo':'vermelho';}
@@ -4111,6 +4111,7 @@ function renderGDRegistrar(cont){
   h+=`<div class="sec-title" style="margin-top:14px;margin-bottom:10px;">Tipos de painel produzidos</div>`;
   h+=`<div class="field-row"><div class="field"><label>Painéis fáceis (qtd)</label>${inp('paineisFaceis',f.paineisFaceis,'number','min=0')}</div><div class="field"><label>Modelo do painel fácil</label>${inp('modeloFacil',f.modeloFacil,'text','placeholder="Ex: QGBT-100"')}</div></div>`;
   h+=`<div class="field-row"><div class="field"><label>Painéis difíceis (qtd)</label>${inp('paineisDificeis',f.paineisDificeis,'number','min=0')}</div><div class="field"><label>Modelo do painel difícil</label>${inp('modeloDificil',f.modeloDificil,'text','placeholder="Ex: CCM-480"')}</div></div>`;
+  h+=`<div class="field"><label>Modelos e OPs produzidos no dia <span style="color:#0e7490;">(puxado do programa)</span></label><textarea id="gd_modelosOps" placeholder="Clique em ⚡ Puxar dados do dia para listar os modelos e OPs...">${_gdEsc(f.modelosOps)}</textarea></div>`;
   h+=`<div class="field"><label>Pedidos embalados</label>${inp('pedidosEmbalados',f.pedidosEmbalados,'number','min=0')}</div>`;
   h+=`<div class="field"><label>Pedidos para embalar?</label><select id="gd_pedidosParaEmbalar"><option value="nao"${f.pedidosParaEmbalar==='nao'?' selected':''}>Não</option><option value="sim"${f.pedidosParaEmbalar==='sim'?' selected':''}>Sim</option></select></div>`;
   h+=_gdTF('paineisReprovados','Painéis reprovados no teste?','Painel e motivo...');
@@ -4137,7 +4138,7 @@ function renderGDRegistrar(cont){
 }
 function gdColheForm(){
   const f=Object.assign({},_gdForm);
-  const txt=['data','segurancaNota','horasNaoPlanejadas','horasNaoPlanejadasDetalhe','metaPaineis','paineisMontagem','paineisTesteQtd','quadrosIncompletos','paineisFaceis','modeloFacil','paineisDificeis','modeloDificil','pedidosEmbalados','firstPassDiario','firstPassMensal','backlogTeste','erroprojetoModelo','equipePrevista','presentes'];
+  const txt=['data','segurancaNota','horasNaoPlanejadas','horasNaoPlanejadasDetalhe','metaPaineis','paineisMontagem','paineisTesteQtd','quadrosIncompletos','paineisFaceis','modeloFacil','paineisDificeis','modeloDificil','pedidosEmbalados','firstPassDiario','firstPassMensal','backlogTeste','erroprojetoModelo','equipePrevista','presentes','modelosOps'];
   txt.forEach(k=>{const el=document.getElementById('gd_'+k);if(el)f[k]=el.value;});
   ['kaizen','scrap','retrabalho','faltaMaterial','materialRisco','paineisReprovados','pedidoRisco','erroprojeto'].forEach(k=>{const el=document.getElementById('gd_'+k+'Detalhe');if(el)f[k+'Detalhe']=el.value;});
   const segN=document.getElementById('gd_segurancaNota');if(segN)f.segurancaNota=segN.value;
@@ -4177,6 +4178,11 @@ function gdPuxarDados(){
   const SET_LBL={mecanica:'Mecânica',chapa:'Chapa',cabos:'Prep. cabos',eletrica:'Elétrica'};
   if(retrabApts.length){_gdForm.retrabalho='sim';const setores=[];retrabApts.forEach(a=>a.retrabalho.setores.forEach(s=>{if(setores.indexOf(s)<0)setores.push(s);}));_gdForm.retrabalhoDetalhe=retrabApts.length+' retrabalho(s) no dia: '+setores.map(s=>SET_LBL[s]||s).join(', ');}
   if(faltaApts.length){_gdForm.faltaMaterial='sim';const obs=faltaApts.map(a=>(a.obsItensFaltando||'').trim()).filter(Boolean);_gdForm.faltaMaterialDetalhe=obs.length?obs.join(' | '):faltaApts.length+' painel(is) com item faltando';}
+  const feitas=apts.filter(a=>a.setor==='eletrica'&&a.fim&&noDia(a.fim));
+  const porModelo={};const ops=[];
+  feitas.forEach(a=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);const cod=m?m.codigo:(a.modeloLabel||'—');porModelo[cod]=(porModelo[cod]||0)+1;if(a.opNum&&ops.indexOf(String(a.opNum))<0)ops.push(String(a.opNum));});
+  const modStr=Object.keys(porModelo).sort((x,y)=>porModelo[y]-porModelo[x]).map(cod=>cod+' ×'+porModelo[cod]).join(', ');
+  _gdForm.modelosOps=(modStr?'Modelos: '+modStr:'')+(ops.length?((modStr?'\n':'')+'OPs: '+ops.join(', ')):'');
   renderGDRegistrar(document.getElementById('gd-conteudo'));
   gdSalvarRascunho();
   toast('Dados do dia: '+eletFeita+' elétrica · '+prontosTeste+' prontos · '+backlog+' no teste · '+incompletos+' incompletos');

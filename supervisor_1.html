@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v83</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v85</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -322,6 +322,9 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         <div class="frow">
           <div><label>Prazo de entrega</label><input type="date" id="opPrazo"/></div>
           <div><label>Observações</label><input id="opObs" placeholder="Opcional..."/></div>
+        </div>
+        <div class="frow">
+          <div><label>Seu nome (quem está cadastrando)</label><input id="opCadastroNome" placeholder="Ex: Bruno"/></div>
         </div>
         <button class="btn" onclick="addOP()">Cadastrar OP</button>
         <div id="opMsg" style="font-size:12px;margin-top:8px;min-height:16px;"></div>
@@ -1053,13 +1056,8 @@ setInterval(async()=>{
     const foraPor=Date.now()-_saiuEm;
     if(_saiuEm===0||foraPor<3000)return; // ignora saídas muito rápidas
     if(!loginAutenticado)return; // tela de login, não recarrega
-    const ativo=document.activeElement;
-    const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT'||ativo.tagName==='SELECT');
-    if(digitando){
-      try{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();}catch(e){}
-      return;
-    }
-    location.reload();
+    // Nunca recarrega ao voltar pra aba (perderia o que está sendo preenchido). Só sincroniza os dados em silêncio.
+    try{await load();if(currentPage==='dash')renderDash();if(currentPage==='live')renderLivePage();}catch(e){}
   });
 }
 
@@ -1882,14 +1880,18 @@ async function addOP(){
   const obs=document.getElementById('opObs').value.trim();
   if(!num||!modelo){msg('opMsg','Preencha número e modelo.','bad');return;}
   if(S.ops.find(o=>o&&o.num===num)){msg('opMsg','OP já cadastrada.','bad');return;}
-  S.ops.push({id:uid(),num,modelo,qtd,prazo,obs,status:'aberta'});
+  const _nomeCad=(document.getElementById('opCadastroNome')?document.getElementById('opCadastroNome').value.trim():'');
+  if(_nomeCad)try{localStorage.setItem('opCadastroNome',_nomeCad);}catch(e){}
+  S.ops.push({id:uid(),num,modelo,qtd,prazo,obs,status:'aberta',criadoEm:new Date().toISOString(),criadoPor:_nomeCad});
   ['opNum','opModelo','opObs','opPrazo'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('opQtd').value='';
   await save();msg('opMsg','OP cadastrada!','ok');renderOPs();
 }
 
+function fmtDataHora(iso){if(!iso)return'';const d=new Date(iso);return isNaN(d)?'':d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function renderOPs(){
   const div=document.getElementById('ops-lista');if(!div)return;
+  const _nmEl=document.getElementById('opCadastroNome');if(_nmEl&&!_nmEl.value){try{_nmEl.value=localStorage.getItem('opCadastroNome')||'';}catch(e){}}
   if(!S.ops.length){div.innerHTML='<p class="empty">Nenhuma OP cadastrada.</p>';return;}
   const ab=S.ops.filter(o=>o&&o.status==='aberta'),conc=S.ops.filter(o=>o&&o.status==='concluida');
   let html='';
@@ -1904,6 +1906,7 @@ function renderOPs(){
           <div style="font-size:12px;color:#888;">${op.modelo} · ${op.qtd} quadro${op.qtd>1?'s':''}</div>
           ${op.prazo?`<div style="font-size:11px;color:${venc?'#A32D2D':'#bbb'};">Entrega: ${fmtD(op.prazo)}</div>`:''}
           ${op.obs?`<div style="font-size:11px;color:#bbb;">${op.obs}</div>`:''}
+          ${op.criadoEm?`<div style="font-size:10px;color:#c9c9c9;margin-top:2px;">📝 Cadastrada em ${fmtDataHora(op.criadoEm)}${op.criadoPor?' · por '+String(op.criadoPor).replace(/</g,'&lt;'):''}</div>`:''}
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           ${venc?'<span class="badge bbad">Atrasada</span>':''}

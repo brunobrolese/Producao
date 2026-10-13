@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v85</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v86</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -4305,10 +4305,10 @@ function parsePCP(wb){
   let hi=-1;for(let i=0;i<Math.min(rows.length,15);i++){const r=(rows[i]||[]).map(pcpNorm);if(r.indexOf('STATUS')>=0&&r.indexOf('SEMANA')>=0){hi=i;break;}}
   if(hi<0)throw new Error('Não achei o cabeçalho da aba Pedidos (esperava STATUS e SEMANA).');
   const header=(rows[hi]||[]).map(pcpNorm);const col=n=>header.indexOf(n);
-  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:col('SEMANA'),mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO')};
+  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:col('SEMANA'),mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),chicotes:col('CHICOTES'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO')};
   const pedidos=[];
   for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const st=r[ci.status];if(st==null||String(st).trim()==='')continue;
-    pedidos.push({pedido:r[ci.pedido]!=null?String(r[ci.pedido]):'',item:r[ci.item]!=null?String(r[ci.item]):'',descricao:r[ci.desc]!=null?String(r[ci.desc]):'',status:String(st).trim(),qtd:num(r[ci.qtd])||1,semana:num(r[ci.semana]),mes:num(r[ci.mes]),ano:num(r[ci.ano]),grupo:(r[ci.grupo]!=null&&String(r[ci.grupo]).trim()!=='')?String(r[ci.grupo]).trim():'(sem grupo)',op:(ci.op>=0&&r[ci.op]!=null)?String(r[ci.op]).trim():'',dataEntrega:ci.dataEntrega>=0?pcpFmtDate(r[ci.dataEntrega]):'',dataEnvio:ci.dataEnvio>=0?pcpFmtDate(r[ci.dataEnvio]):''});}
+    pedidos.push({pedido:r[ci.pedido]!=null?String(r[ci.pedido]):'',item:r[ci.item]!=null?String(r[ci.item]):'',descricao:r[ci.desc]!=null?String(r[ci.desc]):'',status:String(st).trim(),qtd:num(r[ci.qtd])||1,semana:num(r[ci.semana]),mes:num(r[ci.mes]),ano:num(r[ci.ano]),grupo:(r[ci.grupo]!=null&&String(r[ci.grupo]).trim()!=='')?String(r[ci.grupo]).trim():'(sem grupo)',op:(ci.op>=0&&r[ci.op]!=null)?String(r[ci.op]).trim():'',chicotes:(ci.chicotes>=0&&r[ci.chicotes]!=null)?String(r[ci.chicotes]).trim():'',dataEntrega:ci.dataEntrega>=0?pcpFmtDate(r[ci.dataEntrega]):'',dataEnvio:ci.dataEnvio>=0?pcpFmtDate(r[ci.dataEnvio]):''});}
   if(!pedidos.length)throw new Error('A aba Pedidos não tinha linhas reconhecíveis.');
   return {pedidos};
 }
@@ -4317,6 +4317,29 @@ function pcpAgg(pcp){const a={total:0,cancelado:0,concluido:0,montagem:0,teste:0
 function pcpSuggest(pcp,dateStr){if(!pcp||!pcp.pedidos)return null;const wk=isoWeek(dateStr);let meta=0,teste=0,mont=0;
   pcp.pedidos.forEach(p=>{const cat=pcpCat(p.status);if(cat!=='cancelado'&&Number(p.semana)===wk.week&&(!p.ano||Number(p.ano)===wk.year))meta++;if(pcpNorm(p.status)==='TESTE')teste++;if(cat==='montagem')mont++;});
   return {week:wk.week,year:wk.year,meta,backlogTeste:teste,paineisMontagem:mont};}
+function _gdCand(p){const cc=[];[p.op,p.chicotes].forEach(v=>{if(v==null)return;const ms=String(v).match(/\d{4,}/g);if(ms)ms.forEach(n=>{if(cc.indexOf(n)<0)cc.push(n);});});return cc;}
+function gdStatusLinha(p){
+  const cand=_gdCand(p);if(!cand.length)return null;
+  const apts=(S.apontamentos||[]).filter(a=>{if(!a||a.tipoRegistro==='sem_chapa'||a.opNum==null)return false;const n=String(a.opNum).replace(/\D/g,'');return n&&cand.indexOf(n)>=0;});
+  if(!apts.length)return null;
+  let stage=0,incompleto=false;
+  apts.forEach(a=>{
+    if(a.etapa==='concluido'||(a.mf&&a.mf.resultado))stage=Math.max(stage,4);
+    else if(a.etapa==='montagem_final'||(a.mf&&a.mf.incompleto)){stage=Math.max(stage,3);if(a.mf&&a.mf.incompleto)incompleto=true;}
+    else if(a.setor==='eletrica'||a.etapa==='eletrica'||a.eletricaIniciada)stage=Math.max(stage,2);
+    else if(a.setor==='chapa')stage=Math.max(stage,1);
+  });
+  const M={4:{et:'pronto',label:'Concluído',cor:'#15803d'},3:{et:'pronto',label:incompleto?'MF · incompleto':'Montagem Final',cor:'#15803d'},2:{et:'fazendo',label:'Elétrica',cor:'#2563eb'},1:{et:'fazendo',label:'Chapa',cor:'#b45309'}};
+  return M[stage]||null;
+}
+function gdStatusPedido(p){
+  const real=gdStatusLinha(p);
+  if(real)return Object.assign({},real,{fonte:'programa'});
+  const cat=pcpCat(p.status);
+  const et=cat==='concluido'?'pronto':(cat==='montagem'||cat==='producao'||cat==='teste')?'fazendo':cat==='cancelado'?'cancelado':'afazer';
+  const cor=et==='pronto'?'#15803d':et==='fazendo'?'#2563eb':'#999';
+  return {et,label:(pcpCatLabel[cat]||p.status||'—'),cor,fonte:'pcp'};
+}
 // semáforos
 const semSeg=e=>!e?'amarelo':e.seguranca==='ok'?'verde':e.seguranca==='acidente'?'vermelho':'amarelo';
 const semProd=e=>{if(!e)return'amarelo';const m=Number(e.metaPaineis),r=Number(e.paineisMontagem);if(m>0){const p=r/m;return p>=1?'verde':p>=0.8?'amarelo':'vermelho';}return r>0?'verde':'vermelho';};
@@ -4445,8 +4468,14 @@ function _gdMonthEntries(mesKey){return (_gd.entries||[]).filter(e=>e&&e.data&&e
 function _gdWeekMonSun(){const d=new Date();const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d.setDate(diff));return mon.toISOString().slice(0,10);}
 function _gdWeekEntries(start){const s=new Date(start+'T00:00:00'),e=new Date(s);e.setDate(e.getDate()+6);return (_gd.entries||[]).filter(e2=>{if(!e2||!e2.data)return false;const d=new Date(e2.data+'T00:00:00');return d>=s&&d<=e;});}
 function _gdPcpColuna(titulo,cor,bg,lista){
-  const itens=lista.length?lista.map(p=>'<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;"><div style="font-weight:600;">OP '+_gdEsc(p.op||'—')+'</div><div style="color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_gdEsc((p.descricao||p.item||'').substring(0,34))+'</div>'+(p.dataEnvio?'<div style="color:#aaa;">📅 '+_gdEsc(p.dataEnvio)+'</div>':'')+'</div>').join(''):'<div style="font-size:12px;color:#bbb;padding:8px;">—</div>';
-  return '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:'+cor+';text-align:center;padding:6px;background:'+bg+';border-radius:6px;margin-bottom:6px;">'+titulo+' ('+lista.length+')</div><div style="max-height:260px;overflow-y:auto;">'+itens+'</div></div>';
+  const itens=lista.length?lista.map(x=>{const p=x.p||x,s=x.s||{label:'',cor:'#999',fonte:'pcp'};
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;">'
+      +'<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;"><span style="font-weight:600;">OP '+_gdEsc(p.op||'—')+'</span>'
+      +'<span style="font-size:10px;font-weight:700;color:'+s.cor+';white-space:nowrap;" title="'+(s.fonte==='programa'?'status real do programa':'status da planilha PCP')+'">'+(s.fonte==='programa'?'● ':'')+_gdEsc(s.label)+'</span></div>'
+      +'<div style="color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_gdEsc((p.descricao||p.item||'').substring(0,34))+'</div>'
+      +(p.dataEnvio?'<div style="color:#aaa;">📅 '+_gdEsc(p.dataEnvio)+'</div>':'')+'</div>';
+  }).join(''):'<div style="font-size:12px;color:#bbb;padding:8px;">—</div>';
+  return '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:'+cor+';text-align:center;padding:6px;background:'+bg+';border-radius:6px;margin-bottom:6px;">'+titulo+' ('+lista.length+')</div><div style="max-height:300px;overflow-y:auto;">'+itens+'</div></div>';
 }
 function renderGDN2(cont){
   const entries=(_gd.entries||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
@@ -4486,10 +4515,14 @@ function renderGDN2(cont){
     if(_gdN2Mes===null)_gdN2Mes=mesAtualN;
     const anoAtual=+mesKey.split('-')[0];
     const pedidosMes=(pcp.pedidos||[]).filter(p=>Number(p.mes)===Number(_gdN2Mes)&&(!p.ano||Number(p.ano)===anoAtual));
-    const porCat=cats=>pedidosMes.filter(p=>cats.indexOf(pcpCat(p.status))>=0).sort((a,b)=>(pcpDateToNum(a.dataEnvio)||0)-(pcpDateToNum(b.dataEnvio)||0));
-    const aFazerL=porCat(['aguardando']),fazendoL=porCat(['montagem','producao']),prontosL=porCat(['concluido']);
+    const byEnvio=(a,b)=>(pcpDateToNum(a.p.dataEnvio)||0)-(pcpDateToNum(b.p.dataEnvio)||0);
+    const comStatus=pedidosMes.filter(p=>pcpCat(p.status)!=='cancelado').map(p=>({p,s:gdStatusPedido(p)}));
+    const aFazerL=comStatus.filter(x=>x.s.et==='afazer').sort(byEnvio);
+    const fazendoL=comStatus.filter(x=>x.s.et==='fazendo').sort(byEnvio);
+    const prontosL=comStatus.filter(x=>x.s.et==='pronto').sort(byEnvio);
     h+='<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:600;color:#666;">Mês: </label><select onchange="_gdN2Mes=+this.value;renderGD()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;">'+mesesPCP.map(m=>'<option value="'+m+'"'+(m===_gdN2Mes?' selected':'')+'>'+(MESES[m-1]||'Mês '+m)+(m===mesAtualN?' (atual)':'')+'</option>').join('')+'</select></div>';
     h+='<div style="display:flex;gap:10px;align-items:flex-start;">'+_gdPcpColuna('A fazer','#666','#f5f5f5',aFazerL)+_gdPcpColuna('Fazendo','#2563eb','#eef2ff',fazendoL)+_gdPcpColuna('Prontos','#1D9E75','#e9f7f1',prontosL)+'</div>';
+    h+='<div style="font-size:11px;color:#888;margin-top:8px;">● = posição real na linha (cruzado com os apontamentos por OP/chicote): <b style="color:#b45309;">Chapa</b> · <b style="color:#2563eb;">Elétrica</b> · <b style="color:#15803d;">Montagem Final/Concluído = pronto</b>. Sem o ●, é o status da planilha do PCP.</div>';
   }else{
     h+='<div style="font-size:13px;color:#666;text-align:center;padding:8px 0;">Carregue a planilha na aba 📋 PCP para ver este quadro.</div>';
   }

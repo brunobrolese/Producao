@@ -171,7 +171,7 @@ textarea{resize:vertical;}
   <div style="display:flex;align-items:center;gap:10px;">
     <h1>Apontamento</h1>
     <span class="badge-col">COLABORADOR</span>
-    <span style="font-size:9px;color:#666;margin-left:4px;">v75</span>
+    <span style="font-size:9px;color:#666;margin-left:4px;">v85</span>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
     <div class="sync-info"><span class="dot" id="dot"></span><span id="syncTxt">conectando...</span></div>
@@ -1816,10 +1816,13 @@ async function init(){
   // ── AUTO-RELOAD A CADA 30 MINUTOS ──
   // Recarrega a página inteira para evitar que abas abertas o dia todo
   // acumulem estado velho. Só recarrega quando é SEGURO (ninguém no meio de uma ação).
-  const RELOAD_INTERVAL=30*60*1000; // 30 minutos
+  const RELOAD_INTERVAL=30*60*1000;
+  window._gUltimaInteracao=Date.now();
+  ['keydown','pointerdown','input'].forEach(ev=>document.addEventListener(ev,()=>{window._gUltimaInteracao=Date.now();},true)); // 30 minutos
   let _proximoReload=Date.now()+RELOAD_INTERVAL;
   setInterval(async()=>{
     if(Date.now()<_proximoReload)return; // ainda não deu 30 min
+    if(Date.now()-(window._gUltimaInteracao||0)<180000)return; // ativo nos últimos 3 min, espera
     // verifica se é seguro recarregar
     const ativo=document.activeElement;
     const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
@@ -1851,12 +1854,8 @@ async function init(){
     const ativo=document.activeElement;
     const digitando=ativo&&(ativo.tagName==='TEXTAREA'||ativo.tagName==='INPUT');
     const painelAberto=!!finalizando||!!_tipoPausa||document.querySelector('.fin-panel')||document.querySelector('.add-form');
-    if(digitando||painelAberto||finalizando){
-      // não recarrega para não perder o que está sendo feito; só sincroniza
-      try{await load();renderAll();}catch(e){}
-      return;
-    }
-    location.reload();
+    // Nunca recarrega ao voltar pra aba. Só sincroniza; se estiver no meio de algo, nem re-renderiza (preserva o painel aberto).
+    try{await load();if(!(digitando||painelAberto||finalizando))renderAll();}catch(e){}
   });
 }
 

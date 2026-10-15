@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v87</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v90</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -1690,12 +1690,17 @@ function tempoModeloSetor(m,setor){
   if(setor==='eletrica')return (m.tempoEletrica!=null?m.tempoEletrica:m.tempoPrevisto)||0;
   return 0;
 }
-// ══════════ AJUSTE DE TEMPOS (média aparada da produção real) ══════════
+// ══════════ AJUSTE DE TEMPOS (cluster rápido da produção real) ══════════
+// Usa a METADE MAIS RÁPIDA dos tempos reais (os menores) em vez da média de todos.
+// Assim o tempo-padrão representa um ritmo bom e JÁ ALCANÇADO de verdade, e não
+// sobe quando um montador vai mais devagar que o normal.
 function _mediaAparada(valores){
   const v=(valores||[]).filter(x=>typeof x==='number'&&x>0).sort((a,b)=>a-b);
-  if(v.length<3)return null; // precisa remover o menor e o maior e ainda sobrar pelo menos 1
-  const meio=v.slice(1,-1); // descarta o menor e o maior (fora da curva)
-  return Math.round(meio.reduce((s,x)=>s+x,0)/meio.length);
+  if(v.length<3)return null;
+  const base=v.slice(1); // descarta o único tempo mais rápido (proteção contra registro curto demais / erro)
+  const n=Math.max(1,Math.ceil(base.length/2)); // a metade mais rápida do que sobrou
+  const rapidos=base.slice(0,n);
+  return Math.round(rapidos.reduce((s,x)=>s+x,0)/rapidos.length);
 }
 function _temposReais(modeloId,setor){
   const out=[];
@@ -1726,7 +1731,7 @@ function aplicarTempo(modeloId,setor){
   renderModelos();
 }
 function aplicarTodosTempos(){
-  if(!confirm('Atualizar o tempo previsto de TODOS os modelos com 3+ quadros pela média real da produção? Isso substitui os tempos atuais.'))return;
+  if(!confirm('Atualizar o tempo previsto de TODOS os modelos com 3+ quadros pelo desempenho rápido (metade mais rápida dos tempos reais)? Isso substitui os tempos atuais.'))return;
   let n=0;
   (S.modelos||[]).forEach(m=>{
     if(!m)return;
@@ -1736,7 +1741,7 @@ function aplicarTodosTempos(){
     if(se!=null){m.tempoEletrica=se;m.tempoPrevisto=se;n++;}
   });
   save();
-  toast(n+' tempo(s) atualizados pela média real.');
+  toast(n+' tempo(s) atualizados pelo desempenho rápido.');
   renderModelos();
 }
 function renderAjusteTempos(){
@@ -1758,7 +1763,7 @@ function renderAjusteTempos(){
   let html='<div class="card" style="border-top:3px solid #2563eb;">'
     +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><h3 style="margin:0;">⏱ Ajuste de tempos pela produção real</h3>'
     +(comDados.length?'<button class="btn" onclick="aplicarTodosTempos()">✓ Aplicar todos</button>':'')+'</div>'
-    +'<div style="font-size:12px;color:#888;margin:6px 0 12px;">Média dos tempos reais de cada modelo, <strong>descartando o menor e o maior</strong> (fora da curva). Precisa de pelo menos 3 quadros por setor. Aplique para o tempo previsto virar a média real.</div>';
+    +'<div style="font-size:12px;color:#888;margin:6px 0 12px;">Tempo baseado no <strong>desempenho rápido</strong> de cada modelo: usa a <strong>metade mais rápida</strong> dos tempos reais (ritmo bom e já alcançado), então não sobe quando alguém vai mais devagar. Precisa de pelo menos 3 quadros por setor. Aplique para o tempo previsto virar essa referência.</div>';
   if(!comDados.length){
     html+='<p class="empty" style="padding:8px 0;">Ainda não há modelos com 3+ quadros concluídos para calcular a média. Conforme a produção rodar, as sugestões aparecem aqui.</p></div>';
     div.innerHTML=html;return;
@@ -3955,7 +3960,7 @@ let _gd={entries:[],n2:{},equipe:[],errosCat:[],lembretes:[],metaMes:{},pcp:null
 let _gdForm=null, _gdView='dashboard', _gdEditData=null, _gdLoaded=false, _gdRascunhoAtivo=false;
 
 function _gdEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function gdDefaultForm(){return {data:gdHoje(),seguranca:'ok',segurancaNota:'',kaizen:'nao',kaizenDetalhe:'',scrap:'nao',scrapDetalhe:'',retrabalho:'nao',retrabalhoDetalhe:'',horasNaoPlanejadas:'',horasNaoPlanejadasDetalhe:'',faltaMaterial:'nao',faltaMaterialDetalhe:'',erroprojeto:'nao',erroprojetoDetalhe:'',errosProjetoTipos:[],erroprojetoModelo:'',metaPaineis:'',paineisMontagem:'',paineisTesteQtd:'',quadrosIncompletos:'',tipoPainel:'facil',paineisFaceis:'',modeloFacil:'',paineisDificeis:'',modeloDificil:'',pedidosEmbalados:'',pedidosParaEmbalar:'nao',paineisReprovados:'nao',paineisReprovadosDetalhe:'',equipePrevista:'',presentes:'',ausentes:[],materialRisco:'nao',materialRiscoDetalhe:'',backlogTeste:'',pedidoRisco:'nao',pedidoRiscoDetalhe:'',firstPassDiario:'',firstPassMensal:'',modelosOps:''};}
+function gdDefaultForm(){return {data:gdHoje(),seguranca:'ok',segurancaNota:'',kaizen:'nao',kaizenDetalhe:'',scrap:'nao',scrapDetalhe:'',retrabalho:'nao',retrabalhoDetalhe:'',horasNaoPlanejadas:'',horasNaoPlanejadasDetalhe:'',faltaMaterial:'nao',faltaMaterialDetalhe:'',erroprojeto:'nao',erroprojetoDetalhe:'',errosProjetoTipos:[],erroprojetoModelo:'',metaPaineis:'',paineisMontagem:'',paineisTesteQtd:'',quadrosIncompletos:'',tipoPainel:'facil',paineisFaceis:'',modeloFacil:'',paineisDificeis:'',modeloDificil:'',pedidosEmbalados:'',pedidosParaEmbalar:'nao',paineisReprovados:'nao',paineisReprovadosDetalhe:'',equipePrevista:'',presentes:'',ausentes:[],materialRisco:'nao',materialRiscoDetalhe:'',backlogTeste:'',pedidoRisco:'nao',pedidoRiscoDetalhe:'',firstPassDiario:'',firstPassMensal:'',modelosOps:'',chicotesQtd:'',chicotesModelos:'',chapasQtd:'',caixasQtd:''};}
 function gdHoje(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function gdFmtData(iso){if(!iso)return'—';const p=String(iso).split('-');if(p.length!==3)return iso;return p[2]+'/'+p[1]+'/'+p[0];}
 function gdSemQual(e){if(!e||e.firstPassDiario==='')return'amarelo';const v=Number(e.firstPassDiario);return v>=85?'verde':v>=70?'amarelo':'vermelho';}
@@ -4115,6 +4120,10 @@ function renderGDRegistrar(cont){
   h+=`<div class="field-row"><div class="field"><label>Painéis fáceis (qtd)</label>${inp('paineisFaceis',f.paineisFaceis,'number','min=0')}</div><div class="field"><label>Modelo do painel fácil</label>${inp('modeloFacil',f.modeloFacil,'text','placeholder="Ex: QGBT-100"')}</div></div>`;
   h+=`<div class="field-row"><div class="field"><label>Painéis difíceis (qtd)</label>${inp('paineisDificeis',f.paineisDificeis,'number','min=0')}</div><div class="field"><label>Modelo do painel difícil</label>${inp('modeloDificil',f.modeloDificil,'text','placeholder="Ex: CCM-480"')}</div></div>`;
   h+=`<div class="field"><label>Modelos e OPs produzidos no dia <span style="color:#0e7490;">(puxado do programa)</span></label><textarea id="gd_modelosOps" placeholder="Clique em ⚡ Puxar dados do dia para listar os modelos e OPs...">${_gdEsc(f.modelosOps)}</textarea></div>`;
+  h+=`<div class="sec-title" style="margin-top:14px;margin-bottom:10px;">Chicotes, chapas e caixas</div>`;
+  h+=`<div class="field-row"><div class="field"><label>Chicotes produzidos (qtd)</label>${inp('chicotesQtd',f.chicotesQtd,'number','min=0')}</div><div class="field"><label>Chapas produzidas (qtd)</label>${inp('chapasQtd',f.chapasQtd,'number','min=0')}</div></div>`;
+  h+=`<div class="field-row"><div class="field"><label>Caixas produzidas (qtd)</label>${inp('caixasQtd',f.caixasQtd,'number','min=0')}</div><div class="field"></div></div>`;
+  h+=`<div class="field"><label>Modelos dos chicotes produzidos</label><textarea id="gd_chicotesModelos" placeholder="Ex: ROSCA VARREDORA 25CV, BIOCAV 3M, SIG316...">${_gdEsc(f.chicotesModelos)}</textarea></div>`;
   h+=`<div class="field"><label>Pedidos embalados</label>${inp('pedidosEmbalados',f.pedidosEmbalados,'number','min=0')}</div>`;
   h+=`<div class="field"><label>Pedidos para embalar?</label><select id="gd_pedidosParaEmbalar"><option value="nao"${f.pedidosParaEmbalar==='nao'?' selected':''}>Não</option><option value="sim"${f.pedidosParaEmbalar==='sim'?' selected':''}>Sim</option></select></div>`;
   h+=_gdTF('paineisReprovados','Painéis reprovados no teste?','Painel e motivo...');
@@ -4141,7 +4150,7 @@ function renderGDRegistrar(cont){
 }
 function gdColheForm(){
   const f=Object.assign({},_gdForm);
-  const txt=['data','segurancaNota','horasNaoPlanejadas','horasNaoPlanejadasDetalhe','metaPaineis','paineisMontagem','paineisTesteQtd','quadrosIncompletos','paineisFaceis','modeloFacil','paineisDificeis','modeloDificil','pedidosEmbalados','firstPassDiario','firstPassMensal','backlogTeste','erroprojetoModelo','equipePrevista','presentes','modelosOps'];
+  const txt=['data','segurancaNota','horasNaoPlanejadas','horasNaoPlanejadasDetalhe','metaPaineis','paineisMontagem','paineisTesteQtd','quadrosIncompletos','paineisFaceis','modeloFacil','paineisDificeis','modeloDificil','pedidosEmbalados','firstPassDiario','firstPassMensal','backlogTeste','erroprojetoModelo','equipePrevista','presentes','modelosOps','chicotesQtd','chicotesModelos','chapasQtd','caixasQtd'];
   txt.forEach(k=>{const el=document.getElementById('gd_'+k);if(el)f[k]=el.value;});
   ['kaizen','scrap','retrabalho','faltaMaterial','materialRisco','paineisReprovados','pedidoRisco','erroprojeto'].forEach(k=>{const el=document.getElementById('gd_'+k+'Detalhe');if(el)f[k+'Detalhe']=el.value;});
   const segN=document.getElementById('gd_segurancaNota');if(segN)f.segurancaNota=segN.value;
@@ -4290,7 +4299,7 @@ const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agos
 const pcpDeaccent=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'');
 const pcpNorm=s=>pcpDeaccent(s).trim().toUpperCase();
 const pcpCat=status=>{const s=pcpNorm(status);if(s==='CANCELADO')return'cancelado';if(s==='FATURADO'||s==='EXPEDICAO'||s==='ESTOQUE'||s==='TESTE'||s==='RESERVADO')return'concluido';if(s.indexOf('MONTAGEM FINAL')>=0||s==='MF')return'final';if(s.indexOf('MONTAGEM')>=0)return'montagem';if(s==='PRODUCAO')return'producao';if(s==='SEM OP'||s==='ALMOXARIFADO')return'aguardando';return'aguardando';};
-const pcpCatLabel={concluido:'pronto',final:'mont. final',montagem:'mont. elétrica',producao:'produção',aguardando:'a fazer',cancelado:'cancelado'};
+const pcpCatLabel={concluido:'pronto',final:'montagem final',montagem:'montagem elétrica',producao:'produção',aguardando:'a fazer',cancelado:'cancelado'};
 function pcpFmtDate(v){if(v==null||v==='')return'';if(v instanceof Date&&!isNaN(v))return('0'+v.getUTCDate()).slice(-2)+'/'+('0'+(v.getUTCMonth()+1)).slice(-2)+'/'+v.getUTCFullYear();if(typeof v==='number'&&isFinite(v)){const d=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(d))return('0'+d.getUTCDate()).slice(-2)+'/'+('0'+(d.getUTCMonth()+1)).slice(-2)+'/'+d.getUTCFullYear();}return String(v).trim();}
 function pcpClamp(ws){if(!ws)return ws;let maxR=0,maxC=0;for(const k in ws){if(k[0]==='!')continue;const m=k.match(/^([A-Z]+)(\d+)$/);if(!m)continue;const r=parseInt(m[2],10),c=XLSX.utils.decode_col(m[1]);if(r>maxR)maxR=r;if(c>maxC)maxC=c;}if(maxR>0)ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:maxR-1,c:maxC}});return ws;}
 function pcpDateToNum(s){const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);if(!m)return null;let y=+m[3];if(y<100)y+=2000;return y*10000+(+m[2])*100+(+m[1]);}
@@ -4329,7 +4338,7 @@ function gdStatusLinha(p){
     else if(a.setor==='eletrica'||a.etapa==='eletrica'||a.eletricaIniciada)stage=Math.max(stage,2);
     else if(a.setor==='chapa')stage=Math.max(stage,1);
   });
-  const M={4:{et:'pronto',label:'Concluído',cor:'#15803d'},3:{et:'pronto',label:incompleto?'MF · incompleto':'Montagem Final',cor:'#15803d'},2:{et:'fazendo',label:'Elétrica',cor:'#2563eb'},1:{et:'fazendo',label:'Chapa',cor:'#b45309'}};
+  const M={4:{et:'pronto',label:'Concluído',cor:'#15803d'},3:{et:'pronto',label:incompleto?'Mont. final · incompleto':'Montagem final',cor:'#15803d'},2:{et:'fazendo',label:'Montagem elétrica',cor:'#2563eb'},1:{et:'fazendo',label:'Chapa',cor:'#b45309'}};
   return M[stage]||null;
 }
 function gdStatusPedido(p){
@@ -4522,7 +4531,7 @@ function renderGDN2(cont){
     const prontosL=comStatus.filter(x=>x.s.et==='pronto').sort(byEnvio);
     h+='<div style="margin-bottom:10px;"><label style="font-size:12px;font-weight:600;color:#666;">Mês: </label><select onchange="_gdN2Mes=+this.value;renderGD()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;">'+mesesPCP.map(m=>'<option value="'+m+'"'+(m===_gdN2Mes?' selected':'')+'>'+(MESES[m-1]||'Mês '+m)+(m===mesAtualN?' (atual)':'')+'</option>').join('')+'</select></div>';
     h+='<div style="display:flex;gap:10px;align-items:flex-start;">'+_gdPcpColuna('A fazer','#666','#f5f5f5',aFazerL)+_gdPcpColuna('Fazendo','#2563eb','#eef2ff',fazendoL)+_gdPcpColuna('Prontos','#1D9E75','#e9f7f1',prontosL)+'</div>';
-    h+='<div style="font-size:11px;color:#888;margin-top:8px;">● = posição real na linha (cruzado com os apontamentos por OP/chicote): <b style="color:#b45309;">Chapa</b> · <b style="color:#2563eb;">Elétrica</b> · <b style="color:#15803d;">Montagem Final/Concluído = pronto</b>. Sem o ●, é o status da planilha do PCP.</div>';
+    h+='<div style="font-size:11px;color:#888;margin-top:8px;">● = posição real na linha (cruzado com os apontamentos por OP/chicote): <b style="color:#b45309;">Chapa</b> · <b style="color:#2563eb;">Montagem elétrica</b> · <b style="color:#15803d;">Montagem final/Concluído = pronto</b>. Sem o ●, é o status da planilha do PCP.</div>';
   }else{
     h+='<div style="font-size:13px;color:#666;text-align:center;padding:8px 0;">Carregue a planilha na aba 📋 PCP para ver este quadro.</div>';
   }
@@ -4625,7 +4634,7 @@ function renderGDPcp(cont){
   let h='<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:10px;"><div><h3 style="margin:0;">📦 PCP — Painéis</h3><div style="font-size:11px;color:#999;margin-top:4px;">'+(pcp.arquivo?_gdEsc(pcp.arquivo)+' · ':'')+'carregado em '+(dt&&!isNaN(dt)?dt.toLocaleString('pt-BR'):'—')+'</div></div><label class="btn" style="cursor:pointer;">↻ Substituir<input type="file" accept=".xlsx,.xls" onchange="gdCarregarPCP(this)" style="display:none;"/></label></div>';
   h+='<div id="gdPcpStatus" style="font-size:13px;margin:4px 0;color:#15803d;"></div>';
   if(mesesDisp.length)h+='<div style="margin:10px 0;"><label style="font-size:12px;font-weight:600;color:#666;">Filtrar por mês: </label><select onchange="_gdPcpMes=this.value;renderGD()" style="padding:6px 10px;border:1px solid #ddd;border-radius:8px;"><option value="todos"'+(_gdPcpMes==='todos'?' selected':'')+'>Todos os meses</option>'+mesesDisp.map(m=>'<option value="'+m+'"'+(String(_gdPcpMes)===String(m)?' selected':'')+'>'+(MESES[m-1]||'Mês '+m)+'</option>').join('')+'</select></div>';
-  h+='<div class="kpi-grid" style="margin-top:12px;">'+kpi('Total painéis',a.total)+kpi('Aguardando',a.aguardando)+kpi('Mont. elétrica',a.montagem)+kpi('Em produção',a.producao)+kpi('Mont. final',a.final)+kpi('Concluídos',a.concluido)+kpi('Cancelados',a.cancelado)+'</div>';
+  h+='<div class="kpi-grid" style="margin-top:12px;">'+kpi('Total painéis',a.total)+kpi('Aguardando',a.aguardando)+kpi('Montagem elétrica',a.montagem)+kpi('Em produção',a.producao)+kpi('Montagem final',a.final)+kpi('Concluídos',a.concluido)+kpi('Cancelados',a.cancelado)+'</div>';
   h+='<div class="sec-title" style="margin-top:16px;">Distribuição por status</div><div class="card gd-scope">'+statusEntries.map(([s,v])=>bar(s+' ('+(pcpCatLabel[pcpCat(s)]||'')+')',v,statusMax,catColor(pcpCat(s)))).join('')+'</div>';
   h+='<div class="sec-title">Painéis por grupo</div><div class="card gd-scope">'+(grupoEntries.length?grupoEntries.map(([g,v])=>bar(g,v,grupoMax,'#2563eb')).join(''):'<div style="font-size:12px;color:#aaa;">Sem grupos.</div>')+'</div>';
   if(_gdPcpMes==='todos'&&mesEntries.length)h+='<div class="sec-title">Painéis por mês</div><div class="card gd-scope">'+mesEntries.map(([m,v])=>bar(MESES[m-1]||'Mês '+m,v,mesMax,'#1D9E75')).join('')+'</div>';

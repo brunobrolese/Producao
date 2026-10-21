@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v90</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v91</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2254,6 +2254,77 @@ function tempoPrevistoDe(a,m){
   if(a.setor==='chapa')return m.tempoChapa||0;
   return m.tempoEletrica||m.tempoPrevisto||0;
 }
+// ── PREVISÃO DE TÉRMINO (quando o painel deve ficar pronto nesta etapa) ──
+// Projeta os minutos restantes (previsto − já trabalhado) sobre o expediente,
+// pulando as pausas de café/almoço do colaborador e os fins de semana.
+function _hm2min(hhmm){const p=String(hhmm).split(':');if(p.length<2)return null;const h=parseInt(p[0]),m=parseInt(p[1]);if(isNaN(h)||isNaN(m))return null;return h*60+m;}
+function _breaksColab(a){
+  const c=(S.colaboradores||[]).find(x=>x&&x.id===a.colabId);
+  const cfg=(c&&c.horarios)||{};
+  const out=[];
+  ['cafeManha','almoco','cafeTarde'].forEach(k=>{
+    const b=cfg[k];
+    if(b&&b.inicio&&b.fim){const s=_hm2min(b.inicio),e=_hm2min(b.fim);if(s!=null&&e!=null&&e>s)out.push([s,e]);}
+  });
+  return out.sort((x,y)=>x[0]-y[0]);
+}
+function preverTermino(a,m){
+  const prev=tempoPrevistoDe(a,m);
+  if(!prev||prev<=0)return null;                   // modelo sem tempo previsto → não dá para estimar
+  const exp=S.expediente;
+  if(!exp||!exp.inicio||!exp.fim)return null;       // expediente não configurado
+  const expS=_hm2min(exp.inicio),expE=_hm2min(exp.fim);
+  if(expS==null||expE==null||expE<=expS)return null;
+  const liq=tempoLiquido(a);
+  let rem=prev-liq;
+  const now=new Date();
+  if(rem<=0)return {quando:now,due:true,atrasado:rem<0};
+  const breaks=_breaksColab(a);
+  function segmentosDia(deMin){                      // trechos de trabalho do dia, descontando pausas
+    let segs=[[Math.max(deMin,expS),expE]].filter(s=>s[1]>s[0]);
+    breaks.forEach(b=>{
+      segs=segs.flatMap(([s,e])=>{
+        if(b[1]<=s||b[0]>=e)return [[s,e]];
+        const r=[];
+        if(b[0]>s)r.push([s,Math.min(b[0],e)]);
+        if(b[1]<e)r.push([Math.max(b[1],s),e]);
+        return r;
+      });
+    });
+    return segs;
+  }
+  let cur=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  let deMin=now.getHours()*60+now.getMinutes();
+  for(let dia=0;dia<400&&rem>0;dia++){
+    const dow=cur.getDay();
+    if(dow!==0&&dow!==6){                            // pula domingo(0) e sábado(6)
+      for(const seg of segmentosDia(deMin)){
+        const avail=seg[1]-seg[0];
+        if(avail<=0)continue;
+        if(rem<=avail){
+          const fim=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate());
+          fim.setMinutes(seg[0]+rem);
+          return {quando:fim,atrasado:false};
+        }
+        rem-=avail;
+      }
+    }
+    cur=new Date(cur.getFullYear(),cur.getMonth(),cur.getDate()+1);
+    deMin=0;                                         // dias seguintes começam no início do expediente
+  }
+  return null;
+}
+function fmtPrevisao(p){
+  if(!p)return '';
+  if(p.due)return p.atrasado?'a qualquer momento (passou do previsto)':'a qualquer momento';
+  const d=p.quando,hoje=new Date();
+  const amanha=new Date(hoje.getFullYear(),hoje.getMonth(),hoje.getDate()+1);
+  const hh=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  const mesma=(x,y)=>x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate();
+  if(mesma(d,hoje))return 'hoje '+hh;
+  if(mesma(d,amanha))return 'amanhã '+hh;
+  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+hh;
+}
 function renderLive(){
   const tPausa={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -2309,6 +2380,10 @@ function renderLive(){
       const expandido=_liveExpanded.has(a.id);
       const pct=prev>0?Math.min(Math.round(liq/prev*100),100):0;
       const tipoIcons2={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
+      // previsão de término (só etapas ativas chapa/elétrica)
+      const pv=(grupo!=='mf')?preverTermino(a,m):null;
+      const pvPausado=(st.key==='pausado');
+      const prevHtml=pv?`<div style="font-size:12.5px;margin-top:7px;font-weight:700;color:${pv.atrasado?'#b91c1c':'#0b6bcb'};">🏁 ${pvPausado?'previsão (ao retomar)':'previsão'}: ${fmtPrevisao(pv)}</div>`:'';
 
       // bloco de detalhes (quando expandido) — mantém as informações completas
       let detalhes='';
@@ -2359,6 +2434,7 @@ function renderLive(){
           ${tempoBloco}
         </div>
         ${grupo!=='mf'&&prev>0?`<div style="height:7px;background:#00000012;border-radius:99px;margin-top:9px;overflow:hidden;"><div style="height:100%;width:${pct}%;background:${st.barra};border-radius:99px;"></div></div>`:''}
+        ${prevHtml}
         ${st.key==='pausado'&&st.desde?`<div style="font-size:12px;color:${st.cor};margin-top:6px;font-weight:600;">pausado às ${fmtH(st.desde)}</div>`:''}
         ${a.itensFaltando&&!expandido?`<div style="font-size:12px;color:#BA7517;margin-top:6px;font-weight:700;">⚠ Itens faltando</div>`:''}
         <div class="live-toggle" style="text-align:center;color:#aaa;font-size:11px;margin-top:6px;">${expandido?'▲ menos':'▼ detalhes'}</div>

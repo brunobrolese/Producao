@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v91</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v92</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -2325,6 +2325,20 @@ function fmtPrevisao(p){
   if(mesma(d,amanha))return 'amanhã '+hh;
   return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+' '+hh;
 }
+// troca o montador de um quadro (reatribui quando começaram no colaborador errado)
+async function trocarMontador(aptId,novoId){
+  const a=(S.apontamentos||[]).find(x=>x&&String(x.id)===String(aptId));
+  if(!a)return;
+  if(!novoId||String(a.colabId)===String(novoId)){renderLive();return;}
+  const novo=(S.colaboradores||[]).find(x=>x&&String(x.id)===String(novoId));
+  const atual=(S.colaboradores||[]).find(x=>x&&String(x.id)===String(a.colabId));
+  if(!confirm('Trocar o montador da OP '+(a.opNum||'—')+' de "'+(atual?atual.nome:'—')+'" para "'+(novo?novo.nome:'—')+'"?')){renderLive();return;}
+  a.colabId=novoId;
+  a._ts=Date.now();
+  try{await save();}catch(e){}
+  toast('✓ Montador trocado para '+(novo?novo.nome:'—'));
+  if(currentPage==='live')renderLivePage(); else if(currentPage==='dash')renderDash();
+}
 function renderLive(){
   const tPausa={intervalo:'☕',atividade:'📋',almoco:'🍽️',fimdia:'🌙'};
   const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -2389,6 +2403,9 @@ function renderLive(){
       let detalhes='';
       if(expandido){
         const linhas=[];
+        // trocar montador (reatribui o quadro se começaram no colaborador errado)
+        const optsMont=(S.colaboradores||[]).filter(x=>x&&x.nome).map(x=>`<option value="${x.id}"${String(x.id)===String(a.colabId)?' selected':''}>${x.nome}</option>`).join('');
+        linhas.push(`<div style="font-size:12px;color:#666;margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><strong>🔄 Trocar montador:</strong> <select onclick="event.stopPropagation()" onchange="event.stopPropagation();trocarMontador('${a.id}',this.value)" style="padding:4px 7px;border:1px solid #ccc;border-radius:6px;font-size:12px;max-width:180px;">${optsMont}</select></div>`);
         linhas.push(`<div style="font-size:12px;color:#666;"><strong>Início:</strong> ${a.inicio?fmtDH(a.inicio):'—'}</div>`);
         const pausas=(a.pausas||[]).filter(p=>p&&p.inicio);
         if(pausas.length){

@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v93</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v95</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -742,6 +742,7 @@ async function load(){
     const r=await fetch(DB_URL+'.json');
     if(!r.ok)throw new Error();
     const d=await r.json();
+    let repaired=false;
     if(d){
       S=d;
       // Firebase às vezes retorna arrays como objetos {0:...,1:...} — normaliza para array
@@ -752,8 +753,21 @@ async function load(){
         S[k]=base.filter(x=>x!=null&&typeof x==='object');
       });
       if(!S.nid)S.nid=1;
+      // AUTO-REPARO: colabId gravado como TEXTO (troca de montador antiga) → regrava com o ID nativo
+      // do colaborador, para o nome voltar a casar no tempo real e o quadro aparecer pro colaborador.
+      try{
+        const ids=(S.colaboradores||[]).filter(c=>c&&c.id!=null);
+        (S.apontamentos||[]).forEach(a=>{
+          if(!a||a.colabId==null)return;
+          if(ids.some(c=>c.id===a.colabId))return;                 // já casa de forma estrita
+          const alvo=ids.find(c=>String(c.id)===String(a.colabId));
+          if(alvo){a.colabId=alvo.id;a._ts=Date.now();repaired=true;}
+        });
+      }catch(e){}
     }
-    setSync(true);_dadosCarregados=true;return true;
+    setSync(true);_dadosCarregados=true;
+    if(repaired){try{await save();}catch(e){}}  // persiste o reparo no Firebase
+    return true;
   }catch(e){setSync(false);return false;}
 }
 
@@ -4408,10 +4422,10 @@ function parsePCP(wb){
   let hi=-1;for(let i=0;i<Math.min(rows.length,15);i++){const r=(rows[i]||[]).map(pcpNorm);if(r.indexOf('STATUS')>=0&&r.indexOf('SEMANA')>=0){hi=i;break;}}
   if(hi<0)throw new Error('Não achei o cabeçalho da aba Pedidos (esperava STATUS e SEMANA).');
   const header=(rows[hi]||[]).map(pcpNorm);const col=n=>header.indexOf(n);
-  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:col('SEMANA'),mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),chicotes:col('CHICOTES'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO')};
+  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:col('SEMANA'),mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),chicotes:col('CHICOTES'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO'),kepler:col('PEDIDO KEPLER')};
   const pedidos=[];
   for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const st=r[ci.status];if(st==null||String(st).trim()==='')continue;
-    pedidos.push({pedido:r[ci.pedido]!=null?String(r[ci.pedido]):'',item:r[ci.item]!=null?String(r[ci.item]):'',descricao:r[ci.desc]!=null?String(r[ci.desc]):'',status:String(st).trim(),qtd:num(r[ci.qtd])||1,semana:num(r[ci.semana]),mes:num(r[ci.mes]),ano:num(r[ci.ano]),grupo:(r[ci.grupo]!=null&&String(r[ci.grupo]).trim()!=='')?String(r[ci.grupo]).trim():'(sem grupo)',op:(ci.op>=0&&r[ci.op]!=null)?String(r[ci.op]).trim():'',chicotes:(ci.chicotes>=0&&r[ci.chicotes]!=null)?String(r[ci.chicotes]).trim():'',dataEntrega:ci.dataEntrega>=0?pcpFmtDate(r[ci.dataEntrega]):'',dataEnvio:ci.dataEnvio>=0?pcpFmtDate(r[ci.dataEnvio]):''});}
+    pedidos.push({pedido:r[ci.pedido]!=null?String(r[ci.pedido]):'',item:r[ci.item]!=null?String(r[ci.item]):'',descricao:r[ci.desc]!=null?String(r[ci.desc]):'',status:String(st).trim(),qtd:num(r[ci.qtd])||1,semana:num(r[ci.semana]),mes:num(r[ci.mes]),ano:num(r[ci.ano]),grupo:(r[ci.grupo]!=null&&String(r[ci.grupo]).trim()!=='')?String(r[ci.grupo]).trim():'(sem grupo)',op:(ci.op>=0&&r[ci.op]!=null)?String(r[ci.op]).trim():'',chicotes:(ci.chicotes>=0&&r[ci.chicotes]!=null)?String(r[ci.chicotes]).trim():'',dataEntrega:ci.dataEntrega>=0?pcpFmtDate(r[ci.dataEntrega]):'',dataEnvio:ci.dataEnvio>=0?pcpFmtDate(r[ci.dataEnvio]):'',heijunka:(ci.kepler>=0&&r[ci.kepler]!=null&&pcpNorm(r[ci.kepler])==='HEIJUNKA')});}
   if(!pedidos.length)throw new Error('A aba Pedidos não tinha linhas reconhecíveis.');
   return {pedidos};
 }
@@ -4571,14 +4585,17 @@ function _gdMonthEntries(mesKey){return (_gd.entries||[]).filter(e=>e&&e.data&&e
 function _gdWeekMonSun(){const d=new Date();const day=d.getDay();const diff=d.getDate()-day+(day===0?-6:1);const mon=new Date(d.setDate(diff));return mon.toISOString().slice(0,10);}
 function _gdWeekEntries(start){const s=new Date(start+'T00:00:00'),e=new Date(s);e.setDate(e.getDate()+6);return (_gd.entries||[]).filter(e2=>{if(!e2||!e2.data)return false;const d=new Date(e2.data+'T00:00:00');return d>=s&&d<=e;});}
 function _gdPcpColuna(titulo,cor,bg,lista){
+  const nHeij=lista.filter(x=>((x.p||x).heijunka)).length;
   const itens=lista.length?lista.map(x=>{const p=x.p||x,s=x.s||{label:'',cor:'#999',fonte:'pcp'};
-    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;">'
-      +'<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;"><span style="font-weight:600;">OP '+_gdEsc(p.op||'—')+'</span>'
+    const hj=!!p.heijunka;
+    return '<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;font-size:12px;'+(hj?'border-left:3px solid #7c3aed;background:#faf8ff;':'')+'">'
+      +'<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;"><span style="font-weight:600;">OP '+_gdEsc(p.op||'—')+(hj?' <span style="font-size:9px;font-weight:800;color:#fff;background:#7c3aed;border-radius:99px;padding:1px 6px;vertical-align:middle;">⚖️ HEIJUNKA</span>':'')+'</span>'
       +'<span style="font-size:10px;font-weight:700;color:'+s.cor+';white-space:nowrap;" title="'+(s.fonte==='programa'?'status real do programa':'status da planilha PCP')+'">'+(s.fonte==='programa'?'● ':'')+_gdEsc(s.label)+'</span></div>'
       +'<div style="color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_gdEsc((p.descricao||p.item||'').substring(0,34))+'</div>'
       +(p.dataEnvio?'<div style="color:#aaa;">📅 '+_gdEsc(p.dataEnvio)+'</div>':'')+'</div>';
   }).join(''):'<div style="font-size:12px;color:#bbb;padding:8px;">—</div>';
-  return '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:'+cor+';text-align:center;padding:6px;background:'+bg+';border-radius:6px;margin-bottom:6px;">'+titulo+' ('+lista.length+')</div><div style="max-height:300px;overflow-y:auto;">'+itens+'</div></div>';
+  const subt=lista.length?'<div style="font-size:10px;font-weight:700;margin-top:2px;"><span style="color:#7c3aed;">⚖️ '+nHeij+' Heijunka</span> <span style="color:#aaa;">· '+(lista.length-nHeij)+' fora</span></div>':'';
+  return '<div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:700;color:'+cor+';text-align:center;padding:6px;background:'+bg+';border-radius:6px;margin-bottom:6px;">'+titulo+' ('+lista.length+')'+subt+'</div><div style="max-height:300px;overflow-y:auto;">'+itens+'</div></div>';
 }
 function renderGDN2(cont){
   const entries=(_gd.entries||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));

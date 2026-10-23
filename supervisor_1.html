@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v95</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v96</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -335,6 +335,18 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <!-- COLABORADORES -->
     <!-- APONTAMENTOS -->
     <div id="page-apt" class="page">
+      <div class="card" style="border-left:4px solid #2563eb;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <h3 style="margin:0;">📅 Apontamentos do dia — por setor</h3>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <button class="btn" style="width:auto;padding:5px 11px;margin:0;" onclick="aptDiaShift(-1)">◀</button>
+            <input id="aptDiaInput" type="date" onchange="aptDiaSet(this.value)" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:14px;"/>
+            <button class="btn" style="width:auto;padding:5px 11px;margin:0;" onclick="aptDiaShift(1)">▶</button>
+            <button class="btn" style="width:auto;padding:5px 11px;margin:0;background:#2563eb;" onclick="aptDiaSet(td())">Hoje</button>
+          </div>
+        </div>
+        <div id="apt-dia-cont" style="margin-top:12px;"></div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;" id="hist-metrics"></div>
       <div class="card" id="hist-antes" style="border-left:4px solid #1D9E75;"></div>
       <div class="card" id="hist-depois" style="border-left:4px solid #A32D2D;margin-bottom:12px;"></div>
@@ -1524,8 +1536,66 @@ async function salvarEditarTempo(aptId){
   renderApt();
   toast('✓ Tempo do apontamento atualizado');
 }
+// ── APONTAMENTOS DO DIA (por setor) ──
+let _aptDia=null;
+function _fmtDurDia(min){min=Math.round(min||0);return min>=60?Math.floor(min/60)+'h'+(min%60?' '+(min%60)+'min':''):min+'min';}
+function aptDiaSet(v){ if(v)_aptDia=v; const inp=document.getElementById('aptDiaInput'); if(inp&&_aptDia)inp.value=_aptDia; renderAptDia(); }
+function aptDiaShift(n){ if(!_aptDia)_aptDia=td(); const d=new Date(_aptDia+'T12:00:00'); if(!isNaN(d)){d.setDate(d.getDate()+n);_aptDia=dataLocalStr(d);} const inp=document.getElementById('aptDiaInput'); if(inp)inp.value=_aptDia; renderAptDia(); }
+function _aptSit(a){
+  if(!a.fim)return estaPausado(a)?{t:'⏸ pausado',c:'#b45309',bg:'#fffbeb'}:{t:'▶ em andamento',c:'#15803d',bg:'#f0fdf4'};
+  if(a.etapa==='concluido'||(a.mf&&a.mf.resultado==='aprovado'))return {t:'✓ concluído',c:'#15803d',bg:'#e9f7f1'};
+  if(a.mf&&a.mf.resultado==='reprovado')return {t:'✗ reprovado',c:'#b91c1c',bg:'#fef2f2'};
+  if(a.etapa==='montagem_final'||(a.mf&&a.mf.incompleto))return {t:'→ montagem final',c:'#6d28d9',bg:'#f5f3ff'};
+  return {t:'✓ etapa concluída',c:'#15803d',bg:'#e9f7f1'};
+}
+function renderAptDia(){
+  const cont=document.getElementById('apt-dia-cont'); if(!cont)return;
+  if(!_aptDia)_aptDia=td();
+  const inp=document.getElementById('aptDiaInput'); if(inp&&!inp.value)inp.value=_aptDia;
+  const dia=_aptDia;
+  const nome=id=>{const x=(S.colaboradores||[]).find(y=>y&&y.id===id);return x?x.nome:'—';};
+  const modc=a=>{const m=(S.modelos||[]).find(y=>y&&y.id===a.modeloId);return m?m.codigo:(a.modeloLabel||'—');};
+  const D=iso=>iso&&dataLocalStr(iso)===dia;
+  const dm=iso=>{const s=dataLocalStr(iso);return s?s.slice(8,10)+'/'+s.slice(5,7):'';};
+  const aps=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+  const chapa=aps.filter(a=>a.setor==='chapa'&&(D(a.inicio)||D(a.fim)));
+  const elet=aps.filter(a=>(a.setor==='eletrica'||a.setor==='geral'||!a.setor)&&(D(a.inicio)||D(a.fim)));
+  const mf=aps.filter(a=>a.mf&&a.mf.fim&&D(a.mf.fim));
+  const tabela=(lista)=>{
+    if(!lista.length)return '<p class="empty" style="padding:8px 2px;font-size:13px;">Nada apontado neste setor no dia.</p>';
+    const rows=lista.slice().sort((a,b)=>(a.inicio||'').localeCompare(b.inicio||'')).map(a=>{
+      const sit=_aptSit(a);const liq=tempoLiquido(a);
+      const ini=D(a.inicio)?fmtH(a.inicio):(a.inicio?'<span style="color:#aaa;">'+dm(a.inicio)+'</span>':'—');
+      const fim=a.fim?(D(a.fim)?fmtH(a.fim):'<span style="color:#aaa;">'+dm(a.fim)+'</span>'):'<span style="color:#aaa;">—</span>';
+      return '<tr><td style="font-weight:700;">'+(a.opNum||'—')+'</td><td>'+modc(a)+'</td><td>'+nome(a.colabId)+'</td><td>'+ini+'</td><td>'+fim+'</td><td style="font-weight:600;">'+_fmtDurDia(liq)+'</td><td><span style="font-size:11px;font-weight:700;color:'+sit.c+';background:'+sit.bg+';padding:2px 8px;border-radius:99px;white-space:nowrap;">'+sit.t+'</span></td></tr>';
+    }).join('');
+    return '<div style="overflow-x:auto;"><table><thead><tr><th>OP</th><th>Modelo</th><th>Colab.</th><th>Início</th><th>Fim</th><th>Tempo</th><th>Situação</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  };
+  const tabelaMF=(lista)=>{
+    if(!lista.length)return '<p class="empty" style="padding:8px 2px;font-size:13px;">Nenhum quadro concluído na montagem final no dia.</p>';
+    const rows=lista.slice().sort((a,b)=>(a.mf.fim||'').localeCompare(b.mf.fim||'')).map(a=>{
+      const ap=a.mf.resultado==='aprovado';
+      const insp=(a.mf.inicioInspecao&&a.mf.fim)?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):null;
+      return '<tr><td style="font-weight:700;">'+(a.opNum||'—')+'</td><td>'+modc(a)+'</td><td>'+nome(a.colabId)+'</td><td><span style="font-size:11px;font-weight:700;color:'+(ap?'#15803d':'#b91c1c')+';background:'+(ap?'#e9f7f1':'#fef2f2')+';padding:2px 8px;border-radius:99px;">'+(ap?'✓ aprovado':'✗ reprovado')+'</span></td><td style="font-weight:600;">'+(insp==null?'—':_fmtDurDia(insp))+'</td><td>'+fmtH(a.mf.fim)+'</td></tr>';
+    }).join('');
+    return '<div style="overflow-x:auto;"><table><thead><tr><th>OP</th><th>Modelo</th><th>Colab.</th><th>Resultado</th><th>Insp.</th><th>Hora</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  };
+  const cab=(emoji,titulo,cor,extra)=>'<div style="display:flex;align-items:center;gap:8px;margin:16px 0 6px;flex-wrap:wrap;"><span style="font-size:15px;font-weight:800;color:'+cor+';">'+emoji+' '+titulo+'</span><span style="font-size:12px;color:#888;">'+extra+'</span></div>';
+  const resumoSetor=(lista)=>{const ini=lista.filter(a=>D(a.inicio)).length;const fim=lista.filter(a=>D(a.fim)).length;return lista.length+' quadro(s) · '+ini+' iniciados · '+fim+' finalizados';};
+  const apMF=mf.filter(a=>a.mf.resultado==='aprovado').length, rpMF=mf.filter(a=>a.mf.resultado==='reprovado').length;
+  const diaBonito=dia.slice(8,10)+'/'+dia.slice(5,7)+'/'+dia.slice(0,4);
+  let h='<div style="font-size:12px;color:#888;margin-bottom:4px;">O que foi apontado em <strong>'+diaBonito+'</strong> (iniciado ou finalizado no dia), separado por setor.</div>';
+  h+=cab('🔧','Chapa','#db2777',resumoSetor(chapa));
+  h+=tabela(chapa);
+  h+=cab('⚡','Montagem Elétrica','#EA580C',resumoSetor(elet));
+  h+=tabela(elet);
+  h+=cab('🔍','Montagem Final','#7c3aed',mf.length?(mf.length+' concluído(s) · '+apMF+' aprovados'+(rpMF?' · '+rpMF+' reprovados':'')):'0 concluídos');
+  h+=tabelaMF(mf);
+  cont.innerHTML=h;
+}
 function renderApt(){
   if(!S.modelos)S.modelos=[];
+  renderAptDia();
   const noFiltro=a=>!(_filtroData.de||_filtroData.ate)||dentroFiltro(a.fim||a.inicio);
 
   // ── RESUMO DE FINALIZADOS (sem distinção de prazo) ──

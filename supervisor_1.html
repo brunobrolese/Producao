@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v96</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v97</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3755,8 +3755,11 @@ function analiseMesDados(mesStr){
   const refMes=a=>mesLocalStr((a&&a.mf&&a.mf.fim)||(a&&a.fim)||(a&&a.inicio)||'');
   const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
 
-  const concluidos=apts.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&fMes(a.mf.fim));
-  const concluidosAnt=apts.filter(a=>a.etapa==='concluido'&&a.mf&&a.mf.fim&&fAnt(a.mf.fim));
+  // "Produção do mês" = painéis cuja MONTAGEM ELÉTRICA foi concluída no mês (o fim da etapa elétrica),
+  // e NÃO a montagem final/teste (pedido do supervisor). Cada painel tem um registro de elétrica.
+  const ehEletrica=a=>(a.setor==='eletrica'||a.setor==='geral'||!a.setor);
+  const concluidos=apts.filter(a=>ehEletrica(a)&&a.fim&&fMes(a.fim));
+  const concluidosAnt=apts.filter(a=>ehEletrica(a)&&a.fim&&fAnt(a.fim));
   const porModelo={};
   concluidos.forEach(a=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);const cod=m?m.codigo:(a.modeloLabel||'—');porModelo[cod]=(porModelo[cod]||0)+1;});
   const topModelos=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]);
@@ -3847,7 +3850,7 @@ function renderAnaliseMes(){
 
   // KPIs
   let html='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;">';
-  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Quadros concluídos</div><div style="font-size:34px;font-weight:800;">'+d.concluidos+'</div><div style="font-size:12px;color:#888;">'+deltaProd+' vs '+_nomeMes(d.mesAnt)+'</div></div>';
+  html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Painéis montados (elétrica)</div><div style="font-size:34px;font-weight:800;">'+d.concluidos+'</div><div style="font-size:12px;color:#888;">'+deltaProd+' vs '+_nomeMes(d.mesAnt)+'</div></div>';
   html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Produtividade geral</div><div style="font-size:34px;font-weight:800;color:'+corProd(d.geral)+';">'+(d.geral==null?'—':d.geral+'%')+' <span style="font-size:16px;">'+setasProd+'</span></div><div style="font-size:12px;color:#888;">eficiência (previsto ÷ real)</div></div>';
   html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Retrabalho</div><div style="font-size:34px;font-weight:800;color:'+(d.retrab?'#dc2626':'#16a34a')+';">'+d.retrab+'</div><div style="font-size:12px;color:#888;">painéis com retrabalho</div></div>';
   html+='<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Itens faltando</div><div style="font-size:34px;font-weight:800;color:'+(d.itensFalt?'#BA7517':'#16a34a')+';">'+d.itensFalt+'</div><div style="font-size:12px;color:#888;">painéis afetados</div></div>';
@@ -3884,7 +3887,7 @@ function montarResumoTexto(d,h){
   L.push('ANÁLISE DE PRODUÇÃO — '+_nomeMes(d.mesStr).toUpperCase());
   L.push('');
   L.push('PRODUÇÃO');
-  L.push('- Quadros concluídos: '+d.concluidos+(d.concluidosAnt?' (mês anterior: '+d.concluidosAnt+')':''));
+  L.push('- Painéis montados (elétrica): '+d.concluidos+(d.concluidosAnt?' (mês anterior: '+d.concluidosAnt+')':''));
   if(d.topModelos.length)L.push('- Modelos mais produzidos: '+d.topModelos.slice(0,5).map(x=>x[0]+' ('+x[1]+')').join(', '));
   L.push('');
   L.push('PRODUTIVIDADE (eficiência = tempo previsto ÷ tempo real)');

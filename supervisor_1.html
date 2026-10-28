@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v97</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v100</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -193,6 +193,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('mod',this)">Modelos</button>
     <button onclick="nav('col',this)">Colaboradores</button>
     <button onclick="nav('mes',this)">Visão Mensal</button>
+    <button onclick="nav('previsao',this)">🔮 Previsão</button>
     <button onclick="nav('prod',this)">📊 Produtividade</button>
     <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('obs',this)">📝 Observações</button>
@@ -445,6 +446,25 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
       <div class="card"><h3>🗒️ Todos os apontamentos no mês</h3><div id="mes-apon"></div></div>
     </div>
 
+    <!-- PREVISÃO -->
+    <div id="page-previsao" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">Projeção da produção (montagem elétrica) até <strong>31/12</strong>. O mês atual é completado pelo ritmo de dias úteis já decorridos; os meses seguintes usam a base escolhida. Ajuste a base conforme sua expectativa de ritmo.</div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="frow" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="min-width:230px;"><label>Base para os próximos meses</label>
+            <select id="prevMetodo" onchange="_prevMetodo=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;">
+              <option value="ult3">Média dos últimos 3 meses</option>
+              <option value="ano">Média de todos os meses do ano</option>
+              <option value="melhor">Melhor mês do ano</option>
+              <option value="manual">Valor manual (painéis/mês)</option>
+            </select></div>
+          <div id="prevManualWrap" style="min-width:160px;display:none;"><label>Painéis por mês (manual)</label><input id="prevManual" type="number" min="0" placeholder="ex: 55" oninput="_prevManual=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
+          <div style="min-width:160px;"><label>Meta mensal (opcional)</label><input id="prevMeta" type="number" min="0" value="50" oninput="_prevMeta=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
+        </div>
+      </div>
+      <div id="previsao-out"></div>
+    </div>
+
     <!-- CONFIG -->
     <!-- PRODUTIVIDADE -->
     <div id="page-prod" class="page">
@@ -477,12 +497,17 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
       </div>
       <div id="analise-conteudo"></div>
       <div class="card" style="margin-top:14px;border-top:3px solid #7c3aed;">
-        <h3>✨ Resumo com IA (opcional)</h3>
-        <div style="font-size:12px;color:#888;margin-bottom:10px;">A IA lê os números acima e escreve uma análise executiva. Precisa de uma chave da API da Anthropic (fica salva só neste dispositivo). Tem custo por uso, cobrado na sua conta da Anthropic.</div>
+        <h3>🤖 Agente Lean do Mês</h3>
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">O agente lê <strong>todos os dados do mês selecionado</strong> — produção por setor, por modelo, por colaborador, série diária, retrabalho, itens faltando, erros, atrasos e montagem final — e escreve um <strong>relatório Lean executivo</strong> para levar à gerência, com gargalo, causas-raiz e plano de ação. Depois dá pra baixar em PowerPoint. Precisa de uma chave da API da Anthropic (fica salva só neste dispositivo). Tem custo por uso, cobrado na sua conta.</div>
         <div class="frow" style="gap:8px;flex-wrap:wrap;align-items:flex-end;">
-          <div style="flex:2;min-width:220px;"><label style="font-size:12px;color:#666;">Chave da API (sk-ant-...)</label><input id="iaKey" type="password" placeholder="sk-ant-..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;"/></div>
-          <div style="flex:1;min-width:160px;"><label style="font-size:12px;color:#666;">Modelo</label><input id="iaModelo" value="claude-haiku-4-5-20251001" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;"/></div>
-          <button class="btn" style="background:#7c3aed;" onclick="analiseComIA()">✨ Gerar análise com IA</button>
+          <div style="flex:2;min-width:220px;"><label style="font-size:12px;color:#666;">Chave da API (sk-ant-...)</label><input id="iaKey" type="password" placeholder="sk-ant-..." style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
+          <div style="flex:1;min-width:190px;"><label style="font-size:12px;color:#666;">Modelo</label>
+            <select id="iaModelo" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;">
+              <option value="claude-sonnet-5">Sonnet 5 — recomendado</option>
+              <option value="claude-opus-5">Opus 5 — mais completo (mais caro)</option>
+              <option value="claude-haiku-4-5-20251001">Haiku 4.5 — rápido e barato</option>
+            </select></div>
+          <button class="btn" style="background:#7c3aed;" onclick="analiseComIA()">🤖 Gerar relatório Lean</button>
         </div>
         <div id="ia-output" style="margin-top:12px;"></div>
       </div>
@@ -1305,6 +1330,7 @@ function nav(id,btn){
   if(id==='mod'){load().then(renderModelos);}
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
   if(id==='mes')renderMes();
+  if(id==='previsao')renderPrevisao();
   if(id==='prod')renderProdutividade();
   if(id==='rel')popularRelColab();
   if(id==='obs')renderObservacoes();
@@ -3836,6 +3862,11 @@ function popularAnaliseMeses(){
   const prev=sel.value;
   sel.innerHTML=meses.map(m=>'<option value="'+m+'">'+_nomeMes(m)+'</option>').join('');
   if(prev&&meses.includes(prev))sel.value=prev; else sel.value=atual;
+  // pré-preenche chave e modelo salvos (ficam só neste dispositivo)
+  try{
+    const kEl=document.getElementById('iaKey'); if(kEl&&!kEl.value){const k=localStorage.getItem('anthropicKey');if(k)kEl.value=k;}
+    const mEl=document.getElementById('iaModelo'); if(mEl){const mm=localStorage.getItem('anthropicModel');if(mm)mEl.value=mm;}
+  }catch(e){}
 }
 function renderAnaliseMes(){
   const sel=document.getElementById('anaMesSel');
@@ -3912,28 +3943,248 @@ function copiarResumoAnalise(){
   try{navigator.clipboard.writeText(t.value);toast('Resumo copiado! 📋');}
   catch(e){document.execCommand('copy');toast('Resumo copiado! 📋');}
 }
+// ── PREVISÃO DE PRODUÇÃO (fim do ano) ──
+let _prevMetodo='ult3',_prevManual='',_prevMeta='50',_prevChart=null;
+const _MESC=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+function producaoPorMesAno(ano){
+  const arr=new Array(12).fill(0);
+  const ehEle=a=>(a.setor==='eletrica'||a.setor==='geral'||!a.setor);
+  (S.apontamentos||[]).forEach(a=>{if(!a||a.tipoRegistro==='sem_chapa'||!ehEle(a)||!a.fim)return;const s=dataLocalStr(a.fim);if(!s||(+s.slice(0,4))!==ano)return;const m=(+s.slice(5,7))-1;if(m>=0&&m<12)arr[m]++;});
+  return arr;
+}
+function _bizDaysMes(ano,mesIdx){
+  const totalDias=new Date(ano,mesIdx+1,0).getDate();const hoje=new Date();
+  const ehAtual=(hoje.getFullYear()===ano&&hoje.getMonth()===mesIdx);
+  let total=0,elapsed=0;
+  for(let dd=1;dd<=totalDias;dd++){const dow=new Date(ano,mesIdx,dd).getDay();if(dow===0||dow===6)continue;total++;if(ehAtual&&dd<=hoje.getDate())elapsed++;}
+  return {total,elapsed:ehAtual?elapsed:total,ehAtual};
+}
+function _prevSync(){const w=document.getElementById('prevManualWrap');if(w)w.style.display=(_prevMetodo==='manual')?'':'none';}
+function renderPrevisao(){
+  _prevSync();
+  const out=document.getElementById('previsao-out');if(!out)return;
+  const hoje=new Date();const ano=hoje.getFullYear();const cur=hoje.getMonth();
+  const real=producaoPorMesAno(ano);
+  const completos=[];for(let m=0;m<cur;m++)completos.push(real[m]);
+  const comDados=completos.filter(v=>v>0);
+  let base=0,baseLabel='';
+  if(_prevMetodo==='manual'){base=Math.max(0,Math.round(Number(_prevManual)||0));baseLabel='valor manual';}
+  else if(_prevMetodo==='ano'){const arr=comDados.length?comDados:completos;base=arr.length?Math.round(arr.reduce((s,x)=>s+x,0)/arr.length):0;baseLabel='média dos meses do ano';}
+  else if(_prevMetodo==='melhor'){base=comDados.length?Math.max.apply(null,comDados):0;baseLabel='melhor mês do ano';}
+  else {const arr=comDados.slice(-3);base=arr.length?Math.round(arr.reduce((s,x)=>s+x,0)/arr.length):0;baseLabel='média dos últimos '+arr.length+' mes(es)';}
+  const bd=_bizDaysMes(ano,cur);const realCur=real[cur];
+  let projCur=realCur;
+  if(bd.ehAtual&&bd.elapsed>0&&bd.total>0)projCur=Math.max(realCur,Math.round(realCur*bd.total/bd.elapsed));
+  else projCur=Math.max(realCur,base);
+  const faltaCur=Math.max(0,projCur-realCur);
+  const sumPast=real.slice(0,cur).reduce((s,x)=>s+x,0);
+  const mesesFuturos=11-cur;const projFuture=base*mesesFuturos;
+  const totalAno=sumPast+projCur+projFuture;
+  const realizadoAno=sumPast+realCur;const restante=totalAno-realizadoAno;
+  const metaMensal=Math.max(0,Math.round(Number(_prevMeta)||0));const metaAno=metaMensal*12;
+  const card=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:32px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:12px;color:#888;">'+sub+'</div>':'')+'</div>';
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">';
+  h+=card('Realizado em '+ano,realizadoAno,'#1a1a1a','até hoje ('+_MESC[cur]+'/'+String(hoje.getDate()).padStart(2,'0')+')');
+  h+=card('Projeção p/ o resto','+'+restante,'#EA580C',_MESC[cur]+' a Dez');
+  h+=card('Total projetado '+ano,totalAno,'#2563eb','base: '+base+'/mês ('+baseLabel+')');
+  if(metaAno>0)h+=card('vs meta anual',(totalAno-metaAno>=0?'+':'')+(totalAno-metaAno),totalAno>=metaAno?'#15803d':'#b91c1c','meta '+metaAno+' ('+metaMensal+'/mês)');
+  h+='</div>';
+  if(!comDados.length&&realCur===0){
+    h+='<div class="card"><p class="empty" style="padding:14px 4px;">Ainda não há produção registrada em '+ano+' para projetar. Conforme os painéis forem concluídos na elétrica, a previsão aparece aqui.</p></div>';
+    out.innerHTML=h;return;
+  }
+  h+='<div class="card"><h3>📈 Produção por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado</span>'+(metaMensal>0?'<span>⸺ Meta/mês</span>':'')+'</div><div style="position:relative;height:260px;"><canvas id="prevChart"></canvas></div></div>';
+  let linhas='';
+  for(let m=0;m<12;m++){
+    let r='—',p='—',t='—',obs='';
+    if(m<cur){r=real[m];t=real[m];obs='realizado';}
+    else if(m===cur){r=realCur;p='+'+faltaCur;t=projCur;obs='mês atual (parcial → projeção)';}
+    else {p=base;t=base;obs='projetado';}
+    linhas+='<tr'+(m===cur?' style="background:#fff8ec;"':'')+'><td style="font-weight:700;">'+_MESC[m]+'</td><td>'+r+'</td><td>'+p+'</td><td style="font-weight:700;">'+t+'</td><td style="font-size:12px;color:#888;">'+obs+'</td></tr>';
+  }
+  h+='<div class="card"><h3>📋 Detalhe por mês</h3><div style="overflow-x:auto;"><table><thead><tr><th>Mês</th><th>Realizado</th><th>Projetado</th><th>Total</th><th>—</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div>';
+  out.innerHTML=h;
+  if(typeof Chart!=='undefined'){
+    const cv=document.getElementById('prevChart');
+    if(cv){if(_prevChart){try{_prevChart.destroy();}catch(e){}}
+      const realizadoData=real.map((v,m)=>m<cur?v:(m===cur?realCur:0));
+      const projetadoData=real.map((v,m)=>m<cur?0:(m===cur?faltaCur:base));
+      const ds=[{label:'Realizado',data:realizadoData,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Projetado',data:projetadoData,backgroundColor:'#f59e0b',borderRadius:4,stack:'s'}];
+      if(metaMensal>0)ds.push({type:'line',label:'Meta/mês',data:new Array(12).fill(metaMensal),borderColor:'#9333ea',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false});
+      _prevChart=new Chart(cv.getContext('2d'),{data:{labels:_MESC,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+    }
+  }
+}
+// ── AGENTE LEAN DO MÊS: dataset completo + prompt + PPTX ──
+// resumo qualitativo da Gestão Diária (GD) do mês: ocorrências, riscos e ações do N2
+function _gdResumoMes(mesStr){
+  try{
+    const gd=(typeof _gd!=='undefined'&&_gd)?_gd:null;
+    if(!gd||!Array.isArray(gd.entries))return null;
+    const ents=gd.entries.filter(e=>e&&e.data&&e.data.slice(0,7)===mesStr).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+    if(!ents.length)return null;
+    const num=k=>ents.reduce((s,e)=>s+(Number(e[k])||0),0);
+    const cont=fn=>ents.filter(fn).length;
+    const fData=d=>{try{return gdFmtData(d);}catch(e){return d;}};
+    const fpv=ents.filter(e=>e.firstPassDiario!==''&&e.firstPassDiario!=null).map(e=>Number(e.firstPassDiario)).filter(x=>!isNaN(x));
+    const fpyMedio=fpv.length?Math.round(fpv.reduce((a,b)=>a+b,0)/fpv.length):null;
+    const ocorrencias=[];
+    const push=(data,tipo,txt)=>{if(txt&&String(txt).trim())ocorrencias.push({data:fData(data),tipo,detalhe:String(txt).trim().slice(0,160)});};
+    ents.forEach(e=>{
+      if(e.seguranca==='acidente')push(e.data,'Acidente',e.segurancaNota||'sem detalhe');
+      if(e.scrap==='sim')push(e.data,'Scrap',e.scrapDetalhe);
+      if(e.retrabalho==='sim')push(e.data,'Retrabalho',e.retrabalhoDetalhe);
+      if(e.faltaMaterial==='sim')push(e.data,'Falta de material',e.faltaMaterialDetalhe);
+      if(e.erroprojeto==='sim')push(e.data,'Erro de projeto',((e.errosProjetoTipos&&e.errosProjetoTipos.length?e.errosProjetoTipos.join(', '):'')+(e.erroprojetoModelo?' ['+e.erroprojetoModelo+']':'')+(e.erroprojetoDetalhe?' - '+e.erroprojetoDetalhe:'')));
+      if(e.paineisReprovados==='sim')push(e.data,'Reprovados',e.paineisReprovadosDetalhe);
+      if(e.materialRisco==='sim')push(e.data,'Risco de material',e.materialRiscoDetalhe);
+      if(e.pedidoRisco==='sim')push(e.data,'Risco de pedido atrasar',e.pedidoRiscoDetalhe);
+      if(e.kaizen==='sim')push(e.data,'Kaizen',e.kaizenDetalhe);
+      if(Number(e.horasNaoPlanejadas)>0)push(e.data,'Horas não planejadas',e.horasNaoPlanejadas+'h'+(e.horasNaoPlanejadasDetalhe?' - '+e.horasNaoPlanejadasDetalhe:''));
+    });
+    const n2=[];
+    const n2map=(gd.n2&&typeof gd.n2==='object')?gd.n2:{};
+    Object.keys(n2map).filter(k=>k&&k.slice(0,7)===mesStr).sort().forEach(k=>{
+      const x=n2map[k]||{};
+      const acoes=(x.acoes||[]).filter(a=>a&&(a.descricao||'').trim()).map(a=>({descricao:String(a.descricao).slice(0,160),responsavel:a.responsavel||'',status:a.status||''}));
+      if((x.escalada&&x.escalada.trim())||acoes.length)n2.push({data:fData(k),escalada:(x.escalada||'').trim().slice(0,200),acoes});
+    });
+    return {
+      diasRegistrados:ents.length,
+      metaPaineis:num('metaPaineis'),paineisMontagemGD:num('paineisMontagem'),paineisTesteGD:num('paineisTesteQtd'),
+      pedidosEmbalados:num('pedidosEmbalados'),quadrosIncompletos:num('quadrosIncompletos'),fpyMedio,
+      diasComScrap:cont(e=>e.scrap==='sim'),diasComRetrabalho:cont(e=>e.retrabalho==='sim'),
+      diasComFaltaMaterial:cont(e=>e.faltaMaterial==='sim'),diasComErroProjeto:cont(e=>e.erroprojeto==='sim'),
+      diasComReprovados:cont(e=>e.paineisReprovados==='sim'),diasComAcidente:cont(e=>e.seguranca==='acidente'),
+      diasComKaizen:cont(e=>e.kaizen==='sim'),diasComMaterialRisco:cont(e=>e.materialRisco==='sim'),diasComPedidoRisco:cont(e=>e.pedidoRisco==='sim'),
+      ocorrencias:ocorrencias.slice(0,40),acoesN2:n2.slice(0,30)
+    };
+  }catch(e){return null;}
+}
+function analiseMesLeanDados(mesStr){
+  const d=analiseMesDados(mesStr);
+  const fMes=iso=>mesLocalStr(iso)===mesStr;
+  const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+  const ehEle=a=>(a.setor==='eletrica'||a.setor==='geral'||!a.setor);
+  const nomeC=id=>{const c=(S.colaboradores||[]).find(x=>x&&x.id===id);return c?c.nome:'—';};
+  const codM=a=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);return m?m.codigo:(a.modeloLabel||'—');};
+  const prevSetor=(a,setor)=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);return tempoModeloSetor(m,setor);};
+  // base de produção: montagem elétrica concluída no mês
+  const eleMes=apts.filter(a=>ehEle(a)&&a.fim&&fMes(a.fim));
+  // por colaborador
+  const colMap={};
+  eleMes.forEach(a=>{const id=a.colabId;if(id==null)return;const prev=prevSetor(a,'eletrica'),liq=tempoLiquido(a);const o=colMap[id]||(colMap[id]={nome:nomeC(id),paineis:0,sp:0,sr:0});o.paineis++;if(prev>0&&liq>0){o.sp+=prev;o.sr+=liq;}});
+  const porColab=Object.values(colMap).map(o=>({nome:o.nome,paineis:o.paineis,eficiencia:o.sr>0?Math.round(o.sp/o.sr*100):null})).sort((a,b)=>b.paineis-a.paineis);
+  // por modelo
+  const modMap={};
+  eleMes.forEach(a=>{const cod=codM(a);const prev=prevSetor(a,'eletrica'),liq=tempoLiquido(a);const o=modMap[cod]||(modMap[cod]={modelo:cod,qtd:0,sr:0,prev:prev||0});o.qtd++;o.sr+=liq;if(prev>o.prev)o.prev=prev;});
+  const porModelo=Object.values(modMap).map(o=>({modelo:o.modelo,qtd:o.qtd,tempoMedioReal:o.qtd?Math.round(o.sr/o.qtd):0,tempoPrevisto:o.prev||null})).sort((a,b)=>b.qtd-a.qtd);
+  // série diária (produção elétrica por dia)
+  const porDia={};eleMes.forEach(a=>{const k=dataLocalStr(a.fim);porDia[k]=(porDia[k]||0)+1;});
+  const serieDiaria=Object.keys(porDia).sort().map(k=>({dia:k.slice(8,10)+'/'+k.slice(5,7),qtd:porDia[k]}));
+  const diasProdutivos=serieDiaria.length;
+  const mediaDia=diasProdutivos?Math.round(eleMes.length/diasProdutivos*10)/10:0;
+  const melhorDia=serieDiaria.slice().sort((a,b)=>b.qtd-a.qtd)[0]||null;
+  // retrabalho / itens faltando / erros referenciados no mês
+  const refMes=a=>mesLocalStr((a.mf&&a.mf.fim)||a.fim||a.inicio||'');
+  const mesApts=apts.filter(a=>refMes(a)===mesStr);
+  const retrabDet=mesApts.filter(a=>a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length).map(a=>({op:a.opNum,setores:a.retrabalho.setores,obs:(a.retrabalho.obs||'').slice(0,140)})).slice(0,25);
+  const faltaDet=mesApts.filter(a=>a.itensFaltando).map(a=>({op:a.opNum,detalhe:(a.obsItensFaltando||'').slice(0,140)})).slice(0,25);
+  const errosDet=[];mesApts.forEach(a=>{(a.erros||[]).forEach(e=>{const txt=(typeof e==='string'?e:(e&&(e.descricao||e.texto))||'');if(txt)errosDet.push({op:a.opNum,erro:String(txt).slice(0,140)});});});
+  // atrasos (piores) chapa + elétrica
+  const atrasos=[];
+  apts.forEach(a=>{const isEle=ehEle(a),isCha=a.setor==='chapa';if((isCha||isEle)&&a.fim&&fMes(a.fim)){const setor=isCha?'chapa':'eletrica';const prev=prevSetor(a,setor);if(prev>0){const liq=tempoLiquido(a);if(liq>prev)atrasos.push({op:a.opNum,setor,modelo:codM(a),previsto:prev,real:liq,atrasoMin:liq-prev});}}});
+  atrasos.sort((x,y)=>y.atrasoMin-x.atrasoMin);
+  // montagem final
+  const mfMes=apts.filter(a=>a.mf&&a.mf.fim&&fMes(a.mf.fim));
+  const mfInsp=mfMes.map(a=>a.mf.inicioInspecao?Math.max(0,Math.round((new Date(a.mf.fim)-new Date(a.mf.inicioInspecao))/60000)):null).filter(x=>x!=null&&x>0);
+  const mf={inspecionados:mfMes.length,aprovados:mfMes.filter(a=>a.mf.resultado==='aprovado').length,reprovados:mfMes.filter(a=>a.mf.resultado==='reprovado').length,tempoMedioInspecaoMin:mfInsp.length?Math.round(mfInsp.reduce((s,x)=>s+x,0)/mfInsp.length):null};
+  return Object.assign({},d,{
+    nomeMes:_nomeMes(mesStr),
+    producaoEletrica:eleMes.length,
+    porColab,porModelo,serieDiaria,diasProdutivos,mediaDiaPaineis:mediaDia,melhorDia,
+    retrabDet,faltaDet,errosDet,atrasosTop:atrasos.slice(0,12),qtdAtrasos:atrasos.length,
+    montagemFinal:mf,horasDiaExpediente:(typeof getHorasDia==='function'?getHorasDia():null),
+    gd:_gdResumoMes(mesStr)
+  });
+}
+function promptLeanMes(d){
+  return [
+'Você é um especialista sênior em Lean Manufacturing e analista de produção industrial, atuando como consultor da gerência de uma fábrica de painéis elétricos (quadros de comando).',
+'Com base EXCLUSIVAMENTE nos dados do mês fornecidos em JSON, escreva um RELATÓRIO EXECUTIVO completo em português do Brasil, pronto para ser apresentado à diretoria industrial.',
+'',
+'Regras:',
+'- Não invente números: use apenas os dados do JSON. Se algum dado não existir, diga que não há informação suficiente — não preencha com suposições numéricas.',
+'- A produção do mês é medida pela MONTAGEM ELÉTRICA concluída (campo producaoEletrica / concluidos). A montagem final (montagemFinal) é a inspeção/teste, trate como etapa de qualidade.',
+'- O JSON pode conter "gd" = registros da GESTÃO DIÁRIA (GD) do mês: produção reportada no chão de fábrica, First Pass Yield (fpyMedio), ocorrências do dia a dia (scrap, retrabalho, falta de material, erro de projeto, reprovações, riscos de material/pedido, kaizens, horas não planejadas) e as ações do N2 (acoesN2). Use esses dados qualitativos para explicar os números, reforçar causas-raiz e verificar se as ações do N2 estão endereçando os problemas. Se "gd" estiver ausente ou vazio, diga que não há registros de GD no mês.',
+'- Seja direto e orientado a decisão. Priorize o que mais impacta produção, qualidade e prazo.',
+'- Raciocine em Lean: identifique o GARGALO do fluxo (chapa → elétrica → montagem final), aponte os principais desperdícios (muda: espera, retrabalho, movimentação, superprodução, estoque, defeitos, reprocesso) e proponha CAUSAS-RAIZ prováveis (hipóteses) para investigar no gemba.',
+'- Ao falar da equipe, destaque positivamente e trate baixo desempenho como oportunidade de apoio/treinamento, sem exposição negativa individual.',
+'- Formato: use títulos de seção começando com "## " e tópicos curtos, um por linha, começando com "- ". Isso será convertido em slides.',
+'',
+'Estruture EXATAMENTE nestas seções (cada título com "## "):',
+'## Resumo executivo',
+'## Visão geral da produção',
+'## Produtividade por setor',
+'## Desempenho por modelo',
+'## Desempenho da equipe',
+'## Qualidade e perdas',
+'## Gestão diária (GD): ocorrências, riscos e ações do N2',
+'## Aderência ao tempo-padrão',
+'## Aproveitamento de tempo',
+'## Diagnóstico Lean (gargalo, desperdícios e causas-raiz)',
+'## Plano de ação priorizado',
+'',
+'No "Plano de ação priorizado", para cada ação use o formato: "- Ação — impacto esperado — esforço (baixo/médio/alto) — responsável sugerido".',
+'',
+'DADOS DO MÊS (JSON):',
+JSON.stringify(d)
+  ].join('\n');
+}
+let _leanIaTxt='';
 async function analiseComIA(){
   const out=document.getElementById('ia-output');
   const sel=document.getElementById('anaMesSel');
   const keyEl=document.getElementById('iaKey');
   const key=((keyEl&&keyEl.value)||localStorage.getItem('anthropicKey')||'').trim();
-  if(!key){out.innerHTML='<div style="color:#b45309;font-size:13px;">Cole sua chave da API da Anthropic no campo acima para gerar a análise por IA.</div>';return;}
+  if(!key){out.innerHTML='<div style="color:#b45309;font-size:13px;">Cole sua chave da API da Anthropic no campo acima para gerar o relatório.</div>';return;}
   localStorage.setItem('anthropicKey',key);
-  const modelo=((document.getElementById('iaModelo')||{}).value||'claude-haiku-4-5-20251001').trim();
+  const modelo=((document.getElementById('iaModelo')||{}).value||'claude-sonnet-5').trim();
+  localStorage.setItem('anthropicModel',modelo);
   const mesStr=sel&&sel.value?sel.value:mesLocalStr(new Date());
-  const d=analiseMesDados(mesStr);
-  out.innerHTML='<div style="color:#666;font-size:14px;">⏳ Analisando com IA… (alguns segundos)</div>';
-  const prompt='Você é um analista de produção industrial. Com base nos dados do mês de uma fábrica de painéis elétricos, escreva uma análise executiva em português do Brasil, pronta para uma apresentação à gerência. Seja objetivo, use títulos e tópicos curtos. Estruture em: 1) Visão geral da produção, 2) Produtividade por setor, 3) Principais problemas e riscos, 4) Pontos positivos, 5) Recomendações práticas e priorizadas. Não invente números além dos fornecidos.\n\nDADOS DO MÊS (JSON):\n'+JSON.stringify(d);
+  const d=analiseMesLeanDados(mesStr);
+  out.innerHTML='<div style="color:#666;font-size:14px;">⏳ O agente Lean está analisando '+_nomeMes(mesStr)+'… (pode levar de 20s a 1min)</div>';
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:modelo,max_tokens:1600,messages:[{role:'user',content:prompt}]})});
-    if(!resp.ok){const t=await resp.text();out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Erro da API ('+resp.status+'). Verifique a chave e o nome do modelo.<br><span style="color:#999;">'+String(t).substring(0,300).replace(/</g,'&lt;')+'</span></div>';return;}
+      body:JSON.stringify({model:modelo,max_tokens:4000,messages:[{role:'user',content:promptLeanMes(d)}]})});
+    if(!resp.ok){const t=await resp.text();out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Erro da API ('+resp.status+'). Verifique a chave e o modelo escolhido.<br><span style="color:#999;">'+String(t).substring(0,300).replace(/</g,'&lt;')+'</span></div>';return;}
     const data=await resp.json();
     const txt=(data.content||[]).map(b=>b&&b.type==='text'?b.text:'').join('\n').trim();
+    _leanIaTxt=txt;
     out.innerHTML='<div style="white-space:pre-wrap;line-height:1.55;font-size:14px;background:#fff;padding:14px;border:1px solid #e5e5e5;border-radius:8px;">'+(txt||'(sem resposta)').replace(/</g,'&lt;')+'</div>'
-      +'<button class="btn" style="margin-top:8px;" onclick="(function(){const t=document.createElement(\'textarea\');t.value=document.getElementById(\'ia-output\').innerText;document.body.appendChild(t);t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand(\'copy\');}document.body.removeChild(t);toast(\'Copiado! 📋\');})()">📋 Copiar análise da IA</button>';
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">'
+      +'<button class="btn" style="width:auto;" onclick="_copiarLeanIA()">📋 Copiar</button>'
+      +'<button class="btn" style="width:auto;background:#C43E1C;" onclick="analiseIaPptx()">📊 Baixar PowerPoint</button></div>';
   }catch(e){out.innerHTML='<div style="color:#b91c1c;font-size:13px;">Falha ao chamar a IA: '+e.message+'. Verifique a conexão e a chave.</div>';}
+}
+function _copiarLeanIA(){try{const t=document.createElement('textarea');t.value=_leanIaTxt;document.body.appendChild(t);t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}document.body.removeChild(t);toast('Copiado! 📋');}catch(e){}}
+async function analiseIaPptx(){
+  if(!_leanIaTxt){toast('Gere o relatório primeiro.');return;}
+  try{await carregarPptx();}catch(e){toast('Não consegui carregar o gerador de PowerPoint.');return;}
+  const sel=document.getElementById('anaMesSel');const mesStr=sel&&sel.value?sel.value:mesLocalStr(new Date());
+  const P=new PptxGenJS();P.layout='LAYOUT_WIDE';const AZ='1f3a5f',AC='2b6cb0';
+  let s=P.addSlide();s.background={color:'FFFFFF'};
+  s.addText('Análise Lean da Produção',{x:0.7,y:2.0,w:11.9,h:1,fontSize:34,bold:true,color:AZ,align:'center'});
+  s.addText(_nomeMes(mesStr),{x:0.7,y:3.25,w:11.9,h:0.6,fontSize:18,color:'666666',align:'center'});
+  const lines=String(_leanIaTxt).split(/\r?\n/);const secs=[];let cur=null;
+  const clean=t=>t.replace(/^\s*#{1,4}\s+/,'').replace(/^[-*•]\s+/,'').replace(/^\d+\.\s+/,'').replace(/\*\*/g,'').replace(/`/g,'').trim();
+  lines.forEach(ln=>{const hm=ln.match(/^\s*#{1,4}\s+(.*)/);if(hm){if(cur)secs.push(cur);cur={title:clean(hm[1]),items:[]};}else{const t=ln.trim();if(t){if(!cur)cur={title:'Resumo',items:[]};cur.items.push(clean(t));}}});
+  if(cur)secs.push(cur);
+  const PER=10;
+  secs.forEach(sec=>{for(let i=0;i<Math.max(1,sec.items.length);i+=PER){const chunk=sec.items.slice(i,i+PER);const sl=P.addSlide();sl.background={color:'FFFFFF'};sl.addText((sec.title||'')+(i>0?' (cont.)':''),{x:0.6,y:0.4,w:12.1,h:0.8,fontSize:24,bold:true,color:AZ});sl.addShape(P.ShapeType.line,{x:0.6,y:1.2,w:12.1,h:0,line:{color:AC,width:2}});if(chunk.length)sl.addText(chunk.map(it=>({text:it,options:{bullet:{indent:18},fontSize:15,color:'333333',paraSpaceAfter:8}})),{x:0.7,y:1.5,w:11.9,h:5.6,valign:'top'});}});
+  await P.writeFile({fileName:'Analise_Lean_'+mesStr+'.pptx'});
+  toast('PowerPoint gerado! 📊');
 }
 
 function carregarPptx(){

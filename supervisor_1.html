@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v104</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v105</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3958,9 +3958,20 @@ function _bizDaysMes(ano,mesIdx){
   return {total,elapsed:ehAtual?elapsed:total,ehAtual};
 }
 function _bizDaysBetween(ano,m,d1,d2){const last=new Date(ano,m+1,0).getDate();d1=Math.max(1,d1);d2=Math.min(last,d2);let n=0;for(let d=d1;d<=d2;d++){const dow=new Date(ano,m,d).getDay();if(dow!==0&&dow!==6)n++;}return n;}
-// pedidos do PCP ainda a entregar (não faturados e não cancelados)
+// data de entrega de um pedido, normalizada para ms (os dois formatos de PCP guardam diferente)
+function _pedEntregaMs(p){
+  if(!p)return null;
+  const parseBR=s=>{const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1],12,0,0).getTime():null;};
+  if(typeof p.entrega==='number'&&isFinite(p.entrega))return p.entrega;           // aba Pedidos (ms)
+  let v=parseBR(p.dataEntrega); if(v!=null)return v;                                // GD PCP (texto dd/mm/aaaa)
+  if(typeof p.envio==='number'&&isFinite(p.envio))return p.envio;                   // fallback: data de envio
+  v=parseBR(p.dataEnvio); if(v!=null)return v;
+  if(p.ano&&p.mes)return new Date(+p.ano,(+p.mes)-1,28,12,0,0).getTime();           // fallback: mês/ano
+  return null;
+}
+// pedidos do PCP ainda a entregar (não faturados e não cancelados), com recorte pela data de entrega
 // lê de qualquer fonte: o PCP do GD (_gd.pcp), a aba Pedidos (_pedidos) ou o cache local
-function _pcpPendentes(){
+function _pcpPendentes(endMs){
   try{
     let peds=null;
     const g=(typeof gdLoadPCP==='function'?gdLoadPCP():null)||((typeof _gd!=='undefined'&&_gd)?_gd.pcp:null);
@@ -3968,9 +3979,15 @@ function _pcpPendentes(){
     else if(typeof _pedidos!=='undefined'&&_pedidos&&_pedidos.length)peds=_pedidos;
     else { try{const c=JSON.parse(localStorage.getItem('pedidosCache')||'null');if(c&&c.peds&&c.peds.length)peds=c.peds;}catch(e){} }
     if(!peds||!peds.length)return null;
-    let pend=0,fila=0,final=0;
-    peds.forEach(p=>{const c=pcpCat(p&&p.status);if(c==='cancelado')return;if(c!=='concluido'){pend++;if(c==='final')final++;else fila++;}});
-    return {pend,fila,final};
+    let pend=0,fila=0,final=0,pendAte=0,semData=0,aposData=0;
+    peds.forEach(p=>{const c=pcpCat(p&&p.status);if(c==='cancelado'||c==='concluido')return;
+      pend++; if(c==='final')final++; else fila++;
+      const e=_pedEntregaMs(p);
+      if(e==null)semData++;
+      else if(endMs==null||e<=endMs)pendAte++;
+      else aposData++;
+    });
+    return {pend,fila,final,pendAte,semData,aposData};
   }catch(e){return null;}
 }
 function renderPrevisao(){
@@ -4019,26 +4036,27 @@ function renderPrevisao(){
   // dias úteis restantes até a data (p/ estimar o ritmo necessário em caso de déficit)
   let bizRest=0;for(let m=cur;m<12;m++){if(ano>endDate.getFullYear()||(ano===endDate.getFullYear()&&m>endDate.getMonth()))break;const last=new Date(ano,m+1,0).getDate();const d1=m===cur?hoje.getDate()+1:1;const d2=(ano===endDate.getFullYear()&&m===endDate.getMonth())?endDate.getDate():last;if(d2>=d1)bizRest+=_bizDaysBetween(ano,m,d1,d2);}
   const mesesEq=bizTotalCur>0?(bizRest/bizTotalCur):(bizRest/21);
-  const pcp=_pcpPendentes();
+  const pcp=_pcpPendentes(endDate.getTime());
   const card=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:32px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:12px;color:#888;">'+sub+'</div>':'')+'</div>';
   let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;">';
   h+=card('Ritmo (elétrica)',base+'/mês','#1a1a1a','média dos últimos '+usados.length+' mes(es)');
   h+=card('Dá pra entregar até '+endTxt,'~'+capacidade,'#2563eb','de hoje até '+endTxt);
   if(pcp){
-    h+=card('Pedidos pendentes (PCP)',pcp.pend,'#b45309',pcp.fila+' na fila · '+pcp.final+' em mont. final');
-    const saldo=capacidade-pcp.pend;
-    h+=card('Saldo até a data',(saldo>=0?'+':'')+saldo,saldo>=0?'#15803d':'#b91c1c',saldo>=0?'o ritmo cobre os pedidos':'faltariam '+Math.abs(saldo));
+    h+=card('Pedidos p/ entregar até '+endTxt,pcp.pendAte,'#b45309','de '+pcp.pend+' pendentes'+(pcp.semData?' · '+pcp.semData+' sem data':''));
+    const saldo=capacidade-pcp.pendAte;
+    h+=card('Saldo até '+endTxt,(saldo>=0?'+':'')+saldo,saldo>=0?'#15803d':'#b91c1c',saldo>=0?'o ritmo cobre a demanda':'faltariam '+Math.abs(saldo));
   } else {
-    h+=card('Pedidos pendentes (PCP)','—','#b45309','importe o PCP (aba 📦 Pedidos)');
+    h+=card('Pedidos (PCP)','—','#b45309','importe o PCP (aba 📦 Pedidos)');
   }
   h+='</div>';
   let frase='No ritmo dos últimos '+usados.length+' mes(es) — <strong>'+base+' painéis/mês</strong> na montagem elétrica — de hoje até <strong>'+endTxt+'</strong> você ainda entrega cerca de <strong>'+capacidade+' painéis</strong>.';
   if(pcp){
-    const saldo=capacidade-pcp.pend;
-    if(saldo>=0){frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong> — no ritmo atual dá pra entregar todos, com folga de <strong>'+saldo+'</strong>.';}
-    else {const precisaMes=base+Math.ceil(Math.abs(saldo)/Math.max(0.1,mesesEq));frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong> — <strong>faltariam '+Math.abs(saldo)+'</strong> até '+endTxt+'. Para zerar, o ritmo precisaria subir para ~<strong>'+precisaMes+' painéis/mês</strong>.';}
+    const saldo=capacidade-pcp.pendAte;
+    frase+=' O PCP tem <strong>'+pcp.pendAte+' pedidos com entrega até '+endTxt+'</strong>'+(pcp.semData?' (+ '+pcp.semData+' sem data de entrega)':'')+(pcp.aposData?' e '+pcp.aposData+' com entrega depois':'')+'. ';
+    if(saldo>=0){frase+='No ritmo atual dá pra entregar todos no prazo, com folga de <strong>'+saldo+'</strong>.';}
+    else {const precisaMes=base+Math.ceil(Math.abs(saldo)/Math.max(0.1,mesesEq));frase+='No ritmo atual <strong>faltariam '+Math.abs(saldo)+'</strong> para entregar tudo no prazo — o ritmo precisaria subir para ~<strong>'+precisaMes+' painéis/mês</strong>.';}
   } else {
-    frase+=' Importe a planilha do PCP na aba 📦 Pedidos para comparar com os pedidos pendentes.';
+    frase+=' Importe a planilha do PCP na aba 📦 Pedidos para comparar com os pedidos por data de entrega.';
   }
   h+='<div class="card" style="border-left:4px solid #2563eb;"><div style="font-size:14px;line-height:1.55;">'+frase+'</div></div>';
   h+='<div class="card"><h3>📈 Montagem elétrica por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado (até '+endTxt+')</span></div><div style="position:relative;height:250px;"><canvas id="prevChart"></canvas></div></div>';

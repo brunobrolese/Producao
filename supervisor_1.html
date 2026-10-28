@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v101</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v102</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3957,12 +3957,17 @@ function _bizDaysMes(ano,mesIdx){
   return {total,elapsed:ehAtual?elapsed:total,ehAtual};
 }
 // pedidos do PCP ainda a entregar (não faturados e não cancelados)
+// lê de qualquer fonte: o PCP do GD (_gd.pcp), a aba Pedidos (_pedidos) ou o cache local
 function _pcpPendentes(){
   try{
-    const pcp=(typeof gdLoadPCP==='function'?gdLoadPCP():null)||((typeof _gd!=='undefined'&&_gd)?_gd.pcp:null)||null;
-    if(!pcp||!Array.isArray(pcp.pedidos)||!pcp.pedidos.length)return null;
+    let peds=null;
+    const g=(typeof gdLoadPCP==='function'?gdLoadPCP():null)||((typeof _gd!=='undefined'&&_gd)?_gd.pcp:null);
+    if(g&&Array.isArray(g.pedidos)&&g.pedidos.length)peds=g.pedidos;
+    else if(typeof _pedidos!=='undefined'&&_pedidos&&_pedidos.length)peds=_pedidos;
+    else { try{const c=JSON.parse(localStorage.getItem('pedidosCache')||'null');if(c&&c.peds&&c.peds.length)peds=c.peds;}catch(e){} }
+    if(!peds||!peds.length)return null;
     let pend=0,fila=0,final=0;
-    pcp.pedidos.forEach(p=>{const c=pcpCat(p.status);if(c==='cancelado')return;if(c!=='concluido'){pend++;if(c==='final')final++;else fila++;}});
+    peds.forEach(p=>{const c=pcpCat(p&&p.status);if(c==='cancelado')return;if(c!=='concluido'){pend++;if(c==='final')final++;else fila++;}});
     return {pend,fila,final};
   }catch(e){return null;}
 }

@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v102</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v104</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -457,6 +457,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
               <option value="3" selected>Últimos 3 meses</option>
               <option value="6">Últimos 6 meses</option>
             </select></div>
+          <div style="min-width:170px;"><label>Entregar até</label><input id="prevAte" type="date" onchange="_prevAteStr=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
         </div>
       </div>
       <div id="previsao-out"></div>
@@ -3941,7 +3942,7 @@ function copiarResumoAnalise(){
   catch(e){document.execCommand('copy');toast('Resumo copiado! 📋');}
 }
 // ── PREVISÃO DE PRODUÇÃO (fim do ano) ──
-let _prevN=3,_prevChart=null;
+let _prevN=3,_prevAteStr='',_prevChart=null;
 const _MESC=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 function producaoPorMesAno(ano){
   const arr=new Array(12).fill(0);
@@ -3956,6 +3957,7 @@ function _bizDaysMes(ano,mesIdx){
   for(let dd=1;dd<=totalDias;dd++){const dow=new Date(ano,mesIdx,dd).getDay();if(dow===0||dow===6)continue;total++;if(ehAtual&&dd<=hoje.getDate())elapsed++;}
   return {total,elapsed:ehAtual?elapsed:total,ehAtual};
 }
+function _bizDaysBetween(ano,m,d1,d2){const last=new Date(ano,m+1,0).getDate();d1=Math.max(1,d1);d2=Math.min(last,d2);let n=0;for(let d=d1;d<=d2;d++){const dow=new Date(ano,m,d).getDay();if(dow!==0&&dow!==6)n++;}return n;}
 // pedidos do PCP ainda a entregar (não faturados e não cancelados)
 // lê de qualquer fonte: o PCP do GD (_gd.pcp), a aba Pedidos (_pedidos) ou o cache local
 function _pcpPendentes(){
@@ -3976,6 +3978,12 @@ function renderPrevisao(){
   const hoje=new Date();const ano=hoje.getFullYear();const cur=hoje.getMonth();
   const real=producaoPorMesAno(ano);
   const realCur=real[cur];
+  // data limite editável — padrão 31/12 do ano atual
+  const inp=document.getElementById('prevAte');
+  if(inp){ if(!inp.value)inp.value=_prevAteStr||(ano+'-12-31'); _prevAteStr=inp.value; }
+  if(!_prevAteStr)_prevAteStr=ano+'-12-31';
+  let endDate=new Date(_prevAteStr+'T12:00:00'); if(isNaN(endDate))endDate=new Date(ano,11,31,12,0,0);
+  const endTxt=String(endDate.getDate()).padStart(2,'0')+'/'+String(endDate.getMonth()+1).padStart(2,'0')+'/'+endDate.getFullYear();
   // base = média dos últimos N meses COMPLETOS que tiveram produção
   const completos=[];for(let m=0;m<cur;m++)completos.push(real[m]);
   const comDados=completos.filter(v=>v>0);
@@ -3985,47 +3993,61 @@ function renderPrevisao(){
     out.innerHTML='<div class="card"><p class="empty" style="padding:14px 4px;">Ainda não há montagem elétrica concluída em '+ano+' para projetar o ritmo. Conforme os painéis forem terminando na elétrica, a previsão aparece aqui.</p></div>';
     return;
   }
-  // mês atual completado pelo ritmo de dias úteis já decorridos
-  const bd=_bizDaysMes(ano,cur);
-  let projCur=realCur;
-  if(bd.ehAtual&&bd.elapsed>0&&bd.total>0)projCur=Math.max(realCur,Math.round(realCur*bd.total/bd.elapsed));
-  else projCur=Math.max(realCur,base);
-  const faltaCur=Math.max(0,projCur-realCur);
-  const mesesFuturos=11-cur;
-  const capacidade=faltaCur+base*mesesFuturos;          // o que ainda dá pra entregar, de hoje até dez
+  // ritmo diário do mês atual (por dias úteis já decorridos)
+  const lastCur=new Date(ano,cur+1,0).getDate();
+  const bizElapsedCur=_bizDaysBetween(ano,cur,1,hoje.getDate());
+  const bizTotalCur=_bizDaysBetween(ano,cur,1,lastCur);
+  const rateCurDaily=bizElapsedCur>0?(realCur/bizElapsedCur):(bizTotalCur>0?base/bizTotalCur:0);
+  // capacidade adicional em cada mês (de hoje até a data limite), descontado o já realizado
+  function addMesProj(y,m){
+    if(y>endDate.getFullYear()||(y===endDate.getFullYear()&&m>endDate.getMonth()))return 0;
+    if(y<hoje.getFullYear()||(y===hoje.getFullYear()&&m<hoje.getMonth()))return 0;
+    const last=new Date(y,m+1,0).getDate();
+    const isCur=(y===hoje.getFullYear()&&m===hoje.getMonth());
+    const d1=isCur?hoje.getDate()+1:1;
+    const d2=(y===endDate.getFullYear()&&m===endDate.getMonth())?endDate.getDate():last;
+    if(d2<d1)return 0;
+    const remBiz=_bizDaysBetween(y,m,d1,d2);
+    if(isCur)return Math.max(0,Math.round(rateCurDaily*remBiz));
+    const totBiz=_bizDaysBetween(y,m,1,last);
+    return totBiz>0?Math.round(base*remBiz/totBiz):base;
+  }
+  let capacidade=0;for(let m=cur;m<12;m++)capacidade+=addMesProj(ano,m);
+  const faltaCur=addMesProj(ano,cur);const projCur=realCur+faltaCur;
   const realizadoAno=real.slice(0,cur).reduce((s,x)=>s+x,0)+realCur;
   const totalAno=realizadoAno+capacidade;
+  // dias úteis restantes até a data (p/ estimar o ritmo necessário em caso de déficit)
+  let bizRest=0;for(let m=cur;m<12;m++){if(ano>endDate.getFullYear()||(ano===endDate.getFullYear()&&m>endDate.getMonth()))break;const last=new Date(ano,m+1,0).getDate();const d1=m===cur?hoje.getDate()+1:1;const d2=(ano===endDate.getFullYear()&&m===endDate.getMonth())?endDate.getDate():last;if(d2>=d1)bizRest+=_bizDaysBetween(ano,m,d1,d2);}
+  const mesesEq=bizTotalCur>0?(bizRest/bizTotalCur):(bizRest/21);
   const pcp=_pcpPendentes();
   const card=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:32px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:12px;color:#888;">'+sub+'</div>':'')+'</div>';
   let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;">';
   h+=card('Ritmo (elétrica)',base+'/mês','#1a1a1a','média dos últimos '+usados.length+' mes(es)');
-  h+=card('Dá pra entregar até dez','~'+capacidade,'#2563eb','de hoje até 31/12');
+  h+=card('Dá pra entregar até '+endTxt,'~'+capacidade,'#2563eb','de hoje até '+endTxt);
   if(pcp){
     h+=card('Pedidos pendentes (PCP)',pcp.pend,'#b45309',pcp.fila+' na fila · '+pcp.final+' em mont. final');
     const saldo=capacidade-pcp.pend;
-    h+=card('Saldo até dez',(saldo>=0?'+':'')+saldo,saldo>=0?'#15803d':'#b91c1c',saldo>=0?'o ritmo cobre os pedidos':'faltariam '+Math.abs(saldo));
+    h+=card('Saldo até a data',(saldo>=0?'+':'')+saldo,saldo>=0?'#15803d':'#b91c1c',saldo>=0?'o ritmo cobre os pedidos':'faltariam '+Math.abs(saldo));
   } else {
     h+=card('Pedidos pendentes (PCP)','—','#b45309','importe o PCP (aba 📦 Pedidos)');
   }
   h+='</div>';
-  // frase-resumo
-  let frase='No ritmo dos últimos '+usados.length+' mes(es) — <strong>'+base+' painéis/mês</strong> na montagem elétrica — de hoje até <strong>31/12</strong> você ainda entrega cerca de <strong>'+capacidade+' painéis</strong> (fechando ~'+totalAno+' no ano).';
+  let frase='No ritmo dos últimos '+usados.length+' mes(es) — <strong>'+base+' painéis/mês</strong> na montagem elétrica — de hoje até <strong>'+endTxt+'</strong> você ainda entrega cerca de <strong>'+capacidade+' painéis</strong>.';
   if(pcp){
     const saldo=capacidade-pcp.pend;
-    frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong>. '+(saldo>=0?'No ritmo atual dá pra entregar todos, com folga de <strong>'+saldo+'</strong>.':'No ritmo atual <strong>faltariam '+Math.abs(saldo)+'</strong> até dezembro — seria preciso subir o ritmo em ~<strong>'+Math.ceil(Math.abs(saldo)/Math.max(1,mesesFuturos+1))+'/mês</strong>.');
+    if(saldo>=0){frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong> — no ritmo atual dá pra entregar todos, com folga de <strong>'+saldo+'</strong>.';}
+    else {const precisaMes=base+Math.ceil(Math.abs(saldo)/Math.max(0.1,mesesEq));frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong> — <strong>faltariam '+Math.abs(saldo)+'</strong> até '+endTxt+'. Para zerar, o ritmo precisaria subir para ~<strong>'+precisaMes+' painéis/mês</strong>.';}
   } else {
-    frase+=' Importe a planilha do PCP na aba 📦 Pedidos para comparar com o número de pedidos pendentes.';
+    frase+=' Importe a planilha do PCP na aba 📦 Pedidos para comparar com os pedidos pendentes.';
   }
   h+='<div class="card" style="border-left:4px solid #2563eb;"><div style="font-size:14px;line-height:1.55;">'+frase+'</div></div>';
-  // gráfico realizado x projetado
-  h+='<div class="card"><h3>📈 Montagem elétrica por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado</span></div><div style="position:relative;height:250px;"><canvas id="prevChart"></canvas></div></div>';
-  // tabela
+  h+='<div class="card"><h3>📈 Montagem elétrica por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado (até '+endTxt+')</span></div><div style="position:relative;height:250px;"><canvas id="prevChart"></canvas></div></div>';
   let linhas='';
   for(let m=0;m<12;m++){
     let r='—',p='—',t='—',obs='';
     if(m<cur){r=real[m];t=real[m];obs='realizado';}
     else if(m===cur){r=realCur;p='+'+faltaCur;t=projCur;obs='mês atual (parcial)';}
-    else {p=base;t=base;obs='projetado';}
+    else {const add=addMesProj(ano,m);p=add;t=add;obs=add>0?(m===endDate.getMonth()&&ano===endDate.getFullYear()?'projetado (parcial até '+endTxt+')':'projetado'):'após a data limite';}
     linhas+='<tr'+(m===cur?' style="background:#fff8ec;"':'')+'><td style="font-weight:700;">'+_MESC[m]+'</td><td>'+r+'</td><td>'+p+'</td><td style="font-weight:700;">'+t+'</td><td style="font-size:12px;color:#888;">'+obs+'</td></tr>';
   }
   h+='<div class="card"><h3>📋 Detalhe por mês</h3><div style="overflow-x:auto;"><table><thead><tr><th>Mês</th><th>Realizado</th><th>Projetado</th><th>Total</th><th>—</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div>';
@@ -4034,8 +4056,8 @@ function renderPrevisao(){
     const cv=document.getElementById('prevChart');
     if(cv){if(_prevChart){try{_prevChart.destroy();}catch(e){}}
       const realizadoData=real.map((v,m)=>m<cur?v:(m===cur?realCur:0));
-      const projetadoData=real.map((v,m)=>m<cur?0:(m===cur?faltaCur:base));
-      _prevChart=new Chart(cv.getContext('2d'),{data:{labels:_MESC,datasets:[{label:'Realizado',data:realizadoData,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Projetado',data:projetadoData,backgroundColor:'#f59e0b',borderRadius:4,stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+      const projetadoData=real.map((v,m)=>addMesProj(ano,m));
+      _prevChart=new Chart(cv.getContext('2d'),{type:'bar',data:{labels:_MESC,datasets:[{label:'Realizado',data:realizadoData,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Projetado',data:projetadoData,backgroundColor:'#f59e0b',borderRadius:4,stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
     }
   }
 }

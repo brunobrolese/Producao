@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v105</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v107</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -194,6 +194,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('col',this)">Colaboradores</button>
     <button onclick="nav('mes',this)">Visão Mensal</button>
     <button onclick="nav('previsao',this)">🔮 Previsão</button>
+    <button onclick="nav('firstpass',this)">✅ First Pass</button>
     <button onclick="nav('prod',this)">📊 Produtividade</button>
     <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('obs',this)">📝 Observações</button>
@@ -461,6 +462,19 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         </div>
       </div>
       <div id="previsao-out"></div>
+    </div>
+
+    <!-- FIRST PASS -->
+    <div id="page-firstpass" class="page">
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">Carregue a planilha da <strong>Área de Testes</strong> (.xlsx) e <strong>selecione o mês</strong> no "Período". Por montador, você vê as <strong>aprovações de primeira</strong> e as <strong>reprovações</strong> do mês. O First Pass é o <strong>real</strong>: aprovados de 1ª ÷ testados (lido da aba <em>"Análise montador"</em>).</div>
+      <div class="card" style="margin-bottom:12px;">
+        <div class="frow" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <label class="btn" style="cursor:pointer;width:auto;margin:0;">📤 Carregar planilha (.xlsx)<input type="file" accept=".xlsx,.xls" onchange="carregarPlanilhaFP(this)" style="display:none;"/></label>
+          <div style="min-width:180px;"><label>Período</label><select id="fpPeriodo" onchange="_fpPeriodo=+this.value;renderFirstPass()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;"></select></div>
+        </div>
+        <div id="fpStatus" style="font-size:13px;margin-top:8px;color:#666;"></div>
+      </div>
+      <div id="fp-cont"></div>
     </div>
 
     <!-- CONFIG -->
@@ -1329,6 +1343,7 @@ function nav(id,btn){
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
   if(id==='mes')renderMes();
   if(id==='previsao')renderPrevisao();
+  if(id==='firstpass')renderFirstPass();
   if(id==='prod')renderProdutividade();
   if(id==='rel')popularRelColab();
   if(id==='obs')renderObservacoes();
@@ -3940,6 +3955,95 @@ function copiarResumoAnalise(){
   t.select();
   try{navigator.clipboard.writeText(t.value);toast('Resumo copiado! 📋');}
   catch(e){document.execCommand('copy');toast('Resumo copiado! 📋');}
+}
+// ── FIRST PASS POR MONTADOR (planilha Área de Testes) ──
+let _fpBlocks=null,_fpPeriodo=0,_fpSort='entregues';
+function parseAnaliseMontador(wb){
+  const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase();
+  const sheetName=wb.SheetNames.find(n=>norm(n).indexOf('ANALISE MONTADOR')>=0)||wb.SheetNames.find(n=>norm(n).indexOf('MONTADOR')>=0);
+  if(!sheetName)return null;
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,raw:true,defval:null});
+  const MM=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const blocks=[];
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i]||[];
+    const hasNome=r.some(c=>norm(c)==='NOME');
+    const hasAprov=r.some(c=>norm(c).indexOf('APROVADOS')>=0);
+    if(!(hasNome&&hasAprov))continue;
+    const ci={};
+    r.forEach((c,idx)=>{const n=norm(c);if(n==='NOME')ci.nome=idx;else if(n==='TOTAL')ci.total=idx;else if(n.indexOf('APROVADOS')===0||n.indexOf('DE 1')>=0)ci.prim=idx;else if(n.indexOf('PORCENTAGEM')>=0)ci.pct=idx;});
+    if(ci.nome==null||ci.total==null||ci.prim==null)continue;
+    let periodo='Acumulado';
+    r.forEach(c=>{if(c instanceof Date&&!isNaN(c))periodo=MM[c.getMonth()]+'/'+c.getFullYear();});
+    const mont=[];
+    for(let j=i+1;j<rows.length;j++){
+      const rr=rows[j]||[];const nomeRaw=rr[ci.nome];const n=norm(nomeRaw);
+      if(n==='NOME')break;
+      if(nomeRaw==null||String(nomeRaw).trim()===''){ if(mont.length)break; else continue; }
+      const total=Number(rr[ci.total])||0,prim=Number(rr[ci.prim])||0;
+      let pct=ci.pct!=null?rr[ci.pct]:null;pct=(pct==null||pct==='')?(total>0?prim/total:0):Number(pct);if(pct>1.5)pct=pct/100;
+      mont.push({nome:String(nomeRaw).trim(),total,prim,pct:Math.round(pct*1000)/10});
+    }
+    if(mont.length)blocks.push({periodo,montadores:mont});
+  }
+  // remove blocos totalmente zerados (meses sem teste)
+  const comDados=blocks.filter(b=>b.montadores.some(m=>m.total>0));
+  return comDados.length?comDados:(blocks.length?blocks:null);
+}
+async function carregarPlanilhaFP(input){
+  const file=input&&input.files&&input.files[0]; if(!file)return;
+  const st=document.getElementById('fpStatus'); if(st)st.textContent='⏳ Lendo planilha...';
+  try{
+    await carregarSheetJS();
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:true});
+    const blocks=parseAnaliseMontador(wb);
+    if(!blocks){ if(st)st.innerHTML='<span style="color:#A32D2D;">Não encontrei a aba "Análise montador" na planilha.</span>'; return; }
+    _fpBlocks=blocks; _fpPeriodo=0;
+    try{localStorage.setItem('fpCache',JSON.stringify(blocks));}catch(e){}
+    if(st)st.innerHTML='<span style="color:#15803d;">✓ '+blocks.length+' período(s) carregado(s).</span>';
+    renderFirstPass();
+  }catch(e){ if(st)st.innerHTML='<span style="color:#A32D2D;">Erro ao ler a planilha: '+_gdEsc(e.message)+'</span>'; }
+}
+function renderFirstPass(){
+  const cont=document.getElementById('fp-cont'); if(!cont)return;
+  if(!_fpBlocks){try{const c=JSON.parse(localStorage.getItem('fpCache')||'null');if(c&&c.length)_fpBlocks=c;}catch(e){}}
+  const sel=document.getElementById('fpPeriodo');
+  if(!_fpBlocks||!_fpBlocks.length){ if(sel)sel.innerHTML=''; cont.innerHTML='<div class="card"><p class="empty" style="padding:16px 4px;">Nenhuma planilha carregada. Clique em "Carregar planilha" acima para ver o First Pass por montador.</p></div>'; return; }
+  if(_fpPeriodo>=_fpBlocks.length)_fpPeriodo=0;
+  if(sel)sel.innerHTML=_fpBlocks.map((b,i)=>'<option value="'+i+'"'+(i===_fpPeriodo?' selected':'')+'>'+_gdEsc(b.periodo)+'</option>').join('');
+  const b=_fpBlocks[_fpPeriodo];
+  let mont=(b.montadores||[]).filter(m=>m.total>0);
+  const metric=m=>_fpSort==='firstpass'?m.pct:_fpSort==='deprimeira'?m.prim:m.total;
+  if(_fpSort==='firstpass')mont=mont.slice().sort((a,c)=>c.pct-a.pct||c.total-a.total);
+  else if(_fpSort==='deprimeira')mont=mont.slice().sort((a,c)=>c.prim-a.prim||c.pct-a.pct);
+  else mont=mont.slice().sort((a,c)=>c.total-a.total||c.pct-a.pct);
+  const maxv=Math.max(1,...mont.map(metric));
+  const fpcor=p=>p>=70?'#15803d':p>=50?'#d97706':'#dc2626';
+  const tabBtn=(id,txt)=>'<button onclick="_fpSort=\''+id+'\';renderFirstPass()" style="padding:8px 14px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;'+(_fpSort===id?'background:#2563eb;color:#fff;':'background:#eef2f7;color:#555;')+'">'+txt+'</button>';
+  const tTest=mont.reduce((s,m)=>s+m.total,0),tPrim=mont.reduce((s,m)=>s+m.prim,0);
+  const fpGeral=tTest>0?Math.round(tPrim/tTest*1000)/10:0;
+  const pctTxt=v=>v.toFixed(1).replace('.',',')+'%';
+  let linhas=mont.map((m,i)=>{
+    const w=Math.round(metric(m)/maxv*100);const naoP=m.total-m.prim;
+    return '<tr style="border-bottom:1px solid #f0f0f0;">'
+      +'<td style="padding:9px 6px;color:#aaa;font-weight:700;">'+(i+1)+'</td>'
+      +'<td style="padding:9px 6px;font-weight:800;">'+_gdEsc(m.nome)+'</td>'
+      +'<td style="padding:9px 6px;min-width:170px;"><div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;height:14px;background:#eef2f7;border-radius:99px;overflow:hidden;"><div style="height:100%;width:'+w+'%;background:#3b82f6;border-radius:99px;"></div></div><span style="font-weight:800;min-width:26px;text-align:right;">'+m.total+'</span></div></td>'
+      +'<td style="padding:9px 6px;text-align:center;font-weight:700;color:#15803d;">'+m.prim+'</td>'
+      +'<td style="padding:9px 6px;text-align:center;font-weight:700;color:'+(naoP>0?'#b91c1c':'#aaa')+';">'+naoP+'</td>'
+      +'<td style="padding:9px 6px;text-align:right;font-weight:800;color:'+fpcor(m.pct)+';">'+pctTxt(m.pct)+'</td>'
+      +'</tr>';
+  }).join('');
+  if(!mont.length)linhas='<tr><td colspan="6" style="padding:14px;color:#aaa;">Nenhum montador com testes neste período.</td></tr>';
+  let h='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">'+tabBtn('entregues','Mais entregaram')+tabBtn('firstpass','Melhor First Pass')+tabBtn('deprimeira','Mais entregas de primeira')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:12px;">'
+    +'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">Testados ('+_gdEsc(b.periodo)+')</div><div style="font-size:30px;font-weight:800;">'+tTest+'</div></div>'
+    +'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">De primeira</div><div style="font-size:30px;font-weight:800;color:#15803d;">'+tPrim+'</div></div>'
+    +'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">First Pass do período</div><div style="font-size:30px;font-weight:800;color:'+fpcor(fpGeral)+';">'+pctTxt(fpGeral)+'</div></div>'
+    +'</div>';
+  h+='<div class="card"><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:14px;"><thead><tr style="text-align:left;color:#999;border-bottom:2px solid #eee;font-size:11px;letter-spacing:.03em;"><th style="padding:6px;">#</th><th style="padding:6px;">MONTADOR</th><th style="padding:6px;">QUADROS ENTREGUES</th><th style="padding:6px;text-align:center;">APROV. DE 1ª</th><th style="padding:6px;text-align:center;">REPROVADOS</th><th style="padding:6px;text-align:right;">FIRST PASS</th></tr></thead><tbody>'+linhas+'</tbody></table></div></div>';
+  cont.innerHTML=h;
 }
 // ── PREVISÃO DE PRODUÇÃO (fim do ano) ──
 let _prevN=3,_prevAteStr='',_prevChart=null;

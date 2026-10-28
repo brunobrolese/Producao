@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v100</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v101</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -448,18 +448,15 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
 
     <!-- PREVISÃO -->
     <div id="page-previsao" class="page">
-      <div style="font-size:13px;color:#666;margin-bottom:12px;">Projeção da produção (montagem elétrica) até <strong>31/12</strong>. O mês atual é completado pelo ritmo de dias úteis já decorridos; os meses seguintes usam a base escolhida. Ajuste a base conforme sua expectativa de ritmo.</div>
+      <div style="font-size:13px;color:#666;margin-bottom:12px;">Quanto você <strong>vai conseguir entregar até 31/12</strong>, no ritmo da <strong>montagem elétrica</strong> dos últimos meses, comparado com os <strong>pedidos pendentes do PCP</strong>.</div>
       <div class="card" style="margin-bottom:12px;">
         <div class="frow" style="gap:10px;flex-wrap:wrap;align-items:flex-end;">
-          <div style="min-width:230px;"><label>Base para os próximos meses</label>
-            <select id="prevMetodo" onchange="_prevMetodo=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;">
-              <option value="ult3">Média dos últimos 3 meses</option>
-              <option value="ano">Média de todos os meses do ano</option>
-              <option value="melhor">Melhor mês do ano</option>
-              <option value="manual">Valor manual (painéis/mês)</option>
+          <div style="min-width:220px;"><label>Ritmo baseado em</label>
+            <select id="prevN" onchange="_prevN=+this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;">
+              <option value="2">Últimos 2 meses</option>
+              <option value="3" selected>Últimos 3 meses</option>
+              <option value="6">Últimos 6 meses</option>
             </select></div>
-          <div id="prevManualWrap" style="min-width:160px;display:none;"><label>Painéis por mês (manual)</label><input id="prevManual" type="number" min="0" placeholder="ex: 55" oninput="_prevManual=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
-          <div style="min-width:160px;"><label>Meta mensal (opcional)</label><input id="prevMeta" type="number" min="0" value="50" oninput="_prevMeta=this.value;renderPrevisao()" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
         </div>
       </div>
       <div id="previsao-out"></div>
@@ -3944,7 +3941,7 @@ function copiarResumoAnalise(){
   catch(e){document.execCommand('copy');toast('Resumo copiado! 📋');}
 }
 // ── PREVISÃO DE PRODUÇÃO (fim do ano) ──
-let _prevMetodo='ult3',_prevManual='',_prevMeta='50',_prevChart=null;
+let _prevN=3,_prevChart=null;
 const _MESC=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 function producaoPorMesAno(ano){
   const arr=new Array(12).fill(0);
@@ -3959,46 +3956,70 @@ function _bizDaysMes(ano,mesIdx){
   for(let dd=1;dd<=totalDias;dd++){const dow=new Date(ano,mesIdx,dd).getDay();if(dow===0||dow===6)continue;total++;if(ehAtual&&dd<=hoje.getDate())elapsed++;}
   return {total,elapsed:ehAtual?elapsed:total,ehAtual};
 }
-function _prevSync(){const w=document.getElementById('prevManualWrap');if(w)w.style.display=(_prevMetodo==='manual')?'':'none';}
+// pedidos do PCP ainda a entregar (não faturados e não cancelados)
+function _pcpPendentes(){
+  try{
+    const pcp=(typeof gdLoadPCP==='function'?gdLoadPCP():null)||((typeof _gd!=='undefined'&&_gd)?_gd.pcp:null)||null;
+    if(!pcp||!Array.isArray(pcp.pedidos)||!pcp.pedidos.length)return null;
+    let pend=0,fila=0,final=0;
+    pcp.pedidos.forEach(p=>{const c=pcpCat(p.status);if(c==='cancelado')return;if(c!=='concluido'){pend++;if(c==='final')final++;else fila++;}});
+    return {pend,fila,final};
+  }catch(e){return null;}
+}
 function renderPrevisao(){
-  _prevSync();
   const out=document.getElementById('previsao-out');if(!out)return;
   const hoje=new Date();const ano=hoje.getFullYear();const cur=hoje.getMonth();
   const real=producaoPorMesAno(ano);
+  const realCur=real[cur];
+  // base = média dos últimos N meses COMPLETOS que tiveram produção
   const completos=[];for(let m=0;m<cur;m++)completos.push(real[m]);
   const comDados=completos.filter(v=>v>0);
-  let base=0,baseLabel='';
-  if(_prevMetodo==='manual'){base=Math.max(0,Math.round(Number(_prevManual)||0));baseLabel='valor manual';}
-  else if(_prevMetodo==='ano'){const arr=comDados.length?comDados:completos;base=arr.length?Math.round(arr.reduce((s,x)=>s+x,0)/arr.length):0;baseLabel='média dos meses do ano';}
-  else if(_prevMetodo==='melhor'){base=comDados.length?Math.max.apply(null,comDados):0;baseLabel='melhor mês do ano';}
-  else {const arr=comDados.slice(-3);base=arr.length?Math.round(arr.reduce((s,x)=>s+x,0)/arr.length):0;baseLabel='média dos últimos '+arr.length+' mes(es)';}
-  const bd=_bizDaysMes(ano,cur);const realCur=real[cur];
+  const usados=comDados.slice(-_prevN);
+  const base=usados.length?Math.round(usados.reduce((s,x)=>s+x,0)/usados.length):0;
+  if(!comDados.length&&realCur===0){
+    out.innerHTML='<div class="card"><p class="empty" style="padding:14px 4px;">Ainda não há montagem elétrica concluída em '+ano+' para projetar o ritmo. Conforme os painéis forem terminando na elétrica, a previsão aparece aqui.</p></div>';
+    return;
+  }
+  // mês atual completado pelo ritmo de dias úteis já decorridos
+  const bd=_bizDaysMes(ano,cur);
   let projCur=realCur;
   if(bd.ehAtual&&bd.elapsed>0&&bd.total>0)projCur=Math.max(realCur,Math.round(realCur*bd.total/bd.elapsed));
   else projCur=Math.max(realCur,base);
   const faltaCur=Math.max(0,projCur-realCur);
-  const sumPast=real.slice(0,cur).reduce((s,x)=>s+x,0);
-  const mesesFuturos=11-cur;const projFuture=base*mesesFuturos;
-  const totalAno=sumPast+projCur+projFuture;
-  const realizadoAno=sumPast+realCur;const restante=totalAno-realizadoAno;
-  const metaMensal=Math.max(0,Math.round(Number(_prevMeta)||0));const metaAno=metaMensal*12;
+  const mesesFuturos=11-cur;
+  const capacidade=faltaCur+base*mesesFuturos;          // o que ainda dá pra entregar, de hoje até dez
+  const realizadoAno=real.slice(0,cur).reduce((s,x)=>s+x,0)+realCur;
+  const totalAno=realizadoAno+capacidade;
+  const pcp=_pcpPendentes();
   const card=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:32px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:12px;color:#888;">'+sub+'</div>':'')+'</div>';
-  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">';
-  h+=card('Realizado em '+ano,realizadoAno,'#1a1a1a','até hoje ('+_MESC[cur]+'/'+String(hoje.getDate()).padStart(2,'0')+')');
-  h+=card('Projeção p/ o resto','+'+restante,'#EA580C',_MESC[cur]+' a Dez');
-  h+=card('Total projetado '+ano,totalAno,'#2563eb','base: '+base+'/mês ('+baseLabel+')');
-  if(metaAno>0)h+=card('vs meta anual',(totalAno-metaAno>=0?'+':'')+(totalAno-metaAno),totalAno>=metaAno?'#15803d':'#b91c1c','meta '+metaAno+' ('+metaMensal+'/mês)');
-  h+='</div>';
-  if(!comDados.length&&realCur===0){
-    h+='<div class="card"><p class="empty" style="padding:14px 4px;">Ainda não há produção registrada em '+ano+' para projetar. Conforme os painéis forem concluídos na elétrica, a previsão aparece aqui.</p></div>';
-    out.innerHTML=h;return;
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;">';
+  h+=card('Ritmo (elétrica)',base+'/mês','#1a1a1a','média dos últimos '+usados.length+' mes(es)');
+  h+=card('Dá pra entregar até dez','~'+capacidade,'#2563eb','de hoje até 31/12');
+  if(pcp){
+    h+=card('Pedidos pendentes (PCP)',pcp.pend,'#b45309',pcp.fila+' na fila · '+pcp.final+' em mont. final');
+    const saldo=capacidade-pcp.pend;
+    h+=card('Saldo até dez',(saldo>=0?'+':'')+saldo,saldo>=0?'#15803d':'#b91c1c',saldo>=0?'o ritmo cobre os pedidos':'faltariam '+Math.abs(saldo));
+  } else {
+    h+=card('Pedidos pendentes (PCP)','—','#b45309','importe o PCP (aba 📦 Pedidos)');
   }
-  h+='<div class="card"><h3>📈 Produção por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado</span>'+(metaMensal>0?'<span>⸺ Meta/mês</span>':'')+'</div><div style="position:relative;height:260px;"><canvas id="prevChart"></canvas></div></div>';
+  h+='</div>';
+  // frase-resumo
+  let frase='No ritmo dos últimos '+usados.length+' mes(es) — <strong>'+base+' painéis/mês</strong> na montagem elétrica — de hoje até <strong>31/12</strong> você ainda entrega cerca de <strong>'+capacidade+' painéis</strong> (fechando ~'+totalAno+' no ano).';
+  if(pcp){
+    const saldo=capacidade-pcp.pend;
+    frase+=' O PCP tem <strong>'+pcp.pend+' pedidos a entregar</strong>. '+(saldo>=0?'No ritmo atual dá pra entregar todos, com folga de <strong>'+saldo+'</strong>.':'No ritmo atual <strong>faltariam '+Math.abs(saldo)+'</strong> até dezembro — seria preciso subir o ritmo em ~<strong>'+Math.ceil(Math.abs(saldo)/Math.max(1,mesesFuturos+1))+'/mês</strong>.');
+  } else {
+    frase+=' Importe a planilha do PCP na aba 📦 Pedidos para comparar com o número de pedidos pendentes.';
+  }
+  h+='<div class="card" style="border-left:4px solid #2563eb;"><div style="font-size:14px;line-height:1.55;">'+frase+'</div></div>';
+  // gráfico realizado x projetado
+  h+='<div class="card"><h3>📈 Montagem elétrica por mês — realizado e projetado</h3><div style="display:flex;gap:16px;font-size:12px;color:#666;margin-bottom:6px;flex-wrap:wrap;"><span>🟦 Realizado</span><span>🟧 Projetado</span></div><div style="position:relative;height:250px;"><canvas id="prevChart"></canvas></div></div>';
+  // tabela
   let linhas='';
   for(let m=0;m<12;m++){
     let r='—',p='—',t='—',obs='';
     if(m<cur){r=real[m];t=real[m];obs='realizado';}
-    else if(m===cur){r=realCur;p='+'+faltaCur;t=projCur;obs='mês atual (parcial → projeção)';}
+    else if(m===cur){r=realCur;p='+'+faltaCur;t=projCur;obs='mês atual (parcial)';}
     else {p=base;t=base;obs='projetado';}
     linhas+='<tr'+(m===cur?' style="background:#fff8ec;"':'')+'><td style="font-weight:700;">'+_MESC[m]+'</td><td>'+r+'</td><td>'+p+'</td><td style="font-weight:700;">'+t+'</td><td style="font-size:12px;color:#888;">'+obs+'</td></tr>';
   }
@@ -4009,9 +4030,7 @@ function renderPrevisao(){
     if(cv){if(_prevChart){try{_prevChart.destroy();}catch(e){}}
       const realizadoData=real.map((v,m)=>m<cur?v:(m===cur?realCur:0));
       const projetadoData=real.map((v,m)=>m<cur?0:(m===cur?faltaCur:base));
-      const ds=[{label:'Realizado',data:realizadoData,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Projetado',data:projetadoData,backgroundColor:'#f59e0b',borderRadius:4,stack:'s'}];
-      if(metaMensal>0)ds.push({type:'line',label:'Meta/mês',data:new Array(12).fill(metaMensal),borderColor:'#9333ea',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false});
-      _prevChart=new Chart(cv.getContext('2d'),{data:{labels:_MESC,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
+      _prevChart=new Chart(cv.getContext('2d'),{data:{labels:_MESC,datasets:[{label:'Realizado',data:realizadoData,backgroundColor:'#2563eb',borderRadius:4,stack:'s'},{label:'Projetado',data:projetadoData,backgroundColor:'#f59e0b',borderRadius:4,stack:'s'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});
     }
   }
 }

@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v108</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v109</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -4984,10 +4984,12 @@ function parsePCP(wb){
   const wsPed=findSheet(['Pedidos']);
   if(!wsPed)throw new Error('Não encontrei a aba "Pedidos" na planilha.');
   const rows=XLSX.utils.sheet_to_json(pcpClamp(wsPed),{header:1,defval:null,raw:true});
-  let hi=-1;for(let i=0;i<Math.min(rows.length,15);i++){const r=(rows[i]||[]).map(pcpNorm);if(r.indexOf('STATUS')>=0&&r.indexOf('SEMANA')>=0){hi=i;break;}}
-  if(hi<0)throw new Error('Não achei o cabeçalho da aba Pedidos (esperava STATUS e SEMANA).');
+  // acha o cabeçalho: linha com STATUS + alguma coluna-chave (não exige SEMANA, que em algumas versões virou LIBERAÇÃO)
+  let hi=-1;for(let i=0;i<Math.min(rows.length,25);i++){const r=(rows[i]||[]).map(pcpNorm);if(r.indexOf('STATUS')>=0&&(r.indexOf('PEDIDO')>=0||r.indexOf('OP')>=0||r.indexOf('SEMANA')>=0||r.indexOf('MES')>=0)){hi=i;break;}}
+  if(hi<0)throw new Error('Não achei o cabeçalho da aba Pedidos (esperava uma linha com STATUS). Colunas da 1ª linha: '+(((rows[0]||[]).map(pcpNorm).filter(Boolean).slice(0,20).join(', '))||'(vazio)'));
   const header=(rows[hi]||[]).map(pcpNorm);const col=n=>header.indexOf(n);
-  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:col('SEMANA'),mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),chicotes:col('CHICOTES'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO'),kepler:col('PEDIDO KEPLER')};
+  const semIdx=col('SEMANA')>=0?col('SEMANA'):col('LIBERACAO'); // SEMANA foi renomeada p/ LIBERAÇÃO em versões novas
+  const ci={pedido:col('PEDIDO'),item:col('ITEM'),desc:col('DESCRICAO'),status:col('STATUS'),qtd:col('QTD'),semana:semIdx,mes:col('MES'),ano:col('ANO'),grupo:col('GRUPO'),op:col('OP'),chicotes:col('CHICOTES'),dataEntrega:col('DATA ENTREGA'),dataEnvio:col('DATA ENVIO'),kepler:col('PEDIDO KEPLER')};
   const pedidos=[];
   for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const st=r[ci.status];if(st==null||String(st).trim()==='')continue;
     pedidos.push({pedido:r[ci.pedido]!=null?String(r[ci.pedido]):'',item:r[ci.item]!=null?String(r[ci.item]):'',descricao:r[ci.desc]!=null?String(r[ci.desc]):'',status:String(st).trim(),qtd:num(r[ci.qtd])||1,semana:num(r[ci.semana]),mes:num(r[ci.mes]),ano:num(r[ci.ano]),grupo:(r[ci.grupo]!=null&&String(r[ci.grupo]).trim()!=='')?String(r[ci.grupo]).trim():'(sem grupo)',op:(ci.op>=0&&r[ci.op]!=null)?String(r[ci.op]).trim():'',chicotes:(ci.chicotes>=0&&r[ci.chicotes]!=null)?String(r[ci.chicotes]).trim():'',dataEntrega:ci.dataEntrega>=0?pcpFmtDate(r[ci.dataEntrega]):'',dataEnvio:ci.dataEnvio>=0?pcpFmtDate(r[ci.dataEnvio]):'',heijunka:(ci.kepler>=0&&r[ci.kepler]!=null&&pcpNorm(r[ci.kepler])==='HEIJUNKA')});}

@@ -138,7 +138,8 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v110</span>
+    <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v111</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -5035,7 +5036,34 @@ const semEntrega=e=>{if(!e)return'amarelo';if(e.paineisReprovados==='sim')return
 const _gdDot={verde:'#1D9E75',amarelo:'#EF9F27',vermelho:'#E24B4A'};
 // PCP storage no Firebase (_gd.pcp)
 // ── AUTO-SYNC: lê os dados das planilhas que o Power Automate grava no Firebase (/autosync) ──
-let _autoPcp=null,_autoFp=null,_autoSyncTs='';
+let _autoPcp=null,_autoFp=null,_autoPcpTs='',_autoFpTs='';
+function _fmtSyncTs(iso){
+  if(!iso)return '';
+  const d=new Date(iso);
+  if(isNaN(d.getTime()))return '';
+  const p=x=>x<10?'0'+x:''+x;
+  const hoje=new Date();
+  const mesmoDia=d.getDate()===hoje.getDate()&&d.getMonth()===hoje.getMonth()&&d.getFullYear()===hoje.getFullYear();
+  const hora=p(d.getHours())+':'+p(d.getMinutes());
+  return mesmoDia?('hoje '+hora):(p(d.getDate())+'/'+p(d.getMonth()+1)+' '+hora);
+}
+function renderAutoSyncInfo(){
+  const el=document.getElementById('autoSyncInfo');
+  if(!el)return;
+  const partes=[];
+  const tPcp=_fmtSyncTs(_autoPcpTs);
+  if(tPcp)partes.push('PCP '+tPcp);
+  const tFp=_fmtSyncTs(_autoFpTs);
+  if(tFp)partes.push('Testes '+tFp);
+  if(!partes.length){el.textContent='';el.title='';return;}
+  // alerta visual se o mais recente tem mais de ~90 min
+  let maisRecente=0;
+  [_autoPcpTs,_autoFpTs].forEach(x=>{const d=new Date(x);if(!isNaN(d.getTime()))maisRecente=Math.max(maisRecente,d.getTime());});
+  const velho=maisRecente>0&&(Date.now()-maisRecente)>90*60*1000;
+  el.textContent='🔄 atualizado: '+partes.join(' · ');
+  el.style.color=velho?'#e0a030':'#5a9';
+  el.title=velho?'Dados podem estar desatualizados (última sincronização há mais de 1h30).':'Sincronização automática de hora em hora.';
+}
 async function autoSyncPull(){
   try{
     const r=await fetch('https://producao-200d2-default-rtdb.firebaseio.com/autosync.json',{cache:'no-store'});
@@ -5045,7 +5073,9 @@ async function autoSyncPull(){
     let changed=false;
     if(d.pcp&&Array.isArray(d.pcp.pedidos)&&d.pcp.pedidos.length){_autoPcp=d.pcp.pedidos;changed=true;}
     if(d.firstpass&&Array.isArray(d.firstpass.blocks)&&d.firstpass.blocks.length){_autoFp=d.firstpass.blocks;_fpBlocks=d.firstpass.blocks;try{localStorage.setItem('fpCache',JSON.stringify(_fpBlocks));}catch(e){}changed=true;}
-    if(d.atualizadoEm)_autoSyncTs=d.atualizadoEm;
+    if(d.pcp&&d.pcp.atualizadoEm)_autoPcpTs=d.pcp.atualizadoEm;
+    if(d.firstpass&&d.firstpass.atualizadoEm)_autoFpTs=d.firstpass.atualizadoEm;
+    renderAutoSyncInfo();
     if(changed){
       try{if(currentPage==='previsao')renderPrevisao();}catch(e){}
       try{if(currentPage==='firstpass')renderFirstPass();}catch(e){}

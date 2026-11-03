@@ -138,7 +138,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <span class="dot" id="dot"></span>
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v109</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v110</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -1106,6 +1106,9 @@ setInterval(async()=>{
   setInterval(async()=>{try{await load();await processarPausasTodos();}catch(e){}},60000);
   // roda uma vez ao abrir também (pega pausas retroativas do que já passou hoje)
   setTimeout(async()=>{try{await processarPausasTodos();}catch(e){}},3000);
+  // ── AUTO-SYNC das planilhas (Power Automate grava em /autosync; o app lê sozinho de hora em hora) ──
+  setTimeout(()=>{try{autoSyncPull();}catch(e){}},1500);
+  setInterval(()=>{try{autoSyncPull();}catch(e){}},3600000);
 
   // ── AUTO-RELOAD A CADA 30 MINUTOS ──
   // Recarrega a página inteira para evitar estado velho acumulado em abas abertas o dia todo.
@@ -5031,7 +5034,26 @@ const semRisco=e=>{if(!e)return'amarelo';if(e.materialRisco==='sim'||e.pedidoRis
 const semEntrega=e=>{if(!e)return'amarelo';if(e.paineisReprovados==='sim')return'vermelho';if(e.pedidosParaEmbalar==='sim')return'amarelo';return'verde';};
 const _gdDot={verde:'#1D9E75',amarelo:'#EF9F27',vermelho:'#E24B4A'};
 // PCP storage no Firebase (_gd.pcp)
-function gdLoadPCP(){return _gd.pcp||null;}
+// ── AUTO-SYNC: lê os dados das planilhas que o Power Automate grava no Firebase (/autosync) ──
+let _autoPcp=null,_autoFp=null,_autoSyncTs='';
+async function autoSyncPull(){
+  try{
+    const r=await fetch('https://producao-200d2-default-rtdb.firebaseio.com/autosync.json',{cache:'no-store'});
+    if(!r.ok)return;
+    const d=await r.json();
+    if(!d)return;
+    let changed=false;
+    if(d.pcp&&Array.isArray(d.pcp.pedidos)&&d.pcp.pedidos.length){_autoPcp=d.pcp.pedidos;changed=true;}
+    if(d.firstpass&&Array.isArray(d.firstpass.blocks)&&d.firstpass.blocks.length){_autoFp=d.firstpass.blocks;_fpBlocks=d.firstpass.blocks;try{localStorage.setItem('fpCache',JSON.stringify(_fpBlocks));}catch(e){}changed=true;}
+    if(d.atualizadoEm)_autoSyncTs=d.atualizadoEm;
+    if(changed){
+      try{if(currentPage==='previsao')renderPrevisao();}catch(e){}
+      try{if(currentPage==='firstpass')renderFirstPass();}catch(e){}
+      try{if(currentPage==='gd'&&typeof renderGD==='function')renderGD();}catch(e){}
+    }
+  }catch(e){}
+}
+function gdLoadPCP(){return (_gd&&_gd.pcp)||(_autoPcp?{pedidos:_autoPcp}:null);}
 function gdSavePCP(data){_gd.pcp=data;gdSave();}
 // prompt da IA (Lean)
 function gdBuildPrompt(weekEntries,weekLabel,tipo){

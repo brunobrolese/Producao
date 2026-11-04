@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v111</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v112</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -188,6 +188,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
 <div id="appScreen" style="display:none;">
   <div class="nav">
     <button class="active" onclick="nav('dash',this)">Dashboard</button>
+    <button onclick="nav('central',this)">🧭 Central</button>
     <button onclick="nav('live',this)">🔴 Tempo Real</button>
     <button onclick="nav('ops',this)">Ordens de Produção</button>
     <button onclick="nav('apt',this)">Apontamentos</button>
@@ -208,6 +209,15 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
   </div>
 
   <div class="content">
+
+    <!-- CENTRAL DE PRODUÇÃO -->
+    <div id="page-central" class="page">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        <h2 style="margin:0;">🧭 Central de Produção</h2>
+        <button onclick="renderCentral()" style="padding:7px 14px;border:none;border-radius:8px;background:#eef2f7;color:#555;font-size:13px;font-weight:700;cursor:pointer;">↻ Atualizar</button>
+      </div>
+      <div id="central-out"></div>
+    </div>
 
     <!-- DASHBOARD -->
     <div id="page-dash" class="page active">
@@ -1354,6 +1364,7 @@ function nav(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   btn.classList.add('active');
   if(id==='dash')renderDash();
+  if(id==='central'){renderCentral();load().then(()=>{try{var p=autoSyncPull();if(p&&p.then)p.then(renderCentral);}catch(e){}try{gdLoad().then(renderCentral);}catch(e){renderCentral();}});}
   if(id==='live')renderLivePage();
   if(id==='ops'){load().then(renderOPs);}
   if(id==='apt'){load().then(renderApt);}
@@ -4260,6 +4271,161 @@ function renderPrevisao(){
     }
   }
 }
+// ── CENTRAL DE PRODUÇÃO (visão única do dia + mês) ──
+function _pedEnvioMs(p){
+  if(!p)return null;
+  const parseBR=s=>{const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?new Date(+m[3],+m[2]-1,+m[1],12,0,0).getTime():null;};
+  if(typeof p.envio==='number'&&isFinite(p.envio))return p.envio;
+  const v=parseBR(p.dataEnvio); if(v!=null)return v;
+  return null;
+}
+function _centGdOcorr(e){
+  const out=[];const push=(tipo,txt)=>out.push({tipo,detalhe:(txt&&String(txt).trim())?String(txt).trim().slice(0,160):''});
+  if(!e)return out;
+  if(e.seguranca==='acidente')push('Acidente',e.segurancaNota||'sem detalhe');
+  if(e.scrap==='sim')push('Scrap',e.scrapDetalhe);
+  if(e.retrabalho==='sim')push('Retrabalho',e.retrabalhoDetalhe);
+  if(e.faltaMaterial==='sim')push('Falta de material',e.faltaMaterialDetalhe);
+  if(e.erroprojeto==='sim')push('Erro de projeto',((e.errosProjetoTipos&&e.errosProjetoTipos.length?e.errosProjetoTipos.join(', '):'')+(e.erroprojetoDetalhe?' - '+e.erroprojetoDetalhe:'')));
+  if(e.paineisReprovados==='sim')push('Reprovados',e.paineisReprovadosDetalhe);
+  if(e.materialRisco==='sim')push('Risco de material',e.materialRiscoDetalhe);
+  if(e.pedidoRisco==='sim')push('Risco de pedido atrasar',e.pedidoRiscoDetalhe);
+  if(e.kaizen==='sim')push('Kaizen',e.kaizenDetalhe);
+  if(Number(e.horasNaoPlanejadas)>0)push('Horas não planejadas',e.horasNaoPlanejadas+'h'+(e.horasNaoPlanejadasDetalhe?' - '+e.horasNaoPlanejadasDetalhe:''));
+  return out;
+}
+function renderCentral(){
+  const out=document.getElementById('central-out'); if(!out)return;
+  const esc=s=>_gdEsc(s);
+  const hoje=new Date(),ano=hoje.getFullYear(),cur=hoje.getMonth();
+  const hojeStr=dataLocalStr(hoje);
+  const ontem=new Date(ano,cur,hoje.getDate()-1);const ontemStr=dataLocalStr(ontem);
+  const hojeStart=new Date(ano,cur,hoje.getDate(),0,0,0).getTime();
+  const ehEle=a=>(a.setor==='eletrica'||a.setor==='geral'||!a.setor);
+  const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+  // produção elétrica
+  const real=producaoPorMesAno(ano);const realCur=real[cur];
+  const prodHoje=apts.filter(a=>ehEle(a)&&a.fim&&dataLocalStr(a.fim)===hojeStr).length;
+  // ritmo + projeção do mês
+  const completos=[];for(let m=0;m<cur;m++)completos.push(real[m]);
+  const comDados=completos.filter(v=>v>0);
+  const base=comDados.length?Math.round(comDados.slice(-3).reduce((s,x)=>s+x,0)/Math.min(3,comDados.length)):0;
+  const lastCur=new Date(ano,cur+1,0).getDate();
+  const bizElapsed=_bizDaysBetween(ano,cur,1,hoje.getDate());
+  const bizTotal=_bizDaysBetween(ano,cur,1,lastCur);
+  const bizRem=_bizDaysBetween(ano,cur,hoje.getDate()+1,lastCur);
+  const rateDaily=bizElapsed>0?(realCur/bizElapsed):(bizTotal>0?base/bizTotal:0);
+  const projMes=Math.max(realCur,Math.round(realCur+rateDaily*bizRem));
+  const mediaDiaTxt=(Math.round(rateDaily*10)/10).toString().replace('.',',');
+  // PCP
+  const g=(typeof gdLoadPCP==='function'?gdLoadPCP():null);
+  const peds=(g&&Array.isArray(g.pedidos)&&g.pedidos.length)?g.pedidos:null;
+  let prontos=0,aFazer=0,emProd=0,montEle=0,montFin=0,aguard=0,demandaMes=0;
+  let saemHoje=[],atrasados=[],saiuOntem=[];
+  if(peds){
+    peds.forEach(p=>{const c=pcpCat(p.status);if(c==='cancelado')return;
+      if(c==='concluido')prontos++;
+      else{aFazer++;if(c==='producao')emProd++;else if(c==='montagem')montEle++;else if(c==='final')montFin++;else aguard++;}
+      const env=_pedEnvioMs(p);
+      if(env!=null){const ed=dataLocalStr(new Date(env));if(ed===hojeStr&&c!=='concluido')saemHoje.push(p);if(ed===ontemStr)saiuOntem.push(p);}
+      const e=_pedEntregaMs(p);
+      if(c!=='concluido'){
+        if(e!=null){const d=new Date(e);if(d.getFullYear()===ano&&d.getMonth()===cur)demandaMes++;if(e<hojeStart)atrasados.push(p);}
+      }
+    });
+  }
+  const capRestante=projMes-realCur;
+  const saldoMes=capRestante-demandaMes;
+  // First Pass (bloco do mês atual, senão o primeiro disponível)
+  let fpTxt='—',fpCor='#888',fpSub='sem planilha';
+  if(_fpBlocks&&_fpBlocks.length){
+    const token=_MESC[cur]+'/'+ano;
+    let b=_fpBlocks.find(x=>x&&x.periodo===token)||_fpBlocks[0];
+    const mont=(b.montadores||[]).filter(m=>m.total>0);
+    const tT=mont.reduce((s,m)=>s+m.total,0),tP=mont.reduce((s,m)=>s+m.prim,0);
+    if(tT>0){const fp=Math.round(tP/tT*1000)/10;fpTxt=fp.toFixed(1).replace('.',',')+'%';fpCor=fp>=70?'#15803d':fp>=50?'#d97706':'#dc2626';fpSub=esc(b.periodo)+' · '+tP+'/'+tT;}
+  }
+  // entregues ontem (montagem final aprovada ontem)
+  const entreguesOntemMF=apts.filter(a=>a&&a.mf&&a.mf.fim&&dataLocalStr(a.mf.fim)===ontemStr&&a.mf.resultado==='aprovado');
+  // GD — último registro
+  const ents=((_gd&&_gd.entries)||[]).filter(e=>e&&e.data).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  const ult=ents.length?ents[ents.length-1]:null;
+  const gdOcorr=_centGdOcorr(ult);
+  const n2=((_gd&&_gd.n2)||{})[ult?ult.data:'']||null;
+  const n2acoes=(n2&&Array.isArray(n2.acoes))?n2.acoes.filter(a=>a&&(a.descricao||'').trim()):[];
+
+  // ---- montagem do HTML ----
+  const diaSemana=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'][hoje.getDay()];
+  const dataTxt=String(hoje.getDate()).padStart(2,'0')+'/'+String(cur+1).padStart(2,'0')+'/'+ano;
+  const upd=(typeof _fmtSyncTs==='function')?_fmtSyncTs(_autoPcpTs):'';
+  let h='';
+  h+='<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+    +'<div style="font-size:15px;color:#444;font-weight:700;text-transform:capitalize;">'+diaSemana+', '+dataTxt+'</div>'
+    +'<div style="font-size:12px;color:#888;">'+(upd?('PCP atualizado '+upd):(peds?'':'PCP não carregado'))+'</div></div>';
+
+  // KPIs
+  const kpi=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:30px;font-weight:800;line-height:1.1;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:#999;margin-top:2px;">'+sub+'</div>':'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px;">';
+  h+=kpi('⚡ Produzidos hoje',prodHoje,'#2563eb','montagem elétrica concluída');
+  h+=kpi('📅 No mês ('+_MESC[cur]+')',realCur,'#1a1a1a','projeção ~'+projMes);
+  h+=kpi('📈 Média diária',mediaDiaTxt,'#1a1a1a','painéis/dia útil');
+  h+=kpi('✅ First Pass',fpTxt,fpCor,fpSub);
+  h+=kpi('🏁 Faltam no mês',bizRem+' dias úteis',(bizRem<=3?'#b45309':'#1a1a1a'),bizElapsed+' de '+bizTotal+' já decorridos');
+  h+='</div>';
+
+  // Previsibilidade do mês
+  const pct=projMes>0?Math.min(100,Math.round(realCur/projMes*100)):0;
+  h+='<div class="card" style="border-left:4px solid #2563eb;">';
+  h+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><h3 style="margin:0;">🔮 Previsibilidade do mês</h3><span style="font-size:12px;color:#888;">ritmo dos últimos meses: '+base+'/mês</span></div>';
+  h+='<div style="height:22px;background:#eef2f7;border-radius:99px;overflow:hidden;position:relative;margin-bottom:6px;"><div style="height:100%;width:'+pct+'%;background:linear-gradient(90deg,#2563eb,#3b82f6);border-radius:99px;"></div></div>';
+  h+='<div style="font-size:13px;color:#555;line-height:1.5;">Realizado <strong>'+realCur+'</strong> · projeção de fechar o mês com <strong style="color:#2563eb;">~'+projMes+'</strong> painéis ('+pct+'% do previsto já feito). No ritmo atual faltam cerca de <strong>'+Math.max(0,capRestante)+'</strong> nos <strong>'+bizRem+'</strong> dias úteis restantes.';
+  if(peds){
+    h+=' Demanda do PCP com entrega em '+_MESC[cur]+': <strong>'+demandaMes+'</strong> pendentes — ';
+    if(saldoMes>=0)h+='<strong style="color:#15803d;">o ritmo cobre, com folga de '+saldoMes+'</strong>.';
+    else{const precisa=Math.ceil((demandaMes)/Math.max(1,bizRem)*10)/10;h+='<strong style="color:#b91c1c;">faltariam '+Math.abs(saldoMes)+'</strong> — precisaria de ~'+String(precisa).replace('.',',')+'/dia útil.';}
+  }
+  h+='</div></div>';
+
+  // Pedidos do PCP
+  if(peds){
+    const card2=(lbl,val,cor,sub)=>'<div class="card" style="margin:0;"><div style="font-size:12px;color:#888;font-weight:600;">'+lbl+'</div><div style="font-size:26px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:#999;">'+sub+'</div>':'')+'</div>';
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:14px 0;">';
+    h+=card2('🚚 Saem hoje',saemHoje.length,'#2563eb','data de envio = hoje');
+    h+=card2('✅ Prontos',prontos,'#15803d','faturado/estoque/expedição');
+    h+=card2('🔧 A fazer',aFazer,'#b45309',montEle+' elétrica · '+emProd+' produção · '+montFin+' mont. final');
+    h+=card2('⏰ Atrasados',atrasados.length,atrasados.length?'#b91c1c':'#15803d','entrega já venceu, não prontos');
+    h+='</div>';
+    // listas acionáveis
+    const linhaPed=p=>{const e=_pedEntregaMs(p);const ed=e!=null?new Date(e).toLocaleDateString('pt-BR'):'';return '<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 2px;border-bottom:1px solid #f2f2f2;flex-wrap:wrap;"><div style="min-width:0;"><strong style="font-size:13px;">OP '+esc(p.op||'—')+'</strong> <span style="font-size:12px;color:#999;">ped '+esc(p.pedido||'—')+'</span> <span style="font-size:11px;color:#aaa;">'+esc((p.descricao||p.desc||'').slice(0,50))+'</span></div><span style="font-size:12px;font-weight:700;color:#555;">'+esc(p.status||'')+(ed?' · 📅 '+ed:'')+'</span></div>';};
+    if(saemHoje.length){h+='<div class="card"><h3>🚚 Saem hoje ('+saemHoje.length+')</h3>'+saemHoje.slice(0,15).map(linhaPed).join('')+(saemHoje.length>15?'<div style="font-size:12px;color:#999;padding-top:6px;">+ '+(saemHoje.length-15)+' outros</div>':'')+'</div>';}
+    if(atrasados.length){atrasados.sort((a,b)=>(_pedEntregaMs(a)||0)-(_pedEntregaMs(b)||0));h+='<div class="card" style="border-left:4px solid #b91c1c;"><h3 style="color:#b91c1c;">⏰ Atrasados ('+atrasados.length+')</h3>'+atrasados.slice(0,15).map(linhaPed).join('')+(atrasados.length>15?'<div style="font-size:12px;color:#999;padding-top:6px;">+ '+(atrasados.length-15)+' outros</div>':'')+'</div>';}
+  } else {
+    h+='<div class="card"><p class="empty" style="padding:14px 4px;">PCP ainda não carregado. Assim que o fluxo do Power Automate rodar (ou você importar na aba 📦 Pedidos), os pedidos aparecem aqui.</p></div>';
+  }
+
+  // Entregues ontem
+  h+='<div class="card"><h3>📦 Entregues ontem ('+ontem.toLocaleDateString('pt-BR')+')</h3>';
+  if(entreguesOntemMF.length||saiuOntem.length){
+    h+='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;"><div><span style="font-size:26px;font-weight:800;color:#15803d;">'+entreguesOntemMF.length+'</span> <span style="font-size:12px;color:#888;">quadros aprovados na montagem final</span></div>';
+    if(saiuOntem.length)h+='<div><span style="font-size:26px;font-weight:800;color:#2563eb;">'+saiuOntem.length+'</span> <span style="font-size:12px;color:#888;">pedidos com envio ontem</span></div>';
+    h+='</div>';
+    if(entreguesOntemMF.length){const ops=entreguesOntemMF.map(a=>'OP '+esc(a.opNum||'—')).slice(0,20).join(' · ');h+='<div style="font-size:12px;color:#777;">'+ops+(entreguesOntemMF.length>20?' …':'')+'</div>';}
+  } else { h+='<p class="empty" style="padding:6px 2px;">Nenhum quadro aprovado na montagem final nem envio registrado ontem.</p>'; }
+  h+='</div>';
+
+  // GD último dia
+  h+='<div class="card" style="border-left:4px solid #6d28d9;"><h3>📋 GD — '+(ult?gdFmtData(ult.data):'sem registro')+'</h3>';
+  if(ult){
+    if(gdOcorr.length){h+='<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px;">Ocorrências / problemas</div><ul style="margin:0 0 10px 0;padding-left:18px;font-size:13px;line-height:1.6;">'+gdOcorr.map(o=>'<li><strong>'+esc(o.tipo)+'</strong>'+(o.detalhe?': '+esc(o.detalhe):'')+'</li>').join('')+'</ul>';}
+    else h+='<div style="font-size:13px;color:#15803d;margin-bottom:10px;">✓ Sem ocorrências registradas no dia.</div>';
+    if(n2acoes.length){h+='<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px;">Ações do N2</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.6;">'+n2acoes.slice(0,12).map(a=>'<li>'+esc(a.descricao)+(a.responsavel?' <span style="color:#999;">— '+esc(a.responsavel)+'</span>':'')+(a.status?' <span style="font-size:11px;color:#2563eb;">['+esc(a.status)+']</span>':'')+'</li>').join('')+'</ul>';}
+    if(n2&&n2.escalada&&n2.escalada.trim())h+='<div style="font-size:13px;color:#b45309;margin-top:8px;">⬆ Escalada N2: '+esc(n2.escalada.trim())+'</div>';
+  } else { h+='<p class="empty" style="padding:6px 2px;">Nenhum registro de GD ainda. Preencha na aba 📋 GD Diário.</p>'; }
+  h+='</div>';
+
+  out.innerHTML=h;
+}
+
 // ── AGENTE LEAN DO MÊS: dataset completo + prompt + PPTX ──
 // resumo qualitativo da Gestão Diária (GD) do mês: ocorrências, riscos e ações do N2
 function _gdResumoMes(mesStr){
@@ -5079,6 +5245,7 @@ async function autoSyncPull(){
     if(changed){
       try{if(currentPage==='previsao')renderPrevisao();}catch(e){}
       try{if(currentPage==='firstpass')renderFirstPass();}catch(e){}
+      try{if(currentPage==='central')renderCentral();}catch(e){}
       try{if(currentPage==='gd'&&typeof renderGD==='function')renderGD();}catch(e){}
     }
   }catch(e){}

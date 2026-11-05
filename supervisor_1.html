@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v116</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v117</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -4077,12 +4077,13 @@ function renderOperadores(){
   const extra={};
   finalizados.forEach(a=>{
     const setor=(a.setor==='geral')?'eletrica':a.setor;const id=a.colabId;if(id==null)return;
-    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0});
+    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0,modelos:{}});
     const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);const prev=tempoModeloSetor(m,setor);
-    if(prev>0){const liq=tempoLiquido(a);o.aval++;if(liq>prev*(1+tol)){o.atr++;o.over+=(liq-prev);o.itens.push({op:a.opNum||'—',modelo:m?m.codigo:(a.modeloLabel||'—'),setor,prev,liq,over:liq-prev,data:dataLocalStr(a.fim)});}}
+    const cod=m?m.codigo:(a.modeloLabel||'—');o.modelos=o.modelos||{};o.modelos[cod]=(o.modelos[cod]||0)+1;
+    if(prev>0){const liq=tempoLiquido(a);o.aval++;if(liq>prev*(1+tol)){o.atr++;o.over+=(liq-prev);o.itens.push({op:a.opNum||'—',modelo:cod,setor,prev,liq,over:liq-prev,data:dataLocalStr(a.fim)});}}
   });
   apts.forEach(a=>{ if(_operMes&&refMes(a)!==_operMes)return; const id=a.colabId;if(id==null)return;
-    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0});
+    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0,modelos:{}});
     if(a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length)o.retrab++;
     if(a.itensFaltando)o.itensFalt++;
     if(a.erros&&a.erros.length)o.erros+=a.erros.length;
@@ -4097,7 +4098,7 @@ function renderOperadores(){
   const ids=new Set([...Object.keys(stats),...Object.keys(extra)]);
   let cards=[];
   ids.forEach(idStr=>{
-    const st=stats[idStr];const ex=extra[idStr]||{aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0};
+    const st=stats[idStr];const ex=extra[idStr]||{aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0,modelos:{}};
     if(!((st&&st.volume>0)||ex.aval>0||ex.retrab||ex.itensFalt||ex.erros))return;
     const c=(S.colaboradores||[]).find(x=>x&&String(x.id)===String(idStr));
     cards.push({id:idStr,nome:c?c.nome:(st?st.nome:'—'),setor:c?c.setor:(st?st.setor:''),st,ex});
@@ -4151,6 +4152,12 @@ function renderOperadores(){
       +metric('Aproveit.',aproC==null?'—':aproC+'%',aproC==null?'#888':aproC>=80?'#15803d':aproC>=70?'#d97706':'#dc2626')
       +metric('Prod. real',(st&&st.prodReal!=null)?st.prodReal+'%':'—','#2563eb')
       +'</div></div>';
+    // modelos montados
+    const mods=ex.modelos?Object.entries(ex.modelos).sort((a,b)=>b[1]-a[1]):[];
+    if(mods.length){
+      const chips=mods.slice(0,16).map(mm2=>'<span style="display:inline-block;background:#eef2f7;color:#334155;border-radius:99px;padding:2px 9px;font-size:12px;font-weight:600;margin:3px 4px 0 0;">'+esc(mm2[0])+' <strong>×'+mm2[1]+'</strong></span>').join('');
+      h+='<div style="margin-top:12px;"><div style="font-size:11px;color:#8a8f98;font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px;">🧱 Modelos montados ('+mods.length+')</div>'+chips+(mods.length>16?' <span style="font-size:11px;color:#aaa;">+'+(mods.length-16)+' modelos</span>':'')+'</div>';
+    }
     // motivos
     h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;">';
     h+='<div style="background:#fef5f4;border:1px solid #f6d9d5;border-radius:10px;padding:10px 12px;"><div style="font-size:12px;font-weight:800;color:#b91c1c;margin-bottom:5px;">⚠ Pontos a cobrar</div>'+(cobrar.length?'<ul style="margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:#7a2420;">'+cobrar.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<div style="font-size:12.5px;color:#15803d;">Nada a cobrar neste período. 👏</div>')+'</div>';

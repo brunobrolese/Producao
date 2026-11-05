@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v115</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v116</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -199,6 +199,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <button onclick="nav('firstpass',this)">✅ First Pass</button>
     <button onclick="nav('tempos',this)">⏱ Tempos</button>
     <button onclick="nav('prod',this)">📊 Produtividade</button>
+    <button onclick="nav('oper',this)">🎯 Operadores</button>
     <button onclick="nav('rel',this)">📄 Relatório</button>
     <button onclick="nav('obs',this)">📝 Observações</button>
     <button onclick="nav('ana',this)">🔎 Análise de Erros</button>
@@ -217,6 +218,18 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         <button onclick="renderCentral()" style="padding:7px 14px;border:none;border-radius:8px;background:#eef2f7;color:#555;font-size:13px;font-weight:700;cursor:pointer;">↻ Atualizar</button>
       </div>
       <div id="central-out"></div>
+    </div>
+
+    <!-- OPERADORES -->
+    <div id="page-oper" class="page">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+        <h2 style="margin:0;">🎯 Produtividade por operador</h2>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div><label style="font-size:12px;color:#666;">Período</label><br><select id="operMes" onchange="_operMes=this.value;renderOperadores()" style="padding:7px;border:1px solid #ddd;border-radius:8px;"></select></div>
+          <div><label style="font-size:12px;color:#666;" title="Margem antes de contar um quadro como 'acima do tempo'.">Tolerância %</label><br><input id="operTol" type="number" min="0" value="10" oninput="_operTol=this.value;renderOperadores()" style="width:80px;padding:7px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;"/></div>
+        </div>
+      </div>
+      <div id="oper-cont"></div>
     </div>
 
     <!-- DASHBOARD -->
@@ -1376,6 +1389,7 @@ function nav(id,btn){
   if(id==='firstpass')renderFirstPass();
   if(id==='tempos')renderControleTempo();
   if(id==='prod')renderProdutividade();
+  if(id==='oper')renderOperadores();
   if(id==='rel')popularRelColab();
   if(id==='obs')renderObservacoes();
   if(id==='ana')popularAnaMeses();
@@ -4042,6 +4056,116 @@ function renderControleTempo(){
     }
   });
   h+='</tbody></table></div></div>';
+  cont.innerHTML=h;
+}
+// ── DOSSIÊ POR OPERADOR (produtividade + motivos para cobrar) ──
+let _operMes='',_operTol='10',_operOpen=new Set();
+function toggleOper(id){ if(_operOpen.has(id))_operOpen.delete(id); else _operOpen.add(id); renderOperadores(); }
+function renderOperadores(){
+  const cont=document.getElementById('oper-cont'); if(!cont)return;
+  const esc=s=>_gdEsc(s);
+  const selM=document.getElementById('operMes');
+  if(selM){const set=new Set();(S.apontamentos||[]).forEach(a=>{if(a&&a.fim&&a.tipoRegistro!=='sem_chapa'){const m=mesLocalStr(a.fim);if(m)set.add(m);}});const meses=Array.from(set).sort().reverse();if(_operMes&&!meses.includes(_operMes))_operMes='';selM.innerHTML='<option value="">Acumulado (tudo)</option>'+meses.map(m=>'<option value="'+m+'"'+(m===_operMes?' selected':'')+'>'+_nomeMes(m)+'</option>').join('');}
+  const tol=Math.max(0,Number(_operTol)||0)/100;
+  const inMes=iso=>!_operMes||mesLocalStr(iso)===_operMes;
+  const refMes=a=>mesLocalStr((a&&a.mf&&a.mf.fim)||(a&&a.fim)||(a&&a.inicio)||'');
+  const apts=(S.apontamentos||[]).filter(a=>a&&a.tipoRegistro!=='sem_chapa');
+  const finalizados=apts.filter(a=>a.fim&&inMes(a.fim)&&(a.setor==='chapa'||a.setor==='eletrica'));
+  const pool=apts.filter(a=>(a.setor==='chapa'||a.setor==='eletrica')&&((a.inicio&&inMes(a.inicio))||(a.fim&&inMes(a.fim))));
+  const stats=calcProdStats(finalizados,pool,ts=>inMes(ts));
+  // evidências por operador: atrasos + retrabalho/itens/erros
+  const extra={};
+  finalizados.forEach(a=>{
+    const setor=(a.setor==='geral')?'eletrica':a.setor;const id=a.colabId;if(id==null)return;
+    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0});
+    const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);const prev=tempoModeloSetor(m,setor);
+    if(prev>0){const liq=tempoLiquido(a);o.aval++;if(liq>prev*(1+tol)){o.atr++;o.over+=(liq-prev);o.itens.push({op:a.opNum||'—',modelo:m?m.codigo:(a.modeloLabel||'—'),setor,prev,liq,over:liq-prev,data:dataLocalStr(a.fim)});}}
+  });
+  apts.forEach(a=>{ if(_operMes&&refMes(a)!==_operMes)return; const id=a.colabId;if(id==null)return;
+    const o=extra[id]||(extra[id]={aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0});
+    if(a.retrabalho&&a.retrabalho.setores&&a.retrabalho.setores.length)o.retrab++;
+    if(a.itensFaltando)o.itensFalt++;
+    if(a.erros&&a.erros.length)o.erros+=a.erros.length;
+  });
+  // médias da equipe
+  const arr=Object.values(stats);
+  const efVal=arr.filter(s=>s.eficiencia!=null).map(s=>s.eficiencia);
+  const efMedia=efVal.length?Math.round(efVal.reduce((a,b)=>a+b,0)/efVal.length):null;
+  const volArr=arr.map(s=>s.volume||0);
+  const volMedia=volArr.length?Math.round(volArr.reduce((a,b)=>a+b,0)/volArr.length):0;
+  // união de operadores com dados
+  const ids=new Set([...Object.keys(stats),...Object.keys(extra)]);
+  let cards=[];
+  ids.forEach(idStr=>{
+    const st=stats[idStr];const ex=extra[idStr]||{aval:0,atr:0,over:0,itens:[],retrab:0,itensFalt:0,erros:0};
+    if(!((st&&st.volume>0)||ex.aval>0||ex.retrab||ex.itensFalt||ex.erros))return;
+    const c=(S.colaboradores||[]).find(x=>x&&String(x.id)===String(idStr));
+    cards.push({id:idStr,nome:c?c.nome:(st?st.nome:'—'),setor:c?c.setor:(st?st.setor:''),st,ex});
+  });
+  if(!cards.length){cont.innerHTML='<div style="background:#fff;border:1px solid #eceef1;border-radius:12px;padding:16px;"><p class="empty" style="margin:0;">Sem dados de produção neste período. Cadastre os tempos dos modelos (aba Modelos) para habilitar a comparação de atraso.</p></div>';return;}
+  cards.sort((a,b)=>(b.ex.atr-a.ex.atr)||(((a.st&&a.st.aproveitamento!=null)?a.st.aproveitamento:100)-((b.st&&b.st.aproveitamento!=null)?b.st.aproveitamento:100)));
+  // resumo geral
+  const totAval=cards.reduce((s,c)=>s+c.ex.aval,0),totAtr=cards.reduce((s,c)=>s+c.ex.atr,0);
+  const pzGeral=totAval>0?Math.round((totAval-totAtr)/totAval*100):null;
+  const corPct=p=>p==null?'#888':p>=90?'#15803d':p>=70?'#d97706':'#dc2626';
+  const tile=(lbl,val,cor,sub)=>'<div style="background:#fff;border:1px solid #eceef1;border-radius:12px;padding:12px 14px;"><div style="font-size:11px;color:#8a8f98;font-weight:700;text-transform:uppercase;letter-spacing:.03em;">'+lbl+'</div><div style="font-size:26px;font-weight:800;line-height:1.15;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:#9aa0a6;margin-top:2px;">'+sub+'</div>':'')+'</div>';
+  let h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;">'
+    +tile('👥 Operadores',cards.length,'#1a1a1a','com produção no período')
+    +tile('🧩 Quadros avaliados',totAval,'#2563eb','com tempo-padrão')
+    +tile('⏰ Acima do tempo',totAtr,totAtr?'#dc2626':'#15803d','passaram do previsto')
+    +tile('✅ No prazo',pzGeral==null?'—':pzGeral+'%',corPct(pzGeral),'da equipe')
+    +(efMedia!=null?tile('📈 Eficiência média',efMedia+'%','#1a1a1a','da equipe'):'')
+    +'</div>';
+  h+='<div style="font-size:12px;color:#999;margin-bottom:8px;">Ordenado por quem tem mais pontos a resolver. Clique no operador para ver os quadros acima do tempo.</div>';
+  // cartões por operador
+  const mm=v=>_fmtDurDia(v);
+  cards.forEach(c=>{
+    const st=c.st,ex=c.ex;
+    const pz=ex.aval>0?Math.round((ex.aval-ex.atr)/ex.aval*100):null;
+    const aproC=st&&st.aproveitamento!=null?st.aproveitamento:null;
+    const efC=st&&st.eficiencia!=null?st.eficiencia:null;
+    // motivos
+    const cobrar=[],bons=[];
+    if(ex.atr>0){const med=Math.round(ex.over/ex.atr);const piores=ex.itens.slice().sort((a,b)=>b.over-a.over).slice(0,3).map(it=>'OP '+esc(it.op)+' (+'+mm(it.over)+')').join(', ');cobrar.push(ex.atr+' de '+ex.aval+' quadros acima do tempo-padrão (atraso médio +'+mm(med)+'). Piores: '+piores+'.');}
+    if(aproC!=null&&aproC<75)cobrar.push('Muito tempo parado: aproveitamento de '+aproC+'% (o resto foi pausa/espera).');
+    if(efC!=null&&efMedia!=null&&efC<efMedia-10)cobrar.push('Eficiência de '+efC+'%, abaixo da média da equipe ('+efMedia+'%).');
+    if(ex.retrab>0)cobrar.push('Retrabalho em '+ex.retrab+' quadro(s).');
+    if(ex.itensFalt>0)cobrar.push('Itens faltando em '+ex.itensFalt+' quadro(s) — conferência/abastecimento.');
+    if(ex.erros>0)cobrar.push(ex.erros+' erro(s) registrado(s) nos quadros.');
+    if(st&&st.volume!=null&&volMedia>0&&st.volume<volMedia*0.6)cobrar.push('Produção abaixo da média: '+st.volume+' quadros (média da equipe '+volMedia+').');
+    if(ex.aval>0&&ex.atr===0)bons.push('100% dos quadros dentro do tempo-padrão.');
+    else if(pz!=null&&pz>=90)bons.push(pz+'% dos quadros no prazo.');
+    if(efC!=null&&efMedia!=null&&efC>=efMedia+5)bons.push('Eficiência de '+efC+'%, acima da média.');
+    if(ex.retrab===0&&ex.itensFalt===0&&ex.erros===0&&st&&st.volume>0)bons.push('Sem retrabalho, itens faltando ou erros.');
+    if(st&&st.volume!=null&&volMedia>0&&st.volume>volMedia*1.3)bons.push('Bom volume: '+st.volume+' quadros (média '+volMedia+').');
+    const aberto=_operOpen.has(c.id);
+    const setorLbl=c.setor==='chapa'?'🔧 Chapa':c.setor==='mf'?'🔍 Mont. Final':'⚡ Elétrica';
+    const metric=(lbl,val,cor)=>'<div style="text-align:center;min-width:70px;"><div style="font-size:19px;font-weight:800;'+(cor?'color:'+cor+';':'')+'">'+val+'</div><div style="font-size:10px;color:#9aa0a6;text-transform:uppercase;letter-spacing:.02em;">'+lbl+'</div></div>';
+    h+='<div style="background:#fff;border:1px solid #eceef1;border-radius:12px;padding:14px 16px;margin-bottom:10px;">';
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;" onclick="toggleOper(\''+c.id+'\')">'
+      +'<div style="font-size:16px;font-weight:800;">'+(aberto?'▾ ':'▸ ')+esc(c.nome)+' <span style="font-size:11px;font-weight:600;color:#9aa0a6;">'+setorLbl+'</span></div>'
+      +'<div style="display:flex;gap:16px;flex-wrap:wrap;">'
+      +metric('Painéis',st?st.volume:0,'#1a1a1a')
+      +metric('No prazo',pz==null?'—':pz+'%',corPct(pz))
+      +metric('Eficiência',efC==null?'—':efC+'%',efC==null?'#888':efC>=90?'#15803d':efC>=70?'#d97706':'#dc2626')
+      +metric('Aproveit.',aproC==null?'—':aproC+'%',aproC==null?'#888':aproC>=80?'#15803d':aproC>=70?'#d97706':'#dc2626')
+      +metric('Prod. real',(st&&st.prodReal!=null)?st.prodReal+'%':'—','#2563eb')
+      +'</div></div>';
+    // motivos
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:12px;">';
+    h+='<div style="background:#fef5f4;border:1px solid #f6d9d5;border-radius:10px;padding:10px 12px;"><div style="font-size:12px;font-weight:800;color:#b91c1c;margin-bottom:5px;">⚠ Pontos a cobrar</div>'+(cobrar.length?'<ul style="margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:#7a2420;">'+cobrar.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<div style="font-size:12.5px;color:#15803d;">Nada a cobrar neste período. 👏</div>')+'</div>';
+    h+='<div style="background:#f1faf4;border:1px solid #cdeeda;border-radius:10px;padding:10px 12px;"><div style="font-size:12px;font-weight:800;color:#15803d;margin-bottom:5px;">👍 Pontos positivos</div>'+(bons.length?'<ul style="margin:0;padding-left:16px;font-size:12.5px;line-height:1.55;color:#1e5b38;">'+bons.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'<div style="font-size:12.5px;color:#999;">—</div>')+'</div>';
+    h+='</div>';
+    // detalhe OPs
+    if(aberto){
+      if(ex.itens.length){
+        h+='<div style="overflow-x:auto;margin-top:10px;"><table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr style="text-align:left;color:#999;border-bottom:1px solid #eee;font-size:11px;"><th style="padding:5px;">OP</th><th style="padding:5px;">MODELO</th><th style="padding:5px;text-align:center;">PREVISTO</th><th style="padding:5px;text-align:center;">REAL</th><th style="padding:5px;text-align:right;">ATRASO</th></tr></thead><tbody>'
+          +ex.itens.slice().sort((a,b)=>b.over-a.over).map(it=>'<tr style="border-bottom:1px solid #f5f5f5;"><td style="padding:5px;font-weight:700;">'+esc(it.op)+'</td><td style="padding:5px;">'+esc(it.modelo)+' <span style="color:#aaa;">'+(it.setor==='chapa'?'🔧':'⚡')+'</span></td><td style="padding:5px;text-align:center;color:#888;">'+mm(it.prev)+'</td><td style="padding:5px;text-align:center;">'+mm(it.liq)+'</td><td style="padding:5px;text-align:right;color:#b91c1c;font-weight:700;">+'+mm(it.over)+' <span style="color:#bbb;font-weight:400;">'+(it.data?it.data.slice(8,10)+'/'+it.data.slice(5,7):'')+'</span></td></tr>').join('')
+          +'</tbody></table></div>';
+      } else h+='<div style="margin-top:10px;font-size:12.5px;color:#15803d;">Nenhum quadro acima do tempo neste período. 👏</div>';
+    }
+    h+='</div>';
+  });
   cont.innerHTML=h;
 }
 // ── FIRST PASS POR MONTADOR (planilha Área de Testes) ──

@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v121</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v122</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -3665,6 +3665,26 @@ async function anaPptx(){
     topModelos.forEach(x=>rowsM.push([String(x[0]),String(x[1])]));
     s.addTable(rowsM.length>1?rowsM:[[hdr('Modelo'),hdr('Erros')],['Sem dados','—']],{x:6.6,y:1.85,w:6.1,fontSize:13,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.42,valign:'middle',align:'center'});
     if(opsRec.length)s.addText('OPs com erro repetido:   '+opsRec.map(x=>'OP '+x[0]+' ('+x[1]+'×)').join('     '),{x:0.6,y:5.7,w:12.1,h:0.8,fontSize:13,color:'A32D2D'});
+    // 5b — erros registrados (cita quais erros ocorreram)
+    const PER=11,CAPCAT=30;
+    paretoCats.forEach(c=>{
+      const its=erros.filter(o=>o._cat===c.key).sort((a,b)=>(String(a._mes||'')).localeCompare(String(b._mes||''))||((new Date(a.hora))-(new Date(b.hora))));
+      const extra=Math.max(0,its.length-CAPCAT);
+      const linhas=its.slice(0,CAPCAT).map(o=>{
+        const d=o.hora?new Date(o.hora).toLocaleDateString('pt-BR'):_anaMesCurto(o._mes||'');
+        const op=o.opNum?'OP '+o.opNum+' · ':'';
+        const md=o.modeloLabel?o.modeloLabel+' · ':'';
+        const tx=String(o.texto||'').trim().replace(/\s+/g,' ');
+        return op+md+d+' — "'+(tx.length>130?tx.slice(0,130)+'…':(tx||'(sem descrição)'))+'"';
+      });
+      if(extra>0)linhas.push('… e mais '+extra+' erro(s) desta categoria no período.');
+      for(let i=0;i<Math.max(1,linhas.length);i+=PER){
+        const chunk=linhas.slice(i,i+PER);
+        const sl=P.addSlide();titulo(sl,'Erros registrados — '+semEmoji(c.label)+(i>0?' (cont.)':''));
+        sl.addText(cont[c.key]+' erro(s) no período'+(periodo==='todos'?' (todos os meses)':'')+'.',{x:0.6,y:1.25,w:12.1,h:0.3,fontSize:11,color:'9CA3AF'});
+        if(chunk.length)sl.addText(chunk.map(t=>({text:t,options:{bullet:{code:'2022'},color:'333333',fontSize:13,paraSpaceAfter:7}})),{x:0.7,y:1.7,w:12,h:5.2,valign:'top'});
+      }
+    });
     // 6 — plano de ação
     s=P.addSlide();titulo(s,'Plano de ação'+(periodo==='todos'?' (ação mais recente por categoria)':''));
     const rowsPl=[['Categoria','Erros','Causa raiz','Ação corretiva','Resp.','Prazo','Status'].map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'},fontSize:11}}))];

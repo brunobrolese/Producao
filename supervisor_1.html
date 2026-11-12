@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v120</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v121</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -596,7 +596,22 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
           <select id="anaCat" onchange="anaTrocarCat()"></select>
         </div>
       </div>
-      <button id="btnAnaPptx" onclick="anaPptx()" style="padding:9px 18px;border-radius:8px;border:none;background:#2b6cb0;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:16px;">📊 Gerar PowerPoint para a gerência</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;background:#f6f8fb;border:1px solid #e6ebf2;border-radius:10px;padding:10px 12px;">
+        <div><label style="font-size:12px;color:#666;">PowerPoint — período</label><br>
+          <select id="anaPptxPer" style="padding:7px;border:1px solid #ccc;border-radius:8px;">
+            <option value="mes">Mês selecionado acima</option>
+            <option value="todos">Todos os meses (consolidado)</option>
+          </select></div>
+        <div><label style="font-size:12px;color:#666;">Tipo de erro</label><br>
+          <select id="anaPptxCat" style="padding:7px;border:1px solid #ccc;border-radius:8px;">
+            <option value="">Todos os erros</option>
+            <option value="projeto">📐 Erro de projeto</option>
+            <option value="material">📦 Falta de material</option>
+            <option value="planilha">📋 Erro de planilha</option>
+            <option value="ligacao">🔌 Erro de ligação</option>
+          </select></div>
+        <button id="btnAnaPptx" onclick="anaPptx()" style="padding:9px 18px;border-radius:8px;border:none;background:#2b6cb0;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">📊 Gerar PowerPoint</button>
+      </div>
       <div id="ana-conteudo"></div>
     </div>
 
@@ -3570,17 +3585,26 @@ function renderAnalise(){
     </div>`+planos+
     `<div style="font-size:11px;color:#999;margin-top:6px;">As sugestões são apenas um ponto de partida. A causa raiz real deve sair da conversa com quem executa — use os exemplos acima como base na próxima GD.</div>`;
 }
+function _anaMesCurto(mes){const[a,b]=String(mes).split('-');return b+'/'+(a||'').slice(2);}
+function _anaAcaoRecente(meses,catKey){
+  for(let i=meses.length-1;i>=0;i--){const a=anaGetAcao(meses[i],catKey)||{};if(a.causa||a.acao||a.responsavel||a.prazo||(a.status&&a.status!=='aberto'))return Object.assign({_mes:meses[i]},a);}
+  const last=meses[meses.length-1];return Object.assign({_mes:last},anaGetAcao(last,catKey)||{});
+}
 async function anaPptx(){
-  const mes=_anaMes||mesLocalStr(new Date());
+  const perSel=document.getElementById('anaPptxPer');const periodo=perSel?perSel.value:'mes';
+  const catEl=document.getElementById('anaPptxCat');const catSel=catEl?catEl.value:'';
   const btn=document.getElementById('btnAnaPptx');const orig=btn?btn.textContent:'';
+  const mesAtual=_anaMes||mesLocalStr(new Date());
   try{
-    const todas=anaErrosDoMes(mes);
-    const erros=todas.filter(o=>o._cat!=='outros');
-    if(!erros.length){toast('Nenhum erro classificado neste mês.');return;}
+    const meses=(periodo==='todos')?anaMesesDisponiveis().slice().sort():[mesAtual];
+    // coleta de erros no escopo
+    const porMes={};let erros=[];
+    meses.forEach(mes=>{const e=anaErrosDoMes(mes).filter(o=>o._cat!=='outros'&&(!catSel||o._cat===catSel));porMes[mes]=e.length;e.forEach(o=>{o._mes=mes;erros.push(o);});});
+    if(!erros.length){toast('Nenhum erro classificado neste escopo.');return;}
     if(btn){btn.disabled=true;btn.textContent='⏳ Gerando...';}
     await carregarPptx();
-    const [ay,am]=mes.split('-').map(Number);const dAnt=new Date(ay,am-2,1);const mesAnt=dAnt.getFullYear()+'-'+String(dAnt.getMonth()+1).padStart(2,'0');
-    const errosAnt=anaErrosDoMes(mesAnt).filter(o=>o._cat!=='outros');
+    const statusLbl={aberto:'Aberto',em_andamento:'Em andamento',concluido:'Concluído'};
+    const semEmoji=s=>String(s||'').replace(/^[^ ]+\s/,'');
     const cats=CATEGORIAS_ERRO.filter(c=>c.key!=='outros');
     const cont={};cats.forEach(c=>cont[c.key]=erros.filter(o=>o._cat===c.key).length);
     const total=erros.length;
@@ -3592,9 +3616,9 @@ async function anaPptx(){
     const topModelos=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]).slice(0,6);
     const porOp={};erros.forEach(o=>{if(o.opNum)porOp[o.opNum]=(porOp[o.opNum]||0)+1;});
     const opsRec=Object.entries(porOp).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]).slice(0,8);
-    const difTotal=total-errosAnt.length;
-    const statusLbl={aberto:'Aberto',em_andamento:'Em andamento',concluido:'Concluído'};
-    const semEmoji=s=>String(s||'').replace(/^[^ ]+\s/,'');
+    const catNome=catSel?semEmoji((CAT_ERRO_LBL[catSel]||{}).label||catSel):'Todos os erros';
+    const periodoTxt=(periodo==='todos')?(_nomeMes(meses[0])+(meses.length>1?' – '+_nomeMes(meses[meses.length-1]):'')):_nomeMes(mesAtual);
+    const getAcao=(periodo==='todos')?(k=>_anaAcaoRecente(meses,k)):(k=>Object.assign({_mes:mesAtual},anaGetAcao(mesAtual,k)||{}));
 
     const P=new PptxGenJS();P.layout='LAYOUT_WIDE';
     const AZ='1a1a1a',VERM='A32D2D',AC='3550B4';
@@ -3602,24 +3626,35 @@ async function anaPptx(){
     const hdr=t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'}}});
     // 1 — capa
     let s=P.addSlide();s.background={color:'0F1115'};
-    s.addText('Análise de Erros',{x:0.7,y:2.4,w:11.9,h:1,fontSize:44,bold:true,color:'FFFFFF'});
-    s.addText(_nomeMes(mes),{x:0.7,y:3.5,w:11.9,h:0.6,fontSize:26,color:'F87171'});
+    s.addText('Análise de Erros',{x:0.7,y:2.2,w:11.9,h:1,fontSize:44,bold:true,color:'FFFFFF'});
+    s.addText(periodoTxt,{x:0.7,y:3.3,w:11.9,h:0.6,fontSize:26,color:'F87171'});
+    if(catSel)s.addText('Filtro: '+catNome,{x:0.7,y:4.1,w:11.9,h:0.5,fontSize:16,color:'FBBF24'});
     s.addText('Procer — Painéis Elétricos',{x:0.7,y:6.5,w:11.9,h:0.5,fontSize:14,color:'6B7280'});
     // 2 — resumo (KPIs)
-    s=P.addSlide();titulo(s,'Resumo do mês');
+    s=P.addSlide();titulo(s,'Resumo'+(catSel?' — '+catNome:''));
     const kpi=(x,lbl,val,sub,cor)=>{s.addShape(P.ShapeType.roundRect,{x,y:1.8,w:2.9,h:2,fill:{color:'F4F5F7'},line:{color:'E5E5E5',width:1},rectRadius:0.1});s.addText(lbl,{x,y:1.98,w:2.9,h:0.4,fontSize:11,color:'6B7280',align:'center',bold:true});s.addText(val,{x,y:2.35,w:2.9,h:0.9,fontSize:38,bold:true,color:cor,align:'center'});s.addText(sub,{x,y:3.25,w:2.9,h:0.5,fontSize:11,color:'9CA3AF',align:'center'});};
-    const tendTxt=errosAnt.length===0?'sem base anterior':((difTotal>0?'▲ +'+difTotal:difTotal<0?'▼ '+Math.abs(difTotal):'→ igual')+' vs '+_nomeMes(mesAnt));
-    kpi(0.7,'ERROS NO MÊS',String(total),tendTxt,difTotal>0?VERM:'16A34A');
-    kpi(3.75,'CATEGORIA TOP',String(cont[ordenadas[0].key]),semEmoji(ordenadas[0].label),VERM);
+    let subTot;
+    if(periodo==='todos')subTot=meses.length+' meses';
+    else{const[ay,am]=mesAtual.split('-').map(Number);const dA=new Date(ay,am-2,1);const mAnt=dA.getFullYear()+'-'+String(dA.getMonth()+1).padStart(2,'0');const nAnt=anaErrosDoMes(mAnt).filter(o=>o._cat!=='outros'&&(!catSel||o._cat===catSel)).length;const dif=total-nAnt;subTot=nAnt===0?'sem base anterior':((dif>0?'▲ +'+dif:dif<0?'▼ '+Math.abs(dif):'→ igual')+' vs '+_nomeMes(mAnt));}
+    kpi(0.7,'ERROS NO PERÍODO',String(total),subTot,VERM);
+    if(catSel)kpi(3.75,'MODELO TOP',topModelos[0]?String(topModelos[0][1]):'0',topModelos[0]?String(topModelos[0][0]):'—',VERM);
+    else kpi(3.75,'CATEGORIA TOP',String(cont[ordenadas[0].key]),semEmoji(ordenadas[0].label),VERM);
     kpi(6.8,'ÁREA MAIS AFETADA',String(contArea[areaTop]||0),semEmoji(OBS_AREA_LBL[areaTop]||areaTop),AC);
     kpi(9.85,'OPs C/ ERRO REPETIDO',String(opsRec.length),'reincidência',opsRec.length?'F59E0B':'16A34A');
-    // 3 — Pareto
-    s=P.addSlide();titulo(s,'Pareto — onde concentrar o esforço');
-    s.addChart(P.ChartType.bar,[{name:'Erros',labels:paretoCats.map(c=>semEmoji(c.label)),values:paretoCats.map(c=>cont[c.key])}],{x:0.6,y:1.5,w:7.2,h:5,barDir:'bar',chartColors:[VERM],showValue:true,catAxisLabelFontSize:10,dataLabelFontSize:11,valAxisMinVal:0});
-    let acum=0;const boxP=[{text:'Prioridade (regra de Pareto)',options:{bold:true,fontSize:15,color:'B91C1C',paraSpaceAfter:8}}];
-    paretoCats.forEach((c,i)=>{const n=cont[c.key];const pct=total?Math.round(n/total*100):0;acum+=pct;boxP.push({text:(i+1)+'. '+semEmoji(c.label)+' — '+n+' ('+pct+'%) · acum. '+Math.min(acum,100)+'%',options:{fontSize:12,color:'555555',paraSpaceAfter:5}});});
-    s.addText(boxP,{x:8.1,y:1.6,w:4.6,h:5,valign:'top'});
-    // 4 — onde os erros aparecem
+    // 3 — evolução mensal (só no consolidado com +de 1 mês)
+    if(periodo==='todos'&&meses.length>1){
+      s=P.addSlide();titulo(s,'Evolução mês a mês'+(catSel?' — '+catNome:''));
+      s.addChart(P.ChartType.bar,[{name:'Erros',labels:meses.map(_anaMesCurto),values:meses.map(m=>porMes[m]||0)}],{x:0.6,y:1.5,w:12.1,h:5,barDir:'col',chartColors:[VERM],showValue:true,catAxisLabelFontSize:11,dataLabelFontSize:11,valAxisMinVal:0});
+    }
+    // 4 — Pareto por categoria (só quando "todos os erros")
+    if(!catSel){
+      s=P.addSlide();titulo(s,'Pareto — onde concentrar o esforço');
+      s.addChart(P.ChartType.bar,[{name:'Erros',labels:paretoCats.map(c=>semEmoji(c.label)),values:paretoCats.map(c=>cont[c.key])}],{x:0.6,y:1.5,w:7.2,h:5,barDir:'bar',chartColors:[VERM],showValue:true,catAxisLabelFontSize:10,dataLabelFontSize:11,valAxisMinVal:0});
+      let acum=0;const boxP=[{text:'Prioridade (regra de Pareto)',options:{bold:true,fontSize:15,color:'B91C1C',paraSpaceAfter:8}}];
+      paretoCats.forEach((c,i)=>{const n=cont[c.key];const pct=total?Math.round(n/total*100):0;acum+=pct;boxP.push({text:(i+1)+'. '+semEmoji(c.label)+' — '+n+' ('+pct+'%) · acum. '+Math.min(acum,100)+'%',options:{fontSize:12,color:'555555',paraSpaceAfter:5}});});
+      s.addText(boxP,{x:8.1,y:1.6,w:4.6,h:5,valign:'top'});
+    }
+    // 5 — onde os erros aparecem
     s=P.addSlide();titulo(s,'Onde os erros aparecem');
     s.addText('Por área',{x:0.6,y:1.4,w:5,h:0.4,fontSize:14,bold:true,color:AZ});
     const rowsA=[[hdr('Área'),hdr('Erros'),hdr('%')]];
@@ -3630,21 +3665,22 @@ async function anaPptx(){
     topModelos.forEach(x=>rowsM.push([String(x[0]),String(x[1])]));
     s.addTable(rowsM.length>1?rowsM:[[hdr('Modelo'),hdr('Erros')],['Sem dados','—']],{x:6.6,y:1.85,w:6.1,fontSize:13,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.42,valign:'middle',align:'center'});
     if(opsRec.length)s.addText('OPs com erro repetido:   '+opsRec.map(x=>'OP '+x[0]+' ('+x[1]+'×)').join('     '),{x:0.6,y:5.7,w:12.1,h:0.8,fontSize:13,color:'A32D2D'});
-    // 5 — plano de ação
-    s=P.addSlide();titulo(s,'Plano de ação');
+    // 6 — plano de ação
+    s=P.addSlide();titulo(s,'Plano de ação'+(periodo==='todos'?' (ação mais recente por categoria)':''));
     const rowsPl=[['Categoria','Erros','Causa raiz','Ação corretiva','Resp.','Prazo','Status'].map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'},fontSize:11}}))];
-    paretoCats.forEach(c=>{const a=anaGetAcao(mes,c.key)||{};rowsPl.push([semEmoji(c.label),String(cont[c.key]),(a.causa||'—').slice(0,90),(a.acao||'—').slice(0,90),(a.responsavel||'—'),(a.prazo||'—'),(statusLbl[a.status]||'Aberto')]);});
+    paretoCats.forEach(c=>{const a=getAcao(c.key);rowsPl.push([semEmoji(c.label),String(cont[c.key]),(a.causa||'—').slice(0,90),(a.acao||'—').slice(0,90),(a.responsavel||'—'),(a.prazo||'—'),(statusLbl[a.status]||'Aberto')]);});
     s.addTable(rowsPl,{x:0.35,y:1.5,w:12.6,fontSize:10,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.4,valign:'middle',colW:[1.8,0.7,3.15,3.15,1.4,1.1,1.3]});
-    // 6 — próximos passos
+    // 7 — próximos passos
     s=P.addSlide();titulo(s,'Próximos passos');
     const top=paretoCats[0];const nextBul=[];
-    if(top)nextBul.push('Atacar primeiro: '+semEmoji(top.label)+' ('+cont[top.key]+' erros, '+(total?Math.round(cont[top.key]/total*100):0)+'% do total).');
+    if(top)nextBul.push((catSel?'Foco: '+catNome:'Atacar primeiro: '+semEmoji(top.label))+' ('+cont[top.key]+' erros, '+(total?Math.round(cont[top.key]/total*100):0)+'% do total).');
     nextBul.push('Área mais afetada: '+semEmoji(OBS_AREA_LBL[areaTop]||areaTop)+' — '+(contArea[areaTop]||0)+' erros.');
     if(opsRec.length)nextBul.push('Investigar reincidência nas OPs: '+opsRec.slice(0,5).map(x=>x[0]+' ('+x[1]+'×)').join(', ')+'.');
     nextBul.push('Definir causa raiz e responsável de cada categoria na próxima GD (N2).');
     s.addText(nextBul.map(t=>({text:t,options:{bullet:{code:'2022'},color:'333333',fontSize:16,paraSpaceAfter:10}})),{x:0.7,y:1.6,w:12,h:5,valign:'top'});
 
-    await P.writeFile({fileName:'Analise_Erros_'+mes+'.pptx'});
+    const nomeArq='Analise_Erros_'+(periodo==='todos'?'consolidado':mesAtual)+(catSel?'_'+catSel:'')+'.pptx';
+    await P.writeFile({fileName:nomeArq});
     toast('PowerPoint gerado! 📊');
   }catch(e){toast('Erro ao gerar PowerPoint: '+((e&&e.message)||e));}
   finally{if(btn){btn.disabled=false;btn.textContent=orig;}}

@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v117</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v120</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -596,6 +596,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
           <select id="anaCat" onchange="anaTrocarCat()"></select>
         </div>
       </div>
+      <button id="btnAnaPptx" onclick="anaPptx()" style="padding:9px 18px;border-radius:8px;border:none;background:#2b6cb0;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:16px;">📊 Gerar PowerPoint para a gerência</button>
       <div id="ana-conteudo"></div>
     </div>
 
@@ -927,6 +928,7 @@ async function save(){
     }
     await fetch(DB_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(S)});
     setSync(true);
+    try{publicarIndicadoresErros();}catch(e){}
   }catch(e){setSync(false);}
 }
 
@@ -1133,6 +1135,8 @@ setInterval(async()=>{
   // ── AUTO-SYNC das planilhas (Power Automate grava em /autosync; o app lê sozinho de hora em hora) ──
   setTimeout(()=>{try{autoSyncPull();}catch(e){}},1500);
   setInterval(()=>{try{autoSyncPull();}catch(e){}},3600000);
+  setTimeout(()=>{try{publicarIndicadoresErros();}catch(e){}},4000);
+  setInterval(()=>{try{publicarIndicadoresErros();}catch(e){}},3600000);
 
   // ── AUTO-RELOAD A CADA 30 MINUTOS ──
   // Recarrega a página inteira para evitar estado velho acumulado em abas abertas o dia todo.
@@ -3566,6 +3570,85 @@ function renderAnalise(){
     </div>`+planos+
     `<div style="font-size:11px;color:#999;margin-top:6px;">As sugestões são apenas um ponto de partida. A causa raiz real deve sair da conversa com quem executa — use os exemplos acima como base na próxima GD.</div>`;
 }
+async function anaPptx(){
+  const mes=_anaMes||mesLocalStr(new Date());
+  const btn=document.getElementById('btnAnaPptx');const orig=btn?btn.textContent:'';
+  try{
+    const todas=anaErrosDoMes(mes);
+    const erros=todas.filter(o=>o._cat!=='outros');
+    if(!erros.length){toast('Nenhum erro classificado neste mês.');return;}
+    if(btn){btn.disabled=true;btn.textContent='⏳ Gerando...';}
+    await carregarPptx();
+    const [ay,am]=mes.split('-').map(Number);const dAnt=new Date(ay,am-2,1);const mesAnt=dAnt.getFullYear()+'-'+String(dAnt.getMonth()+1).padStart(2,'0');
+    const errosAnt=anaErrosDoMes(mesAnt).filter(o=>o._cat!=='outros');
+    const cats=CATEGORIAS_ERRO.filter(c=>c.key!=='outros');
+    const cont={};cats.forEach(c=>cont[c.key]=erros.filter(o=>o._cat===c.key).length);
+    const total=erros.length;
+    const ordenadas=cats.slice().sort((a,b)=>cont[b.key]-cont[a.key]);
+    const paretoCats=ordenadas.filter(c=>cont[c.key]>0);
+    const areas=['chapa','eletrica','mf'];const contArea={};areas.forEach(a=>contArea[a]=erros.filter(o=>o.setor===a).length);
+    const areaTop=areas.slice().sort((a,b)=>contArea[b]-contArea[a])[0];
+    const porModelo={};erros.forEach(o=>{const k=o.modeloLabel||'—';porModelo[k]=(porModelo[k]||0)+1;});
+    const topModelos=Object.entries(porModelo).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const porOp={};erros.forEach(o=>{if(o.opNum)porOp[o.opNum]=(porOp[o.opNum]||0)+1;});
+    const opsRec=Object.entries(porOp).filter(([,n])=>n>1).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const difTotal=total-errosAnt.length;
+    const statusLbl={aberto:'Aberto',em_andamento:'Em andamento',concluido:'Concluído'};
+    const semEmoji=s=>String(s||'').replace(/^[^ ]+\s/,'');
+
+    const P=new PptxGenJS();P.layout='LAYOUT_WIDE';
+    const AZ='1a1a1a',VERM='A32D2D',AC='3550B4';
+    const titulo=(s,t)=>{s.addText(t,{x:0.6,y:0.35,w:12.1,h:0.8,fontSize:28,bold:true,color:AZ});s.addShape(P.ShapeType.line,{x:0.6,y:1.2,w:12.1,h:0,line:{color:'E5E5E5',width:1}});};
+    const hdr=t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'}}});
+    // 1 — capa
+    let s=P.addSlide();s.background={color:'0F1115'};
+    s.addText('Análise de Erros',{x:0.7,y:2.4,w:11.9,h:1,fontSize:44,bold:true,color:'FFFFFF'});
+    s.addText(_nomeMes(mes),{x:0.7,y:3.5,w:11.9,h:0.6,fontSize:26,color:'F87171'});
+    s.addText('Procer — Painéis Elétricos',{x:0.7,y:6.5,w:11.9,h:0.5,fontSize:14,color:'6B7280'});
+    // 2 — resumo (KPIs)
+    s=P.addSlide();titulo(s,'Resumo do mês');
+    const kpi=(x,lbl,val,sub,cor)=>{s.addShape(P.ShapeType.roundRect,{x,y:1.8,w:2.9,h:2,fill:{color:'F4F5F7'},line:{color:'E5E5E5',width:1},rectRadius:0.1});s.addText(lbl,{x,y:1.98,w:2.9,h:0.4,fontSize:11,color:'6B7280',align:'center',bold:true});s.addText(val,{x,y:2.35,w:2.9,h:0.9,fontSize:38,bold:true,color:cor,align:'center'});s.addText(sub,{x,y:3.25,w:2.9,h:0.5,fontSize:11,color:'9CA3AF',align:'center'});};
+    const tendTxt=errosAnt.length===0?'sem base anterior':((difTotal>0?'▲ +'+difTotal:difTotal<0?'▼ '+Math.abs(difTotal):'→ igual')+' vs '+_nomeMes(mesAnt));
+    kpi(0.7,'ERROS NO MÊS',String(total),tendTxt,difTotal>0?VERM:'16A34A');
+    kpi(3.75,'CATEGORIA TOP',String(cont[ordenadas[0].key]),semEmoji(ordenadas[0].label),VERM);
+    kpi(6.8,'ÁREA MAIS AFETADA',String(contArea[areaTop]||0),semEmoji(OBS_AREA_LBL[areaTop]||areaTop),AC);
+    kpi(9.85,'OPs C/ ERRO REPETIDO',String(opsRec.length),'reincidência',opsRec.length?'F59E0B':'16A34A');
+    // 3 — Pareto
+    s=P.addSlide();titulo(s,'Pareto — onde concentrar o esforço');
+    s.addChart(P.ChartType.bar,[{name:'Erros',labels:paretoCats.map(c=>semEmoji(c.label)),values:paretoCats.map(c=>cont[c.key])}],{x:0.6,y:1.5,w:7.2,h:5,barDir:'bar',chartColors:[VERM],showValue:true,catAxisLabelFontSize:10,dataLabelFontSize:11,valAxisMinVal:0});
+    let acum=0;const boxP=[{text:'Prioridade (regra de Pareto)',options:{bold:true,fontSize:15,color:'B91C1C',paraSpaceAfter:8}}];
+    paretoCats.forEach((c,i)=>{const n=cont[c.key];const pct=total?Math.round(n/total*100):0;acum+=pct;boxP.push({text:(i+1)+'. '+semEmoji(c.label)+' — '+n+' ('+pct+'%) · acum. '+Math.min(acum,100)+'%',options:{fontSize:12,color:'555555',paraSpaceAfter:5}});});
+    s.addText(boxP,{x:8.1,y:1.6,w:4.6,h:5,valign:'top'});
+    // 4 — onde os erros aparecem
+    s=P.addSlide();titulo(s,'Onde os erros aparecem');
+    s.addText('Por área',{x:0.6,y:1.4,w:5,h:0.4,fontSize:14,bold:true,color:AZ});
+    const rowsA=[[hdr('Área'),hdr('Erros'),hdr('%')]];
+    areas.forEach(a=>{const n=contArea[a]||0;rowsA.push([OBS_AREA_LBL[a]||a,String(n),total?Math.round(n/total*100)+'%':'0%']);});
+    s.addTable(rowsA,{x:0.6,y:1.85,w:5.6,fontSize:13,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.45,valign:'middle',align:'center'});
+    s.addText('Modelos com mais erros',{x:6.6,y:1.4,w:6,h:0.4,fontSize:14,bold:true,color:AZ});
+    const rowsM=[[hdr('Modelo'),hdr('Erros')]];
+    topModelos.forEach(x=>rowsM.push([String(x[0]),String(x[1])]));
+    s.addTable(rowsM.length>1?rowsM:[[hdr('Modelo'),hdr('Erros')],['Sem dados','—']],{x:6.6,y:1.85,w:6.1,fontSize:13,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.42,valign:'middle',align:'center'});
+    if(opsRec.length)s.addText('OPs com erro repetido:   '+opsRec.map(x=>'OP '+x[0]+' ('+x[1]+'×)').join('     '),{x:0.6,y:5.7,w:12.1,h:0.8,fontSize:13,color:'A32D2D'});
+    // 5 — plano de ação
+    s=P.addSlide();titulo(s,'Plano de ação');
+    const rowsPl=[['Categoria','Erros','Causa raiz','Ação corretiva','Resp.','Prazo','Status'].map(t=>({text:t,options:{bold:true,color:'FFFFFF',fill:{color:'1A1A1A'},fontSize:11}}))];
+    paretoCats.forEach(c=>{const a=anaGetAcao(mes,c.key)||{};rowsPl.push([semEmoji(c.label),String(cont[c.key]),(a.causa||'—').slice(0,90),(a.acao||'—').slice(0,90),(a.responsavel||'—'),(a.prazo||'—'),(statusLbl[a.status]||'Aberto')]);});
+    s.addTable(rowsPl,{x:0.35,y:1.5,w:12.6,fontSize:10,border:{type:'solid',color:'E5E5E5',pt:1},rowH:0.4,valign:'middle',colW:[1.8,0.7,3.15,3.15,1.4,1.1,1.3]});
+    // 6 — próximos passos
+    s=P.addSlide();titulo(s,'Próximos passos');
+    const top=paretoCats[0];const nextBul=[];
+    if(top)nextBul.push('Atacar primeiro: '+semEmoji(top.label)+' ('+cont[top.key]+' erros, '+(total?Math.round(cont[top.key]/total*100):0)+'% do total).');
+    nextBul.push('Área mais afetada: '+semEmoji(OBS_AREA_LBL[areaTop]||areaTop)+' — '+(contArea[areaTop]||0)+' erros.');
+    if(opsRec.length)nextBul.push('Investigar reincidência nas OPs: '+opsRec.slice(0,5).map(x=>x[0]+' ('+x[1]+'×)').join(', ')+'.');
+    nextBul.push('Definir causa raiz e responsável de cada categoria na próxima GD (N2).');
+    s.addText(nextBul.map(t=>({text:t,options:{bullet:{code:'2022'},color:'333333',fontSize:16,paraSpaceAfter:10}})),{x:0.7,y:1.6,w:12,h:5,valign:'top'});
+
+    await P.writeFile({fileName:'Analise_Erros_'+mes+'.pptx'});
+    toast('PowerPoint gerado! 📊');
+  }catch(e){toast('Erro ao gerar PowerPoint: '+((e&&e.message)||e));}
+  finally{if(btn){btn.disabled=false;btn.textContent=orig;}}
+}
 function anaUsarSugestao(cat,btn){
   const el=document.getElementById('anaAcao-'+cat);
   if(!el||!btn)return;
@@ -4475,8 +4558,8 @@ function renderCentral(){
   // First Pass (mês atual)
   let fpTxt='—',fpCor='#888',fpSub='sem planilha';
   if(_fpBlocks&&_fpBlocks.length){const token=_MESC[cur]+'/'+ano;let b=_fpBlocks.find(x=>x&&x.periodo===token)||_fpBlocks[0];const mont=(b.montadores||[]).filter(m=>m.total>0);const tT=mont.reduce((s,m)=>s+m.total,0),tP=mont.reduce((s,m)=>s+m.prim,0);if(tT>0){const fp=Math.round(tP/tT*1000)/10;fpTxt=fp.toFixed(1).replace('.',',')+'%';fpCor=fp>=70?'#15803d':fp>=50?'#d97706':'#dc2626';fpSub=esc(b.periodo)+' · '+tP+'/'+tT;}}
-  // entregues no período
-  const entMF=apts.filter(a=>a&&a.mf&&a.mf.fim&&inWin(a.mf.fim)&&a.mf.resultado==='aprovado');
+  // entregues no período = quadros com montagem ELÉTRICA apontada (elétrica é o fim do processo)
+  const prodList=apts.filter(a=>ehEle(a)&&a.fim&&inWin(a.fim));
   const envWin=peds?peds.filter(p=>{const e=_pedEnvioMs(p);return e!=null&&inWin(new Date(e));}):[];
   // GD — último registro
   const ents=((_gd&&_gd.entries)||[]).filter(e=>e&&e.data).sort((a,b)=>(a.data||'').localeCompare(b.data||''));
@@ -4503,16 +4586,16 @@ function renderCentral(){
   if(tab==='hoje'){
     const chip=(v,txt)=>{const on=diasSel===v;return '<button onclick="_centSet(\'dias\',\''+v+'\')" style="padding:5px 12px;border:1px solid '+(on?'#2563eb':'#dde1e6')+';background:'+(on?'#2563eb':'#fff')+';color:'+(on?'#fff':'#555')+';border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;">'+txt+'</button>';};
     h+='<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;">'+chip('0','Hoje')+chip('5','5 dias')+chip('10','10 dias')+chip('15','15 dias')+chip('mes','Mês')+'</div>';
-    h+=grid(tile('⚡ Produzidos',prodWin,'#2563eb',winLabel+' · elétrica')
+    h+=grid(tile('⚡ Produzidos',prodWin,'#2563eb',winLabel+' · elétrica concluída')
       +tile('📈 Média diária',String(mediaWin).replace('.',','),'#1a1a1a','painéis/dia útil ('+bizWin+' dias)')
-      +tile('📦 Entregues',entMF.length,'#15803d',winLabel+' · aprovados MF')
+      +tile('🚚 Enviados',envWin.length,'#15803d',winLabel+' · PCP (data de envio)')
       +tile('✅ First Pass',fpTxt,fpCor,fpSub));
     let entInner='';
-    if(entMF.length||envWin.length){
-      entInner='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;"><div><span style="font-size:24px;font-weight:800;color:#15803d;">'+entMF.length+'</span> <span style="font-size:12px;color:#888;">aprovados na montagem final</span></div>'+(envWin.length?'<div><span style="font-size:24px;font-weight:800;color:#2563eb;">'+envWin.length+'</span> <span style="font-size:12px;color:#888;">pedidos enviados</span></div>':'')+'</div>';
-      if(entMF.length){const ops=entMF.map(a=>'OP '+esc(a.opNum||'—')).slice(0,24).join(' · ');entInner+='<div style="font-size:12px;color:#777;">'+ops+(entMF.length>24?' …':'')+'</div>';}
-    } else entInner='<p class="empty" style="padding:4px 2px;margin:0;">Nada registrado no período.</p>';
-    h+=sec('📦 Entregues — '+winLabel,entInner,'#15803d');
+    if(prodList.length||envWin.length){
+      entInner='<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;"><div><span style="font-size:24px;font-weight:800;color:#2563eb;">'+prodList.length+'</span> <span style="font-size:12px;color:#888;">quadros prontos (elétrica apontada)</span></div>'+(envWin.length?'<div><span style="font-size:24px;font-weight:800;color:#15803d;">'+envWin.length+'</span> <span style="font-size:12px;color:#888;">enviados (PCP)</span></div>':'')+'</div>';
+      if(prodList.length){const ops=prodList.slice().sort((a,b)=>(new Date(b.fim))-(new Date(a.fim))).slice(0,24).map(a=>{const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);return 'OP '+esc(a.opNum||'—')+(m||a.modeloLabel?' <span style="color:#aaa;">'+esc(m?m.codigo:a.modeloLabel)+'</span>':'');}).join(' · ');entInner+='<div style="font-size:12px;color:#777;line-height:1.7;">'+ops+(prodList.length>24?' …':'')+'</div>';}
+    } else entInner='<p class="empty" style="padding:4px 2px;margin:0;">Nada apontado na elétrica no período.</p>';
+    h+=sec('📦 Prontos — elétrica concluída ('+winLabel+')',entInner,'#2563eb');
     let gdInner='';
     if(ult){
       if(gdOcorr.length)gdInner+='<div style="font-size:12px;color:#888;font-weight:700;margin-bottom:4px;">Ocorrências / problemas</div><ul style="margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.6;">'+gdOcorr.map(o=>'<li><strong>'+esc(o.tipo)+'</strong>'+(o.detalhe?': '+esc(o.detalhe):'')+'</li>').join('')+'</ul>';
@@ -5064,14 +5147,75 @@ async function gdLoad(){
       _gd.metaMes=(d.metaMes&&typeof d.metaMes==='object')?d.metaMes:{};
       _gd.pcp=(d.pcp&&typeof d.pcp==='object'&&d.pcp.pedidos)?d.pcp:null;
     }
-    _gdLoaded=true;return true;
+    _gdLoaded=true;try{publicarIndicadoresErros();}catch(e){}return true;
   }catch(e){return false;}
 }
 async function gdSave(){
   try{
     await fetch(GD_URL+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_gd)});
+    try{publicarIndicadoresErros();}catch(e){}
     return true;
   }catch(e){toast('Erro ao salvar GD (sem internet?)');return false;}
+}
+
+// ── CAMADA DE INDICADORES DE ERROS (publicada em /indicadores/erros p/ o painel gerencial) ──
+// Resumo limpo e documentado dos ERROS DE PROJETO (GD) e ERROS/REPROVAÇÕES DE PAINÉIS
+// (apontamentos + GD). Só o navegador escreve no Firebase, então roda dentro do app.
+function _indErrosDataset(){
+  const esc=s=>String(s==null?'':s).trim();
+  const errosProjeto=[]; const porTipo={};
+  ((_gd&&_gd.entries)||[]).forEach(e=>{
+    if(!e||e.erroprojeto!=='sim')return;
+    const tipos=(Array.isArray(e.errosProjetoTipos)?e.errosProjetoTipos:[]).map(esc).filter(Boolean);
+    errosProjeto.push({data:e.data||'',tipos,modelo:esc(e.erroprojetoModelo),detalhe:esc(e.erroprojetoDetalhe)});
+    if(tipos.length)tipos.forEach(t=>{porTipo[t]=(porTipo[t]||0)+1;});
+    else porTipo['(sem tipo)']=(porTipo['(sem tipo)']||0)+1;
+  });
+  const reprovGD=[];
+  ((_gd&&_gd.entries)||[]).forEach(e=>{ if(e&&e.paineisReprovados==='sim')reprovGD.push({data:e.data||'',detalhe:esc(e.paineisReprovadosDetalhe)}); });
+  const reprovPaineis=[];
+  (S.apontamentos||[]).forEach(a=>{
+    if(!a||a.tipoRegistro==='sem_chapa')return;
+    const temErros=Array.isArray(a.erros)&&a.erros.length;
+    const obs=(a.obsErro||'').trim();
+    if(!temErros&&!obs)return;
+    const m=(S.modelos||[]).find(x=>x&&x.id===a.modeloId);
+    const c=(S.colaboradores||[]).find(x=>x&&x.id===a.colabId);
+    reprovPaineis.push({
+      data:dataLocalStr(a.fim||a.inicio||''),
+      op:esc(a.opNum),
+      modelo:m?(m.codigo||''):(a.modeloLabel||''),
+      setor:a.setor||'',
+      operador:c?c.nome:'',
+      erros:(a.erros||[]).map(x=>typeof x==='string'?x:((x&&(x.descricao||x.texto))||'')).filter(Boolean),
+      obs:obs,
+      categoria:esc(a.categoriaErro)
+    });
+  });
+  const ord=(a,b)=>(b.data||'').localeCompare(a.data||'');
+  errosProjeto.sort(ord);reprovPaineis.sort(ord);reprovGD.sort(ord);
+  return {
+    atualizadoEm:new Date().toISOString(), fonte:'app-supervisor',
+    descricao:'Erros de projeto (GD) e reprovacoes de paineis (apontamentos+GD).',
+    errosProjeto, errosProjetoPorTipo:porTipo, reprovacoesPaineis:reprovPaineis, reprovacoesGD:reprovGD,
+    resumo:{
+      diasComErroProjeto:errosProjeto.length,
+      totalErrosProjetoTipos:Object.values(porTipo).reduce((s,x)=>s+x,0),
+      diasComReprovacaoGD:reprovGD.length,
+      totalPaineisComErro:reprovPaineis.length
+    }
+  };
+}
+let _indErrosHash='';
+async function publicarIndicadoresErros(){
+  try{
+    if(!S||!S.apontamentos)return;
+    const ds=_indErrosDataset();
+    const hash=JSON.stringify([ds.resumo,ds.errosProjetoPorTipo,ds.reprovacoesPaineis.length,ds.errosProjeto.length,ds.reprovacoesGD.length]);
+    if(hash===_indErrosHash)return; // nada mudou — evita PUT à toa
+    const r=await fetch('https://producao-200d2-default-rtdb.firebaseio.com/indicadores/erros.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ds)});
+    if(r.ok)_indErrosHash=hash;
+  }catch(e){}
 }
 
 // ── navegação interna do GD ──

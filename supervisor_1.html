@@ -139,7 +139,7 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
     <h1>Gerenciamento de Produção</h1>
     <span class="badge-sup">SUPERVISOR</span>
     <span id="autoSyncInfo" style="font-size:11px;color:#5a9;margin-left:6px;white-space:nowrap;cursor:help;"></span>
-    <span style="font-size:9px;color:#888;margin-left:4px;">v123</span>
+    <span style="font-size:9px;color:#888;margin-left:4px;">v124</span>
   </div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     <span style="font-size:12px;color:#888;">📅</span>
@@ -499,7 +499,9 @@ body.telao #btnSairTelao{display:flex;align-items:center;gap:6px;position:fixed;
         </div>
         <div id="fpStatus" style="font-size:13px;margin-top:8px;color:#666;"></div>
       </div>
+      <div id="fp-subtabs" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;"></div>
       <div id="fp-cont"></div>
+      <div id="rep-cont" style="display:none;"></div>
     </div>
 
     <!-- CONTROLE DE TEMPO -->
@@ -1405,7 +1407,7 @@ function nav(id,btn){
   if(id==='col'){load().then(()=>{renderColabs();popularSeletorMF();});}
   if(id==='mes')renderMes();
   if(id==='previsao')renderPrevisao();
-  if(id==='firstpass')renderFirstPass();
+  if(id==='firstpass')renderFpTabs();
   if(id==='tempos')renderControleTempo();
   if(id==='prod')renderProdutividade();
   if(id==='oper')renderOperadores();
@@ -4354,12 +4356,124 @@ async function carregarPlanilhaFP(input){
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:'array',cellDates:true});
     const blocks=parseAnaliseMontador(wb);
-    if(!blocks){ if(st)st.innerHTML='<span style="color:#A32D2D;">Não encontrei a aba "Análise montador" na planilha.</span>'; return; }
-    _fpBlocks=blocks; _fpPeriodo=0;
-    try{localStorage.setItem('fpCache',JSON.stringify(blocks));}catch(e){}
-    if(st)st.innerHTML='<span style="color:#15803d;">✓ '+blocks.length+' período(s) carregado(s).</span>';
-    renderFirstPass();
+    const reps=parseReprovacoes(wb);
+    if(blocks){_fpBlocks=blocks;_fpPeriodo=0;try{localStorage.setItem('fpCache',JSON.stringify(blocks));}catch(e){}}
+    if(reps){_fpReprovas=reps;try{localStorage.setItem('repCache',JSON.stringify(reps));}catch(e){}}
+    if(!blocks&&!reps){ if(st)st.innerHTML='<span style="color:#A32D2D;">Não encontrei a aba "Análise montador" nem "REPROVAÇÕES" na planilha.</span>'; return; }
+    const partes=[];if(blocks)partes.push(blocks.length+' período(s) de montador');if(reps)partes.push(reps.length+' reprovação(ões)');
+    if(st)st.innerHTML='<span style="color:#15803d;">✓ '+partes.join(' · ')+'.</span>';
+    renderFpTabs();
   }catch(e){ if(st)st.innerHTML='<span style="color:#A32D2D;">Erro ao ler a planilha: '+_gdEsc(e.message)+'</span>'; }
+}
+// ── CAUSA DAS REPROVAÇÕES (aba "REPROVAÇÕES (2)" da Área de Testes) ──
+let _fpReprovas=null,_repMes='',_fpView='montador';
+function _repNorm(s){return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toUpperCase();}
+function _repIsLig(supra){return _repNorm(supra)==='ERRO DE LIGACAO';}
+function _repDataISO(v){
+  if(v==null||v==='')return '';
+  if(v instanceof Date&&!isNaN(v))return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if(typeof v==='number'&&isFinite(v)){const d=new Date(Math.round((v-25569)*86400*1000));if(!isNaN(d))return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+  const m=String(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  const m2=String(v).match(/(\d{4})-(\d{2})-(\d{2})/);if(m2)return m2[1]+'-'+m2[2]+'-'+m2[3];
+  return '';
+}
+function parseReprovacoes(wb){
+  const norm=_repNorm;
+  let best=null,bestN=-1;
+  (wb.SheetNames||[]).forEach(nm=>{
+    if(norm(nm).indexOf('REPROVA')<0)return;
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[nm],{header:1,raw:true,defval:null});
+    let hi=-1;for(let i=0;i<Math.min(rows.length,12);i++){const rn=(rows[i]||[]).map(norm);if(rn.indexOf('OP')>=0&&rn.some(x=>x.indexOf('SUPRACATEG')>=0)){hi=i;break;}}
+    if(hi<0)return;
+    // conta linhas com data válida e supracategoria (pra escolher a aba mais completa/atual)
+    const hdr=(rows[hi]||[]).map(norm);let si=-1,di=-1;hdr.forEach((h,j)=>{if(si<0&&h.indexOf('SUPRACATEG')===0)si=j;if(di<0&&h==='DATA')di=j;});
+    let n=0;for(let i=hi+1;i<rows.length;i++){const r=rows[i]||[];const sp=si>=0?r[si]:null;const dt=di>=0?_repDataISO(r[di]):'';if(sp&&String(sp).trim()!==''&&dt)n++;}
+    if(n>bestN){bestN=n;best={rows,hi};}
+  });
+  if(!best)return null;
+  const {rows,hi}=best;const hdr=(rows[hi]||[]).map(norm);
+  const col=k=>{for(let j=0;j<hdr.length;j++){if(hdr[j].indexOf(k)===0)return j;}return -1;};
+  const ci={data:col('DATA'),supra:col('SUPRACATEG'),op:col('OP'),fam:col('FAMILIA'),desc:col('DESCRICAO'),cat:col('CATEGORIA')};
+  const out=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const r=rows[i]||[];const op=ci.op>=0?r[ci.op]:null;const supra=ci.supra>=0?r[ci.supra]:null;
+    if((op==null||String(op).trim()==='')&&(supra==null||String(supra).trim()===''))continue;
+    out.push({data:ci.data>=0?_repDataISO(r[ci.data]):'',op:op!=null?String(op).trim():'',familia:ci.fam>=0&&r[ci.fam]!=null?String(r[ci.fam]).trim():'',descricao:ci.desc>=0&&r[ci.desc]!=null?String(r[ci.desc]).trim():'',supra:supra!=null?String(supra).trim():'',categoria:ci.cat>=0&&r[ci.cat]!=null?String(r[ci.cat]).trim():''});
+  }
+  return out.length?out:null;
+}
+function fpView(v){_fpView=v;renderFpTabs();}
+function renderFpTabs(){
+  const bar=document.getElementById('fp-subtabs');const mont=document.getElementById('fp-cont'),rep=document.getElementById('rep-cont');
+  if(bar){const b=(id,t)=>'<button onclick="fpView(\''+id+'\')" style="padding:8px 14px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;background:'+(_fpView===id?'#2b6cb0':'#eef2f7')+';color:'+(_fpView===id?'#fff':'#555')+';">'+t+'</button>';bar.innerHTML=b('montador','👷 Por montador')+b('reprovas','❌ Causa das reprovações');}
+  if(mont)mont.style.display=_fpView==='montador'?'':'none';
+  if(rep)rep.style.display=_fpView==='reprovas'?'':'none';
+  if(_fpView==='montador')renderFirstPass();else renderReprovas();
+}
+function renderReprovas(){
+  const cont=document.getElementById('rep-cont'); if(!cont)return;
+  if(!_fpReprovas){try{const c=JSON.parse(localStorage.getItem('repCache')||'null');if(c&&c.length)_fpReprovas=c;}catch(e){}}
+  if(!_fpReprovas||!_fpReprovas.length){cont.innerHTML='<div class="card"><p class="empty" style="padding:16px 4px;">Sem dados de reprovação. Carregue a planilha da Área de Testes (ou aguarde a sincronização automática) — eu leio a aba <em>"REPROVAÇÕES (2)"</em>.</p></div>';return;}
+  const esc=s=>_gdEsc(s);
+  // meses disponíveis
+  const mesesSet=new Set();_fpReprovas.forEach(r=>{if(r.data&&r.data.length>=7)mesesSet.add(r.data.slice(0,7));});
+  const meses=Array.from(mesesSet).sort().reverse();
+  if(_repMes&&_repMes!=='ULT3'&&!meses.includes(_repMes))_repMes='';
+  const nomeM=ym=>{const[a,b]=ym.split('-');return _MESC[+b-1]+'/'+a;};
+  // filtro
+  let lista;
+  if(_repMes==='ULT3'){const corte=meses.slice(0,3);lista=_fpReprovas.filter(r=>r.data&&corte.includes(r.data.slice(0,7)));}
+  else lista=_fpReprovas.filter(r=>!_repMes||(r.data||'').slice(0,7)===_repMes);
+  const total=lista.length;
+  const ligList=lista.filter(r=>_repIsLig(r.supra));
+  const lig=ligList.length, resto=total-lig;
+  const pLig=total?Math.round(lig/total*1000)/10:0, pResto=total?Math.round(resto/total*1000)/10:0;
+  // breakdown por supracategoria
+  const porSupra={};lista.forEach(r=>{const k=(r.supra||'(sem categoria)').toUpperCase();porSupra[k]=(porSupra[k]||0)+1;});
+  const supraOrd=Object.entries(porSupra).sort((a,b)=>b[1]-a[1]);
+  // série mensal
+  const porMes={};lista.forEach(r=>{if(!r.data)return;const m=r.data.slice(0,7);(porMes[m]||(porMes[m]={lig:0,resto:0}))[_repIsLig(r.supra)?'lig':'resto']++;});
+  const mesesSerie=Object.keys(porMes).sort();
+  // famílias com mais ligação
+  const porFamLig={};ligList.forEach(r=>{const k=r.familia||'(sem família)';porFamLig[k]=(porFamLig[k]||0)+1;});
+  const famLigOrd=Object.entries(porFamLig).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+  const selMes='<option value="">Acumulado (tudo)</option><option value="ULT3"'+(_repMes==='ULT3'?' selected':'')+'>Últimos 3 meses</option>'+meses.map(m=>'<option value="'+m+'"'+(m===_repMes?' selected':'')+'>'+nomeM(m)+'</option>').join('');
+  let h='';
+  h+='<div class="card" style="margin-bottom:12px;"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;"><div style="font-size:13px;color:#666;">Das reprovações do período, quanto foi por <strong>erro de ligação</strong> (responsabilidade da montagem) e quanto pelo <strong>resto</strong> dos erros.</div><div><label style="font-size:12px;color:#666;">Período</label><br><select onchange="_repMes=this.value;renderReprovas()" style="padding:7px;border:1px solid #ccc;border-radius:8px;">'+selMes+'</select></div></div></div>';
+  // KPIs
+  const tile=(lbl,val,cor,sub)=>'<div style="background:#fff;border:1px solid #eceef1;border-radius:12px;padding:14px 16px;"><div style="font-size:11px;color:#8a8f98;font-weight:700;text-transform:uppercase;letter-spacing:.03em;">'+lbl+'</div><div style="font-size:30px;font-weight:800;line-height:1.1;'+(cor?'color:'+cor+';':'')+'">'+val+'</div>'+(sub?'<div style="font-size:11px;color:#9aa0a6;margin-top:2px;">'+sub+'</div>':'')+'</div>';
+  h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px;">'
+    +tile('❌ Reprovações',total,'#1a1a1a',_repMes?(_repMes==='ULT3'?'últimos 3 meses':nomeM(_repMes)):'acumulado')
+    +tile('🔌 Por ligação',lig,'#b91c1c',pLig+'% do total')
+    +tile('🧩 Pelo resto',resto,'#b45309',pResto+'% do total')
+    +'</div>';
+  // barra de divisão
+  h+='<div class="card" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">Ligação × resto</div>'
+    +'<div style="display:flex;height:30px;border-radius:8px;overflow:hidden;background:#eee;">'
+    +(lig?'<div style="width:'+pLig+'%;background:#b91c1c;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+(pLig>=12?('Ligação '+pLig+'%'):'')+'</div>':'')
+    +(resto?'<div style="width:'+pResto+'%;background:#d97706;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;">'+(pResto>=12?('Resto '+pResto+'%'):'')+'</div>':'')
+    +'</div><div style="font-size:11px;color:#999;margin-top:6px;">🔌 Erro de ligação = responsabilidade da montagem · 🧩 Resto = projeto, componente, defeito mecânico, acabamento, etc.</div></div>';
+  // composição do "resto"
+  h+='<div class="card" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">Composição por categoria</div><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:#999;border-bottom:2px solid #eee;font-size:11px;"><th style="padding:5px;">CATEGORIA</th><th style="padding:5px;text-align:center;">REPROVAÇÕES</th><th style="padding:5px;text-align:right;">%</th></tr></thead><tbody>'
+    +supraOrd.map(s=>{const isL=_repIsLig(s[0]);const pc=total?Math.round(s[1]/total*1000)/10:0;return '<tr style="border-bottom:1px solid #f4f4f4;"><td style="padding:5px;font-weight:'+(isL?'800':'600')+';color:'+(isL?'#b91c1c':'#333')+';">'+(isL?'🔌 ':'')+esc(s[0])+'</td><td style="padding:5px;text-align:center;">'+s[1]+'</td><td style="padding:5px;text-align:right;font-weight:700;">'+String(pc).replace('.',',')+'%</td></tr>';}).join('')
+    +'</tbody></table></div></div>';
+  // série mensal (ligação × resto)
+  if(mesesSerie.length>1||(!_repMes)){
+    const maxMes=Math.max(1,...mesesSerie.map(m=>porMes[m].lig+porMes[m].resto));
+    h+='<div class="card" style="margin-bottom:12px;"><div style="font-size:13px;font-weight:700;margin-bottom:10px;">Evolução mês a mês (🔌 ligação em vermelho · 🧩 resto em laranja)</div>';
+    mesesSerie.forEach(m=>{const d=porMes[m];const tt=d.lig+d.resto;const wl=tt?Math.round(d.lig/maxMes*100):0;const wr=tt?Math.round(d.resto/maxMes*100):0;const pl=tt?Math.round(d.lig/tt*100):0;
+      h+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:62px;font-size:12px;color:#666;flex:none;">'+nomeM(m)+'</div><div style="flex:1;display:flex;height:18px;background:#f3f3f3;border-radius:5px;overflow:hidden;"><div style="width:'+wl+'%;background:#b91c1c;"></div><div style="width:'+wr+'%;background:#d97706;"></div></div><div style="width:92px;font-size:11px;color:#888;flex:none;text-align:right;">'+d.lig+' lig / '+tt+' ('+pl+'%)</div></div>';
+    });
+    h+='</div>';
+  }
+  // famílias com mais erro de ligação
+  if(famLigOrd.length){
+    h+='<div class="card"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">🔌 Famílias com mais erro de ligação</div><div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:#999;border-bottom:2px solid #eee;font-size:11px;"><th style="padding:5px;">FAMÍLIA</th><th style="padding:5px;text-align:right;">REPROVAÇÕES POR LIGAÇÃO</th></tr></thead><tbody>'
+      +famLigOrd.map(f=>'<tr style="border-bottom:1px solid #f4f4f4;"><td style="padding:5px;">'+esc(f[0])+'</td><td style="padding:5px;text-align:right;font-weight:700;color:#b91c1c;">'+f[1]+'</td></tr>').join('')
+      +'</tbody></table></div></div>';
+  }
+  cont.innerHTML=h;
 }
 function renderFirstPass(){
   const cont=document.getElementById('fp-cont'); if(!cont)return;
@@ -5678,12 +5792,13 @@ async function autoSyncPull(){
     let changed=false;
     if(d.pcp&&Array.isArray(d.pcp.pedidos)&&d.pcp.pedidos.length){_autoPcp=d.pcp.pedidos;changed=true;}
     if(d.firstpass&&Array.isArray(d.firstpass.blocks)&&d.firstpass.blocks.length){_autoFp=d.firstpass.blocks;_fpBlocks=d.firstpass.blocks;try{localStorage.setItem('fpCache',JSON.stringify(_fpBlocks));}catch(e){}changed=true;}
+    if(d.firstpass&&Array.isArray(d.firstpass.reprovacoes)&&d.firstpass.reprovacoes.length){_fpReprovas=d.firstpass.reprovacoes;try{localStorage.setItem('repCache',JSON.stringify(_fpReprovas));}catch(e){}changed=true;}
     if(d.pcp&&d.pcp.atualizadoEm)_autoPcpTs=d.pcp.atualizadoEm;
     if(d.firstpass&&d.firstpass.atualizadoEm)_autoFpTs=d.firstpass.atualizadoEm;
     renderAutoSyncInfo();
     if(changed){
       try{if(currentPage==='previsao')renderPrevisao();}catch(e){}
-      try{if(currentPage==='firstpass')renderFirstPass();}catch(e){}
+      try{if(currentPage==='firstpass')renderFpTabs();}catch(e){}
       try{if(currentPage==='central')renderCentral();}catch(e){}
       try{if(currentPage==='gd'&&typeof renderGD==='function')renderGD();}catch(e){}
     }
